@@ -5,11 +5,12 @@
 
 obj-m := ipc-shm-sample.o
 PWD := $(shell pwd)
+IPC_SHM_DEV_ROOT ?= $(PWD)/../ipc-shm-dev
 
-kbuild:
-	$(MAKE) -C $(KERNEL_DIR) M=$(PWD) modules
+modules:
+	$(MAKE) -C $(KERNELDIR) M=$(PWD) KBUILD_EXTRA_SYMBOLS=${IPC_SHM_DEV_ROOT}/Module.symvers $@
 
 clean:
-	$(MAKE) -C $(KERNEL_DIR) M=$(PWD) clean
+	$(MAKE) -C $(KERNELDIR) M=$(PWD) $@
 
-.PHONY: kbuild clean
+.PHONY: modules clean

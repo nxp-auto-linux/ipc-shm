@@ -6,10 +6,10 @@
 obj-m := ipc-shm.o
 PWD := $(shell pwd)
 
-kbuild:
-	$(MAKE) -C $(KERNEL_DIR) M=$(PWD) modules
+modules:
+	$(MAKE) -C $(KERNELDIR) M=$(PWD) $@
 
 clean:
-	$(MAKE) -C $(KERNEL_DIR) M=$(PWD) clean
+	$(MAKE) -C $(KERNELDIR) M=$(PWD) $@
 
-.PHONY: kbuild clean
+.PHONY: modules clean
