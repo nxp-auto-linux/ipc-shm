@@ -85,6 +85,22 @@ int ipc_shm_init(struct ipc_shm_params *params);
 int ipc_shm_free(void);
 
 /**
+ * shm_channel_init - initialize shared memory IPC channel
+ * @params:         initialization parameters
+ *
+ * Return: 0 for success, error code otherwise
+ */
+int ipc_shm_channel_init(struct ipc_shm_channel_params *params);
+
+/**
+ * shm_channel_free - release shared memory IPC channel
+ * @chan_id:        channel ID
+ *
+ * Return: 0 for success, error code otherwise
+ */
+int ipc_shm_channel_free(int chan_id);
+
+/**
  * ipc_shm_acquire_buf - request a buffer for the given channel
  * @chan_id:        channel ID
  * @size:           required size
