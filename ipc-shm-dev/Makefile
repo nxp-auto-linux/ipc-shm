@@ -7,9 +7,11 @@ PWD := $(shell pwd)
 
 ifneq ($(KERNELRELEASE),)
 # kbuild part of makefile
-obj-m := ipc-shm.o
+obj-m := ipc-shm-dev.o
+ipc-shm-dev-y := ipc-shm.o ipc-fifo.o
 # Add here cc flags (e.g. header lookup paths, defines, etc)
 ccflags-y +=
+
 else
 ARCH ?= arm64
 
