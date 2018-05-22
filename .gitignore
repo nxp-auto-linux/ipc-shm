@@ -5,4 +5,6 @@
 *.ko
 modules.order
 Module.symvers
-
+.cproject
+.project
+.settings

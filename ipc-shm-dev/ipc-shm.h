@@ -6,9 +6,14 @@
 #define IPC_SHM_DEV_IPC_SHM_H
 
 /**
+ * Number of IPC shared memory channels
+ */
+#define IPC_SHM_CHANNEL_COUNT 1
+
+/**
  * Number of buffer pools belonging to a managed channel
  */
-#define BUF_POOL_COUNT 3
+#define IPC_SHM_BUF_POOL_COUNT 3
 
 /**
  * enum ipc_shm_channel_type - channel type
@@ -26,12 +31,12 @@ enum ipc_shm_channel_type {
  * @buf_size:       buffer size
  */
 struct ipc_shm_buf_pool {
-	int num_buffers;
-	int buf_size;
+	uint16_t num_buffers;
+	uint32_t buf_size;
 };
 
 /**
- * struct ipc_shm_channel_params - channel initialization parameters
+ * struct ipc_shm_channel - channel initialization parameters
  * @chan_id:             channel ID
  * @type:                channel type
  * @memory:              memory assigned to channel
@@ -39,66 +44,53 @@ struct ipc_shm_buf_pool {
  * @shm_rx_cb:           receive callback for managed channels
  * @shm_rx_unmanaged_cb: receive callback for unmanaged channels
  */
-struct ipc_shm_channel_params {
+struct ipc_shm_channel {
 	int chan_id;
 
 	/* managed/unmanaged channel memory params */
 	enum ipc_shm_channel_type type;
 	union {
 		struct {
-			struct ipc_shm_buf_pool pool[BUF_POOL_COUNT];
+			struct ipc_shm_buf_pool pools[IPC_SHM_BUF_POOL_COUNT];
 		} managed;
 		struct {
-			int size;
+			uint32_t size;
 		} unmanaged;
 	} memory;
 
 	/* rx API callback */
 	void *cb_arg;
-	void (*shm_rx_cb)(void *cb_arg, int chan_id, uint8_t *buf, size_t size);
-	void (*shm_rx_unmanaged_cb)(void *cb_arg, int chan_id, uint8_t *buf);
+	void (*rx_cb)(void *cb_arg, int chan_id, void *buf, size_t size);
+	void (*rx_unmanaged_cb)(void *cb_arg, int chan_id, uint8_t *buf);
 };
 
 /**
- * struct ipc_shm_params - initialization parameters
- * @shm_base_addr:  shared memory base address
- * @shm_size:       shared memory size
+ * struct ipc_shm - IPC shm initialization parameters
+ * @shm_base_addr:	shared memory base address
+ * @shm_size:		shared memory size
+ * @channels:		ipc channel parameters array
  */
-struct ipc_shm_params {
-	void *shm_base_addr;
+struct ipc_shm {
+	void *local_shm_addr;
+	void *remote_shm_addr;
 	int shm_size;
+	struct ipc_shm_channel channels[IPC_SHM_CHANNEL_COUNT];
 };
 
 /**
  * ipc_shm_init - initialize shared memory device
- * @params:         initialization parameters
+ * @cfg:         configuration parameters
  *
- * Return: 0 for success, error code otherwise
+ * Return: 0 on success, error code otherwise
  */
-int ipc_shm_init(struct ipc_shm_params *params);
+int ipc_shm_init(const struct ipc_shm *cfg);
 
 /**
  * ipc_shm_free - release shared memory device
  *
- * Return: 0 for success, error code otherwise
+ * Return: 0 on success, error code otherwise
  */
 int ipc_shm_free(void);
-
-/**
- * shm_channel_init - initialize shared memory IPC channel
- * @params:         initialization parameters
- *
- * Return: 0 for success, error code otherwise
- */
-int ipc_shm_channel_init(struct ipc_shm_channel_params *params);
-
-/**
- * shm_channel_free - release shared memory IPC channel
- * @chan_id:        channel ID
- *
- * Return: 0 for success, error code otherwise
- */
-int ipc_shm_channel_free(int chan_id);
 
 /**
  * ipc_shm_acquire_buf - request a buffer for the given channel
@@ -107,16 +99,16 @@ int ipc_shm_channel_free(int chan_id);
  *
  * Return: pointer to the buffer base address
  */
-uint8_t *ipc_shm_acquire_buf(int chan_id, size_t size);
+void *ipc_shm_acquire_buf(int chan_id, size_t size);
 
 /**
  * ipc_shm_release_buf - release a buffer for the given channel
  * @chan_id:        channel ID
  * @buf:            buffer pointer
  *
- * Return: 0 for success, error code otherwise
+ * Return: 0 on success, error code otherwise
  */
-int ipc_shm_release_buf(int chan_id, uint8_t *buf);
+int ipc_shm_release_buf(int chan_id, void *buf);
 
 /**
  * nxp_shm_tx - send data on given channel and notify remote
@@ -126,9 +118,9 @@ int ipc_shm_release_buf(int chan_id, uint8_t *buf);
  *
  * Function used only for managed channels where buffer management is enabled.
  *
- * Return: 0 for success, error code otherwise
+ * Return: 0 on success, error code otherwise
  */
-int ipc_shm_tx(int chan_id, uint8_t *buf, size_t size);
+int ipc_shm_tx(int chan_id, void *buf, size_t size);
 
 /**
  * ipc_shm_tx_unmanaged - notify remote that data is available in shared memory
@@ -137,7 +129,7 @@ int ipc_shm_tx(int chan_id, uint8_t *buf, size_t size);
  * Function used only for unmanaged channels where application has full control
  * over channel memory and no buffer management is done by ipc-shm device.
  *
- * Return: 0 for success, error code otherwise
+ * Return: 0 on success, error code otherwise
  */
 int ipc_shm_tx_unmanaged(int chan_id);
 
