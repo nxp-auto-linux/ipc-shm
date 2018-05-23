@@ -5,21 +5,20 @@
 #ifndef IPC_HW_S32_H_
 #define IPC_HW_S32_H_
 
-#include <stdint.h>
+/* MSCM CPU2CPU Interrupt ID (there are 3 CPU2CPU interrupts on S32G) */
+#define MSCM_IRQ_ID    0 /* GIC interrupt 33 */
 
-/* Hardware IP Block Base Addresses - TODO: get them from device tree */
-#define MSCM_BASE    0x40198000ul /* Miscellaneous System Control Module */
+/* Device tree MSCM node: compatible property (search key) */
+#define DT_MSCM_NODE_COMP "fsl,s32g-mscm"
 
-/* S32Gxx Specific Definitions */
-#define RTOS_SIGNAL_CPU    4 /* M7 core 0 */
-#define GPOS_SIGNAL_CPU    0 /* A53 core 0 */
-
-#define MSCM_IRQ_ID    0 /* MSCM Core-to-Core Interrupt ID */
-
-#define MSCM_IRQ_GIC_ID    33u /* MSCM irq Global Interrupt Controller ID */
+/*
+ * Device tree MSCM CPU2CPU interrupt index.
+ * DT intr index is offset by 1 from MSCM_IRQ_ID because the first interrupt in
+ * MSCM is PCIe1 MSI interrupt.
+ */
+#define DT_MSCM_CPU2CPU_INTR (MSCM_IRQ_ID + 1)
 
 /* MSCM Peripheral Register Structure */
-
 struct mscm_memmap {
 	volatile const uint32_t cpxtype; /* Processor x Type Register,
 						offset 0x0 */

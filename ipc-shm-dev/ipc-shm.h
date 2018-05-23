@@ -13,7 +13,7 @@
 /**
  * Number of buffer pools belonging to a managed channel
  */
-#define IPC_SHM_POOL_COUNT 3
+#define IPC_SHM_POOL_COUNT 1
 
 /**
  * Maximum number of buffers per pool
@@ -113,7 +113,7 @@ int ipc_shm_free(void);
  * @chan_id:        channel ID
  * @size:           required size
  *
- * Return: pointer to the buffer base address
+ * Return: pointer to the buffer base address or NULL if buffer not found
  */
 void *ipc_shm_acquire_buf(int chan_id, size_t size);
 
@@ -124,7 +124,7 @@ void *ipc_shm_acquire_buf(int chan_id, size_t size);
  *
  * Return: 0 on success, error code otherwise
  */
-int ipc_shm_release_buf(int chan_id, void *buf);
+int ipc_shm_release_buf(int chan_id, const void *buf);
 
 /**
  * nxp_shm_tx() - send data on given channel and notify remote

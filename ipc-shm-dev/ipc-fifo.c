@@ -37,11 +37,14 @@ uint16_t ipc_fifo_pop(struct ipc_fifo *f, void *buf, uint16_t nbytes)
 	uint8_t *tmp = (uint8_t *) buf;
 	uint16_t w = 0; /* caches the write index */
 	uint16_t r = 0; /* caches the read index */
+	uint8_t *addr;
 
-
-	if ((f == NULL) || (buf == NULL) || (nbytes == 0) || (f->buf == NULL)) {
+	if ((f == NULL) || (buf == NULL) || (nbytes == 0)) {
 		goto out;
 	}
+
+	/* cast cast platform agnostic address to actual pointer */
+	addr = (uint8_t *)&f->buf_addr;
 
 	/* caching is needed because of multithreading */
 	w = f->w;
@@ -59,7 +62,7 @@ uint16_t ipc_fifo_pop(struct ipc_fifo *f, void *buf, uint16_t nbytes)
 	 */
 	if (r < w || n <= f->size - r) {
 		/* r < w or no roll over*/
-		memcpy(tmp, &f->buf[r], n);
+		memcpy(tmp, &addr[r], n);
 	} else {
 		/*|x| = used, | | = free, r = read index, w = write index
 		 * buffer index =>  0 1 2 3 4 5 6 7 8 9
@@ -70,10 +73,10 @@ uint16_t ipc_fifo_pop(struct ipc_fifo *f, void *buf, uint16_t nbytes)
 		/* copy with roll over */
 		/* 1. copy from the read index to end of buffer */
 		partial_len = f->size - r;
-		memcpy(tmp, &f->buf[r], partial_len);
+		memcpy(tmp, &addr[r], partial_len);
 
 		/* 2. copy remaining bytes from the buffer start */
-		memcpy(&tmp[partial_len], f->buf, n - partial_len);
+		memcpy(&tmp[partial_len], addr, n - partial_len);
 	}
 
 	f->r = increment(r, n, f->size);
@@ -125,10 +128,14 @@ uint16_t ipc_fifo_push(struct ipc_fifo *f, const void *buf, uint16_t nbytes)
 	uint8_t *tmp = NULL;
 	uint16_t w = 0; /* caches the write index */
 	uint16_t r = 0; /* caches the read index */
+	uint8_t *addr;
 
-	if ((f == NULL) || (buf == NULL) || (nbytes == 0) || (f->buf == NULL)) {
+	if ((f == NULL) || (buf == NULL) || (nbytes == 0)) {
 		goto out;
 	}
+
+	/* cast cast platform agnostic address to actual pointer */
+	addr = (uint8_t *)&f->buf_addr;
 
 	/* caching is needed because of multithreading */
 	w = f->w;
@@ -146,7 +153,7 @@ uint16_t ipc_fifo_push(struct ipc_fifo *f, const void *buf, uint16_t nbytes)
 	 * ring buffer  => |x|x|x| | | | |x|x|x|
 	 */
 	if (r > w || nbytes <= f->size - w) {
-		memcpy(&f->buf[w], tmp, nbytes);
+		memcpy(&addr[w], tmp, nbytes);
 	} else {
 
 		/*|x| = used, | | = free, r = read index, w = write index
@@ -158,10 +165,10 @@ uint16_t ipc_fifo_push(struct ipc_fifo *f, const void *buf, uint16_t nbytes)
 		/* copy with roll over */
 		/* 1. copy from the write index to end of buffer */
 		partial_len = f->size - w;
-		memcpy(&f->buf[w], tmp, partial_len);
+		memcpy(&addr[w], tmp, partial_len);
 
 		/* 2. copy remaining bytes from the buffer start */
-		memcpy(f->buf, &tmp[partial_len], nbytes - partial_len);
+		memcpy(addr, &tmp[partial_len], nbytes - partial_len);
 	}
 
 	n = nbytes; /* number of pushed elements */
@@ -173,21 +180,26 @@ out:
 
 /**
  * ipc_fifo_init() - initializes the queue (head, tail, size, count, buffer
- * @f:		[IN] queue pointer
- * @buf:	[IN] buffer pointer to be managed by this queue
- * @size:	[IN] the length of the buffer to be managed
- * Return:	0 for success, non zero otherwise
+ * @base_addr:	[IN] address where to map the fifo structure
+ * @buf_size:	[IN] the length of the actual fifo buffer
+ *
+ * In order to implement Single-Producer - Single-Consumer thread-safety without
+ * locking, this queue requires an additional byte in buffer that will never be
+ * written. Caller must provide size = (needed capacity + 1).
+ *
+ * Return:	fifo pointer mapped to specified base_addr
  */
-int ipc_fifo_init(struct ipc_fifo *f, uint8_t *buf, uint16_t size)
+struct ipc_fifo *ipc_fifo_init(void *base_addr, uint16_t buf_size)
 {
-	int16_t status = -1;
+	struct ipc_fifo *f;
 
-	if (f != NULL && buf != NULL && size != 0) {
-		f->buf = buf;
-		f->size = size;
-		f->r = 0;
-		f->w = 0;
-		status = 0;
-	}
-	return status;
+	if (!base_addr)
+		return NULL;
+
+	f = (struct ipc_fifo *) base_addr;
+	f->size = buf_size;
+	f->w = 0;
+	f->r = 0;
+
+	return f;
 }

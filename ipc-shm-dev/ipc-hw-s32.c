@@ -2,9 +2,17 @@
 /*
  * Copyright (C) 2018 NXP Semiconductors
  */
+#include <linux/types.h>
 #include "ipc-hw-s32.h"
 #include <linux/module.h>
 #include <linux/io.h>
+
+/* Hardware IP Block Base Addresses - TODO: get them from device tree */
+#define MSCM_BASE    0x40198000ul /* Miscellaneous System Control Module */
+
+/* S32Gxx Specific Definitions */
+#define RTOS_SIGNAL_CPU    4 /* M7 core 0 */
+#define GPOS_SIGNAL_CPU    0 /* A53 core 0 */
 
 /* pointer to memory-mapped hardware peripheral MSCM */
 static volatile struct mscm_memmap *mscm;
@@ -15,11 +23,10 @@ static volatile struct mscm_memmap *mscm;
 int ipc_hw_init(void)
 {
 	/* map MSCM hardware peripheral block */
-	mscm = (struct mscm_memmap *)ioremap_nocache((phys_addr_t)MSCM_BASE, 0x1000);
-
-	if (!mscm) {
-		return -EFAULT;
-	}
+	mscm = (struct mscm_memmap *) ioremap_nocache(
+		(phys_addr_t)MSCM_BASE, sizeof(struct mscm_memmap));
+	if (!mscm)
+		return -ENOMEM;
 
 	return 0;
 }

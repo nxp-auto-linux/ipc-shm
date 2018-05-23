@@ -68,16 +68,8 @@ static struct ipc_shm_cfg shm_cfg = {
 				.managed = {
 					.pools = {
 						{
-							.num_bufs = 1,
+							.num_bufs = 5,
 							.buf_size = 256
-						},
-						{
-							.num_bufs = 1,
-							.buf_size = 512
-						},
-						{
-							.num_bufs = 1,
-							.buf_size = 4096
 						},
 					},
 				},
@@ -131,7 +123,8 @@ static int run_demo(void)
 	sample_info("starting demo...\n");
 
 	/* initialize the semaphore with total number of available buffers */
-	sema_init(&priv.shm_sample_sema, 3);
+	sema_init(&priv.shm_sample_sema,
+			shm_cfg.channels[0].memory.managed.pools[0].num_bufs);
 
 	sample_dbg("semaphore initialized...\n");
 
@@ -164,7 +157,7 @@ static int run_demo(void)
 			 ipc_shm_sample_msg, i);
 
 		/* send data to peer */
-		err = ipc_shm_tx(0, buf, strlen(buf));
+		err = ipc_shm_tx(chan_id, buf, strlen(buf));
 		if (err) {
 			sample_err("tx failed for channel ID %d, size %d, "
 				   "error code %d\n", 0,
@@ -277,7 +270,7 @@ err_sysfs_free:
 
 static void __exit sample_mod_exit(void)
 {
-	sample_dbg("module exit\n");
+	sample_dbg("module version "MODULE_VER" exit\n");
 	/* stop the demo */
 	priv.run_cmd = 0;
 
