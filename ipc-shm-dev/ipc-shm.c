@@ -8,6 +8,7 @@
 #include <linux/ioport.h>
 #include "ipc-shm.h"
 #include "ipc-fifo.h"
+#include "ipc-hw-s32.h"
 
 #define DRIVER_NAME	"ipc-shm-dev"
 #define DRIVER_VERSION	"0.1"
@@ -17,8 +18,6 @@ MODULE_LICENSE("Dual BSD/GPL");
 MODULE_ALIAS(DRIVER_NAME);
 MODULE_DESCRIPTION("NXP Shared Memory Inter-Processor Communication Driver");
 MODULE_VERSION(DRIVER_VERSION);
-
-#define MSCM_IRQ_ID 49
 
 /* convenience wrappers for printing errors and debug messages */
 #define shm_fmt(fmt) DRIVER_NAME": %s(): "fmt
@@ -279,19 +278,24 @@ int ipc_shm_init(const struct ipc_shm_cfg *cfg)
 	}
 
 	/* init rx interrupt */
-	err = request_irq(MSCM_IRQ_ID, ipc_shm_rx_irq, 0, DRIVER_NAME, priv);
+	err = request_irq(MSCM_IRQ_GIC_ID, ipc_shm_rx_irq, 0, DRIVER_NAME, priv);
 	if (err) {
-		shm_err("Request interrupt %d failed\n", MSCM_IRQ_ID);
+		shm_err("Request interrupt %d failed\n", MSCM_IRQ_GIC_ID);
 		goto err_unmap_remote_shm;
 	}
 
-	/* TODO: init MSCM */
+	/* clear driver notifications */
+	ipc_hw_irq_clear();
+	
+	/* enable driver notifications */
+	ipc_hw_irq_enable();
 
 	shm_dbg("ipc shm initialized\n");
 	return 0;
 
 err_free_irq:
-	free_irq(MSCM_IRQ_ID, priv);
+	ipc_hw_irq_disable();
+	free_irq(MSCM_IRQ_GIC_ID, priv);
 err_unmap_remote_shm:
 	iounmap(cfg->remote_shm_addr);
 err_release_remote_region:
@@ -309,6 +313,7 @@ int ipc_shm_free(void)
 {
 	struct ipc_shm_priv *priv = get_ipc_priv();
 
+	ipc_hw_irq_disable();
 	free_irq(MSCM_IRQ_ID, priv);
 	iounmap(priv->remote_virt_shm);
 	release_mem_region((phys_addr_t)priv->remote_phys_shm, priv->shm_size);
@@ -336,6 +341,9 @@ EXPORT_SYMBOL(ipc_shm_release_buf);
 
 int ipc_shm_tx(int chan_id, void *buf, size_t size)
 {
+	/* notify remote that data is available */
+	ipc_hw_irq_notify();
+	
 	shm_err("Not implemented yet\n");
 	return -EOPNOTSUPP;
 }
@@ -343,6 +351,9 @@ EXPORT_SYMBOL(ipc_shm_tx);
 
 int ipc_shm_tx_unmanaged(int chan_id)
 {
+	/* notify remote that data is available */
+	ipc_hw_irq_notify();
+
 	shm_err("Unmanaged channels not supported yet\n");
 	return -EOPNOTSUPP;
 }
