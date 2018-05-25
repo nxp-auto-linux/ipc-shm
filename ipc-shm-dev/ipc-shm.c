@@ -284,6 +284,13 @@ int ipc_shm_init(const struct ipc_shm_cfg *cfg)
 		goto err_unmap_remote_shm;
 	}
 
+
+	err = ipc_hw_init();
+	if (err) {
+		shm_err("Core-to-core interrupt initialization failed\n");
+		goto err_unmap_remote_shm;
+	}
+
 	/* clear driver notifications */
 	ipc_hw_irq_clear();
 	

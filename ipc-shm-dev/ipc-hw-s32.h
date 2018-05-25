@@ -281,6 +281,8 @@ struct mscm_memmap {
 
 /* S32 Common Chassis Specific Functions */
 
+int ipc_hw_init(void);
+
 void ipc_hw_irq_enable(void);
 
 void ipc_hw_irq_disable(void);
