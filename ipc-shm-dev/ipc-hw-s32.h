@@ -9,7 +9,7 @@
 #define MSCM_IRQ_ID    0 /* GIC interrupt 33 */
 
 /* Device tree MSCM node: compatible property (search key) */
-#define DT_MSCM_NODE_COMP "fsl,s32g-mscm"
+#define DT_MSCM_NODE_COMP "fsl,s32gen1-mscm"
 
 /*
  * Device tree MSCM CPU2CPU interrupt index.
