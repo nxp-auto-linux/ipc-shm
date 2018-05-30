@@ -21,198 +21,199 @@
 /* MSCM Peripheral Register Structure */
 struct mscm_memmap {
 	volatile const uint32_t cpxtype; /* Processor x Type Register,
-						offset 0x0 */
+					  * offset 0x0 */
 	volatile const uint32_t cpxnum; /* Processor x Number Register,
-						offset 0x4 */
+					 * offset 0x4 */
 	volatile const uint32_t cpxrev; /* Processor x Revision Register,
-						offset 0x8 */
+					 * offset 0x8 */
 	volatile const uint32_t cpxcfg[4]; /* Processor x Configuration n
-						Register, offset 0xC + 4*n */
+					    * Register, offset 0xC + 4*n */
 	uint8_t reserved00[4];
 	volatile const uint32_t cp0type; /* Processor 0 Type Register,
-						offset 0x20 */
+					  * offset 0x20 */
 	volatile const uint32_t cp0num; /* Processor 0 Number Register,
-						offset 0x24 */
+					 * offset 0x24 */
 	volatile const uint32_t cp0rev; /* Processor 0 Revision Register,
-						offset 0x28 */
+					 * offset 0x28 */
 	volatile const uint32_t cp0cfg[4]; /* Processor 0 Configuration n
-						Register, offset 0x2C + 4*n */
+					    * Register, offset 0x2C + 4*n */
 	uint8_t reserved01[4];
 	volatile const uint32_t cp1type; /* Processor 1 Type Register,
-						offset 0x40 */
+					  * offset 0x40 */
 	volatile const uint32_t cp1num; /* Processor 1 Number Register,
-						offset 0x44 */
+					 * offset 0x44 */
 	volatile const uint32_t cp1rev; /* Processor 1 Revision Register,
-						offset 0x48 */
+					 * offset 0x48 */
 	volatile const uint32_t cp1cfg[4]; /* Processor 1 Configuration n
-						Register, offset 0x4C + 4*n */
+					    * Register, offset 0x4C + 4*n */
 	uint8_t reserved02[4];
 	volatile const uint32_t cp2type; /* Processor 2 Type Register,
-						offset 0x60 */
+					  * offset 0x60 */
 	volatile const uint32_t cp2num; /* Processor 2 Number Register,
-						offset 0x64 */
+					 * offset 0x64 */
 	volatile const uint32_t cp2rev; /* Processor 2 Revision Register,
-						offset 0x68 */
+					 * offset 0x68 */
 	volatile const uint32_t cp2cfg[4]; /* Processor 2 Configuration n
-						Register, offset 0x6C + 4*n */
+					    * Register, offset 0x6C + 4*n */
 	uint8_t reserved03[4];
 	volatile const uint32_t cp3type; /* Processor 3 Type Register,
-						offset 0x80 */
+					  * offset 0x80 */
 	volatile const uint32_t cp3num; /* Processor 3 Number Register,
-						offset 0x84 */
+					 * offset 0x84 */
 	volatile const uint32_t cp3rev; /* Processor 3 Revision Register,
-						offset 0x88 */
+					 * offset 0x88 */
 	volatile const uint32_t cp3cfg[4]; /* Processor 3 Configuration n
-						Register, offset 0x8C + 4*n */
+					    * Register, offset 0x8C + 4*n */
 	uint8_t reserved04[4];
 	volatile const uint32_t cp4type; /* Processor 4 Type Register,
-						offset 0xA0 */
+					  * offset 0xA0 */
 	volatile const uint32_t cp4num; /* Processor 4 Number Register,
-						offset 0xA4 */
+					 * offset 0xA4 */
 	volatile const uint32_t cp4rev; /* Processor 4 Revision Register,
-						offset 0xA8 */
+					 * offset 0xA8 */
 	volatile const uint32_t cp4cfg[4]; /* Processor 4 Configuration n
-						Register, offset 0xAC + 4*n */
+					    * Register, offset 0xAC + 4*n */
 	uint8_t reserved05[4];
 	volatile const uint32_t cp5type; /* Processor 5 Type Register,
-						offset 0xC0 */
+					  * offset 0xC0 */
 	volatile const uint32_t cp5num; /* Processor 5 Number Register,
-						offset 0xC4 */
+					 * offset 0xC4 */
 	volatile const uint32_t cp5rev; /* Processor 5 Revision Register,
-						offset 0xC8 */
+					 * offset 0xC8 */
 	volatile const uint32_t cp5cfg[4]; /* Processor 5 Configuration n
-						Register, offset 0xCC + 4*n */
+					    * Register, offset 0xCC + 4*n */
 	uint8_t reserved06[4];
 	volatile const uint32_t cp6type; /* Processor 6 Type Register,
-						offset 0xE0 */
+					  * offset 0xE0 */
 	volatile const uint32_t cp6num; /* Processor 6 Number Register,
-						offset 0xE4 */
+					 * offset 0xE4 */
 	volatile const uint32_t cp6rev; /* Processor 6 Revision Register,
-						offset 0xE8 */
+					 * offset 0xE8 */
 	volatile const uint32_t cp6cfg[4]; /* Processor 6 Configuration n
-						Register, offset 0xEC + 4*n */
+					    * Register, offset 0xEC + 4*n */
 	uint8_t reserved07[260];
 	volatile uint32_t ircp0isr0; /* Interrupt Router CP0 Interrupt0 Status
-					Register, offset 0x200 */
-	volatile uint32_t ircp0igr0; /* Interrupt Router CP0 Interrupt0 
-					Generation Register, offset 0x204 */
+				      * Register, offset 0x200 */
+	volatile uint32_t ircp0igr0; /* Interrupt Router CP0 Interrupt0
+				      * Generation Register, offset 0x204 */
 	volatile uint32_t ircp0isr1; /* Interrupt Router CP0 Interrupt1 Status
-					Register, offset 0x208 */
-	volatile uint32_t ircp0igr1; /* Interrupt Router CP0 Interrupt1 
-					Generation Register, offset 0x20C */
+				      * Register, offset 0x208 */
+	volatile uint32_t ircp0igr1; /* Interrupt Router CP0 Interrupt1
+				      * Generation Register, offset 0x20C */
 	volatile uint32_t ircp0isr2; /* Interrupt Router CP0 Interrupt2 Status
-					Register, offset 0x210 */
-	volatile uint32_t ircp0igr2; /* Interrupt Router CP0 Interrupt2 
-					Generation Register, offset 0x214 */
+				      * Register, offset 0x210 */
+	volatile uint32_t ircp0igr2; /* Interrupt Router CP0 Interrupt2
+				      * Generation Register, offset 0x214 */
 	volatile uint32_t ircp0isr3; /* Interrupt Router CP0 InterruptX Status
-					Register, offset 0x218 */
-	volatile uint32_t ircp0igr3; /* Interrupt Router CP0 InterruptX 
-					Generation Register, offset 0x21C */
+				      * Register, offset 0x218 */
+	volatile uint32_t ircp0igr3; /* Interrupt Router CP0 InterruptX
+				      * Generation Register, offset 0x21C */
 	volatile uint32_t ircp1isr0; /* Interrupt Router CP1 Interrupt0 Status
-					Register, offset 0x220 */
-	volatile uint32_t ircp1igr0; /* Interrupt Router CP1 Interrupt0 
-					Generation Register, offset 0x224 */
+				      * Register, offset 0x220 */
+	volatile uint32_t ircp1igr0; /* Interrupt Router CP1 Interrupt0
+				      * Generation Register, offset 0x224 */
 	volatile uint32_t ircp1isr1; /* Interrupt Router CP1 Interrupt1 Status
-					Register, offset 0x228 */
-	volatile uint32_t ircp1igr1; /* Interrupt Router CP1 Interrupt1 
-					Generation Register, offset 0x22C */
+				      * Register, offset 0x228 */
+	volatile uint32_t ircp1igr1; /* Interrupt Router CP1 Interrupt1
+				      * Generation Register, offset 0x22C */
 	volatile uint32_t ircp1isr2; /* Interrupt Router CP1 Interrupt2 Status
-					Register, offset 0x230 */
-	volatile uint32_t ircp1igr2; /* Interrupt Router CP1 Interrupt2 
-					Generation Register, offset 0x234 */
+				      * Register, offset 0x230 */
+	volatile uint32_t ircp1igr2; /* Interrupt Router CP1 Interrupt2
+				      * Generation Register, offset 0x234 */
 	volatile uint32_t ircp1isr3; /* Interrupt Router CP1 InterruptX Status
-					Register, offset 0x238 */
-	volatile uint32_t ircp1igr3; /* Interrupt Router CP1 InterruptX 
-					Generation Register, offset 0x23C */
+				      * Register, offset 0x238 */
+	volatile uint32_t ircp1igr3; /* Interrupt Router CP1 InterruptX
+				      * Generation Register, offset 0x23C */
 	volatile uint32_t ircp2isr0; /* Interrupt Router CP2 Interrupt0 Status
-					Register, offset 0x240 */
-	volatile uint32_t ircp2igr0; /* Interrupt Router CP2 Interrupt0 
-					Generation Register, offset 0x244 */
+				      * Register, offset 0x240 */
+	volatile uint32_t ircp2igr0; /* Interrupt Router CP2 Interrupt0
+				      * Generation Register, offset 0x244 */
 	volatile uint32_t ircp2isr1; /* Interrupt Router CP2 Interrupt1 Status
-					Register, offset 0x248 */
-	volatile uint32_t ircp2igr1; /* Interrupt Router CP2 Interrupt1 
-					Generation Register, offset 0x24C */
+				      * Register, offset 0x248 */
+	volatile uint32_t ircp2igr1; /* Interrupt Router CP2 Interrupt1
+				      * Generation Register, offset 0x24C */
 	volatile uint32_t ircp2isr2; /* Interrupt Router CP2 Interrupt2 Status
-					Register, offset 0x250 */
-	volatile uint32_t ircp2igr2; /* Interrupt Router CP2 Interrupt2 
-					Generation Register, offset 0x254 */
+				      * Register, offset 0x250 */
+	volatile uint32_t ircp2igr2; /* Interrupt Router CP2 Interrupt2
+				      * Generation Register, offset 0x254 */
 	volatile uint32_t ircp2isr3; /* Interrupt Router CP2 InterruptX Status
-					Register, offset 0x258 */
-	volatile uint32_t ircp2igr3; /* Interrupt Router CP2 InterruptX 
-					Generation Register, offset 0x25C */
+				      * Register, offset 0x258 */
+	volatile uint32_t ircp2igr3; /* Interrupt Router CP2 InterruptX
+				      * Generation Register, offset 0x25C */
 	volatile uint32_t ircp3isr0; /* Interrupt Router CP3 Interrupt0 Status
-					Register, offset 0x260 */
-	volatile uint32_t ircp3igr0; /* Interrupt Router CP3 Interrupt0 
-					Generation Register, offset 0x264 */
+				      * Register, offset 0x260 */
+	volatile uint32_t ircp3igr0; /* Interrupt Router CP3 Interrupt0
+				      * Generation Register, offset 0x264 */
 	volatile uint32_t ircp3isr1; /* Interrupt Router CP3 Interrupt1 Status
-					Register, offset 0x268 */
-	volatile uint32_t ircp3igr1; /* Interrupt Router CP3 Interrupt1 
-					Generation Register, offset 0x26C */
+				      * Register, offset 0x268 */
+	volatile uint32_t ircp3igr1; /* Interrupt Router CP3 Interrupt1
+				      * Generation Register, offset 0x26C */
 	volatile uint32_t ircp3isr2; /* Interrupt Router CP3 Interrupt2 Status
-					Register, offset 0x270 */
-	volatile uint32_t ircp3igr2; /* Interrupt Router CP3 Interrupt2 
-					Generation Register, offset 0x274 */
+				      * Register, offset 0x270 */
+	volatile uint32_t ircp3igr2; /* Interrupt Router CP3 Interrupt2
+				      * Generation Register, offset 0x274 */
 	volatile uint32_t ircp3isr3; /* Interrupt Router CP3 InterruptX Status
-					Register, offset 0x278 */
-	volatile uint32_t ircp3igr3; /* Interrupt Router CP3 InterruptX 
-					Generation Register, offset 0x27C */
+				      * Register, offset 0x278 */
+	volatile uint32_t ircp3igr3; /* Interrupt Router CP3 InterruptX
+				      * Generation Register, offset 0x27C */
 	volatile uint32_t ircp4isr0; /* Interrupt Router CP4 Interrupt0 Status
-					Register, offset 0x280 */
-	volatile uint32_t ircp4igr0; /* Interrupt Router CP4 Interrupt0 
-					Generation Register, offset 0x284 */
+				      * Register, offset 0x280 */
+	volatile uint32_t ircp4igr0; /* Interrupt Router CP4 Interrupt0
+				      * Generation Register, offset 0x284 */
 	volatile uint32_t ircp4isr1; /* Interrupt Router CP4 Interrupt1 Status
-					Register, offset 0x288 */
-	volatile uint32_t ircp4igr1; /* Interrupt Router CP4 Interrupt1 
-					Generation Register, offset 0x28C */
+				      * Register, offset 0x288 */
+	volatile uint32_t ircp4igr1; /* Interrupt Router CP4 Interrupt1
+				      * Generation Register, offset 0x28C */
 	volatile uint32_t ircp4isr2; /* Interrupt Router CP4 Interrupt2 Status
-					Register, offset 0x290 */
-	volatile uint32_t ircp4igr2; /* Interrupt Router CP4 Interrupt2 
-					Generation Register, offset 0x294 */
+				      * Register, offset 0x290 */
+	volatile uint32_t ircp4igr2; /* Interrupt Router CP4 Interrupt2
+				      * Generation Register, offset 0x294 */
 	volatile uint32_t ircp4isr3; /* Interrupt Router CP4 InterruptX Status
-					Register, offset 0x298 */
-	volatile uint32_t ircp4igr3; /* Interrupt Router CP4 InterruptX 
-					Generation Register, offset 0x29C */
+				      * Register, offset 0x298 */
+	volatile uint32_t ircp4igr3; /* Interrupt Router CP4 InterruptX
+				      * Generation Register, offset 0x29C */
 	volatile uint32_t ircp5isr0; /* Interrupt Router CP5 Interrupt0 Status
-					Register, offset 0x2A0 */
-	volatile uint32_t ircp5igr0; /* Interrupt Router CP5 Interrupt0 
-					Generation Register, offset 0x2A4 */
+				      * Register, offset 0x2A0 */
+	volatile uint32_t ircp5igr0; /* Interrupt Router CP5 Interrupt0
+				      * Generation Register, offset 0x2A4 */
 	volatile uint32_t ircp5isr1; /* Interrupt Router CP5 Interrupt1 Status
-					Register, offset 0x2A8 */
-	volatile uint32_t ircp5igr1; /* Interrupt Router CP5 Interrupt1 
-					Generation Register, offset 0x2AC */
+				      * Register, offset 0x2A8 */
+	volatile uint32_t ircp5igr1; /* Interrupt Router CP5 Interrupt1
+				      * Generation Register, offset 0x2AC */
 	volatile uint32_t ircp5isr2; /* Interrupt Router CP5 Interrupt2 Status
-					Register, offset 0x2B0 */
-	volatile uint32_t ircp5igr2; /* Interrupt Router CP5 Interrupt2 
-					Generation Register, offset 0x2B4 */
+				      * Register, offset 0x2B0 */
+	volatile uint32_t ircp5igr2; /* Interrupt Router CP5 Interrupt2
+				      * Generation Register, offset 0x2B4 */
 	volatile uint32_t ircp5isr3; /* Interrupt Router CP5 InterruptX Status
-					Register, offset 0x2B8 */
-	volatile uint32_t ircp5igr3; /* Interrupt Router CP5 InterruptX 
-					Generation Register, offset 0x2BC */
+				      * Register, offset 0x2B8 */
+	volatile uint32_t ircp5igr3; /* Interrupt Router CP5 InterruptX
+				      * Generation Register, offset 0x2BC */
 	volatile uint32_t ircp6isr0; /* Interrupt Router CP6 Interrupt0 Status
-					Register, offset 0x2C0 */
-	volatile uint32_t ircp6igr0; /* Interrupt Router CP6 Interrupt0 
-					Generation Register, offset 0x2C4 */
+				      * Register, offset 0x2C0 */
+	volatile uint32_t ircp6igr0; /* Interrupt Router CP6 Interrupt0
+				      * Generation Register, offset 0x2C4 */
 	volatile uint32_t ircp6isr1; /* Interrupt Router CP6 Interrupt1 Status
-					Register, offset 0x2C8 */
-	volatile uint32_t ircp6igr1; /* Interrupt Router CP6 Interrupt1 
-					Generation Register, offset 0x2CC */
+				      * Register, offset 0x2C8 */
+	volatile uint32_t ircp6igr1; /* Interrupt Router CP6 Interrupt1
+				      * Generation Register, offset 0x2CC */
 	volatile uint32_t ircp6isr2; /* Interrupt Router CP6 Interrupt2 Status
-					Register, offset 0x2D0 */
-	volatile uint32_t ircp6igr2; /* Interrupt Router CP6 Interrupt2 
-					Generation Register, offset 0x2D4 */
+				      * Register, offset 0x2D0 */
+	volatile uint32_t ircp6igr2; /* Interrupt Router CP6 Interrupt2
+				      * Generation Register, offset 0x2D4 */
 	volatile uint32_t ircp6isr3; /* Interrupt Router CP6 InterruptX Status
-					Register, offset 0x2D8 */
-	volatile uint32_t ircp6igr3; /* Interrupt Router CP6 InterruptX 
-					Generation Register, offset 0x2DC */
+				      * Register, offset 0x2D8 */
+	volatile uint32_t ircp6igr3; /* Interrupt Router CP6 InterruptX
+				      * Generation Register, offset 0x2DC */
 	uint8_t reserved08[288];
 	volatile uint32_t ircpcfg; /* Interrupt Router Configuration Register,
-					offset 0x400 */
+				    * offset 0x400 */
 	uint8_t reserved09[1020];
 	volatile uint32_t irnmic; /* Interrupt Router Non-Maskable Interrupt
-					Control Register, offset 0x800 */
+				   * Control Register, offset 0x800 */
 	uint8_t reserved10[124];
 	volatile uint16_t irsprc[240]; /* Interrupt Router Shared Peripheral
-			Routing Control Register n, offset 0x880 + 2*n */
+					* Routing Control Register n,
+					* offset 0x880 + 2*n */
 };
 
 /* MSCM Hardware Register Bit Fields Definitions */

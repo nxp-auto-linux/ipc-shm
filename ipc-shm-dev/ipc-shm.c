@@ -397,7 +397,7 @@ int ipc_shm_init(const struct ipc_shm_cfg *cfg)
 
 	/* clear driver notifications */
 	ipc_hw_irq_clear();
-	
+
 	/* enable driver notifications */
 	ipc_hw_irq_enable();
 
@@ -581,7 +581,7 @@ int ipc_shm_tx(int chan_id, void *buf, size_t data_size)
 
 	/* notify remote that data is available */
 	ipc_hw_irq_notify();
-	
+
 	shm_err("Not implemented yet\n");
 	return 0;
 }
