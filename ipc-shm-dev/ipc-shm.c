@@ -43,7 +43,7 @@ MODULE_VERSION(DRIVER_VERSION);
  * Used to push/pop buffers in tx/rx fifo.
  */
 struct ipc_shm_bd {
-	uint16_t pool_id;
+	int16_t pool_id;
 	uint16_t buf_id;
 	uint32_t data_size;
 };
@@ -443,7 +443,6 @@ void *ipc_shm_acquire_buf(int chan_id, size_t request_size)
 	void *buf_addr = NULL;
 	int count;
 	int pool_id;
-	int buf_id;
 
 	if (chan_id < 0 || chan_id >= IPC_SHM_CHANNEL_COUNT) {
 		shm_err("Channel id outside valid range: 0 - %d\n",
@@ -475,7 +474,7 @@ void *ipc_shm_acquire_buf(int chan_id, size_t request_size)
 	buf_addr = pool->local_pool_addr + (bd.buf_id * pool->buf_size);
 
 	shm_dbg("Acquired buffer %d from pool %d from channel %d with address %p\n",
-		buf_id, pool_id, chan_id, buf_addr);
+		bd.buf_id, pool_id, chan_id, buf_addr);
 	return buf_addr;
 }
 EXPORT_SYMBOL(ipc_shm_acquire_buf);
@@ -582,7 +581,6 @@ int ipc_shm_tx(int chan_id, void *buf, size_t data_size)
 	/* notify remote that data is available */
 	ipc_hw_irq_notify();
 
-	shm_err("Not implemented yet\n");
 	return 0;
 }
 EXPORT_SYMBOL(ipc_shm_tx);
