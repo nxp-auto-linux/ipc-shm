@@ -13,10 +13,8 @@
 
 /*
  * Device tree MSCM CPU2CPU interrupt index.
- * DT intr index is offset by 1 from MSCM_IRQ_ID because the first interrupt in
- * MSCM is PCIe1 MSI interrupt.
  */
-#define DT_MSCM_CPU2CPU_INTR (MSCM_IRQ_ID + 1)
+#define DT_MSCM_CPU2CPU_INTR MSCM_IRQ_ID
 
 /* MSCM Peripheral Register Structure */
 struct mscm_memmap {
