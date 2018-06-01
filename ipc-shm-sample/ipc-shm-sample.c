@@ -123,8 +123,7 @@ static int run_demo(void)
 	sample_info("starting demo...\n");
 
 	/* initialize the semaphore with total number of available buffers */
-	sema_init(&priv.shm_sample_sema,
-			shm_cfg.channels[0].memory.managed.pools[0].num_bufs);
+	sema_init(&priv.shm_sample_sema, 1);
 
 	sample_dbg("semaphore initialized...\n");
 

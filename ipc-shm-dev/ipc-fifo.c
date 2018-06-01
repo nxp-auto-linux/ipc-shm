@@ -24,6 +24,17 @@ static inline uint16_t get_free(uint16_t size, uint16_t w, uint16_t r)
 }
 
 /**
+ * memcpy_fifo() - custom memcpy implementation used to prevent compiler
+ *                 optimizations leading to alignment fault
+ */
+static inline void memcpy_fifo(uint8_t *dst, uint8_t *src, uint32_t l)
+{
+    while (l-- > 0) {
+        *dst++ = *src++;
+    }
+}
+
+/**
  * fifo_pop() - removes data from queue
  * @f:		[IN] queue pointer
  * @buf:	[IN] target buffer to pop the data to
@@ -62,7 +73,7 @@ uint16_t ipc_fifo_pop(struct ipc_fifo *f, void *buf, uint16_t nbytes)
 	 */
 	if (r < w || n <= f->size - r) {
 		/* r < w or no roll over*/
-		memcpy(tmp, &addr[r], n);
+		memcpy_fifo(tmp, &addr[r], n);
 	} else {
 		/*|x| = used, | | = free, r = read index, w = write index
 		 * buffer index =>  0 1 2 3 4 5 6 7 8 9
@@ -73,10 +84,10 @@ uint16_t ipc_fifo_pop(struct ipc_fifo *f, void *buf, uint16_t nbytes)
 		/* copy with roll over */
 		/* 1. copy from the read index to end of buffer */
 		partial_len = f->size - r;
-		memcpy(tmp, &addr[r], partial_len);
+		memcpy_fifo(tmp, &addr[r], partial_len);
 
 		/* 2. copy remaining bytes from the buffer start */
-		memcpy(&tmp[partial_len], addr, n - partial_len);
+		memcpy_fifo(&tmp[partial_len], addr, n - partial_len);
 	}
 
 	f->r = increment(r, n, f->size);
@@ -152,8 +163,10 @@ uint16_t ipc_fifo_push(struct ipc_fifo *f, const void *buf, uint16_t nbytes)
 	 * r, w indices =>        w       r
 	 * ring buffer  => |x|x|x| | | | |x|x|x|
 	 */
+
 	if (r > w || nbytes <= f->size - w) {
-		memcpy(&addr[w], tmp, nbytes);
+
+		memcpy_fifo(&addr[w], tmp, nbytes);
 	} else {
 
 		/*|x| = used, | | = free, r = read index, w = write index
@@ -165,10 +178,11 @@ uint16_t ipc_fifo_push(struct ipc_fifo *f, const void *buf, uint16_t nbytes)
 		/* copy with roll over */
 		/* 1. copy from the write index to end of buffer */
 		partial_len = f->size - w;
-		memcpy(&addr[w], tmp, partial_len);
+
+		memcpy_fifo(&addr[w], tmp, partial_len);
 
 		/* 2. copy remaining bytes from the buffer start */
-		memcpy(addr, &tmp[partial_len], nbytes - partial_len);
+		memcpy_fifo(addr, &tmp[partial_len], nbytes - partial_len);
 	}
 
 	n = nbytes; /* number of pushed elements */

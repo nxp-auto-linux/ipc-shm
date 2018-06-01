@@ -193,7 +193,7 @@ static int ipc_buf_pool_init(int chan_id, int pool_id,
 	/* init acquire bufs fifo mapped at start of remote pool shm and
 	 * populated by remote OS with local pool buffers (BDs)
 	 */
-	pool->acquire_bd_fifo = ipc_fifo_init(remote_shm, fifo_size);
+	pool->acquire_bd_fifo = (struct ipc_fifo *) remote_shm;
 
 	/* init release_bd_fifo mapped at start of local pool shm and
 	 * populated by us with remote pool buffers (BDs)
@@ -462,6 +462,7 @@ void *ipc_shm_acquire_buf(int chan_id, size_t request_size)
 
 		/* check if pool has any free buffers left */
 		count = ipc_fifo_pop(pool->acquire_bd_fifo, &bd, sizeof(bd));
+
 		if (count == sizeof(bd))
 			break;
 	}
@@ -471,7 +472,7 @@ void *ipc_shm_acquire_buf(int chan_id, size_t request_size)
 		return NULL;
 	}
 
-	buf_addr = pool->local_pool_addr + (bd.buf_id * pool->buf_size);
+	buf_addr = (uint8_t *)pool->local_pool_addr + (bd.buf_id * pool->buf_size);
 
 	shm_dbg("Acquired buffer %d from pool %d from channel %d with address %p\n",
 		bd.buf_id, pool_id, chan_id, buf_addr);
