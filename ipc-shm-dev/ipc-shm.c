@@ -202,11 +202,11 @@ static int ipc_buf_pool_init(int chan_id, int pool_id,
 
 	/* init actual local buffer pool addr */
 	pool->local_pool_addr = PTR_ALIGN(
-		&pool->release_bd_fifo->buf_addr + fifo_size, 8);
+		&pool->release_bd_fifo->buf_addr + fifo_size + 8, 8);
 
 	/* init actual remote buffer pool addr */
 	pool->remote_pool_addr = PTR_ALIGN(
-		&pool->acquire_bd_fifo->buf_addr + fifo_size, 8);
+		&pool->acquire_bd_fifo->buf_addr + fifo_size + 8, 8);
 
 	pool->shm_size = (pool->local_pool_addr - local_shm)
 				+ (cfg->buf_size * cfg->num_bufs);
@@ -297,8 +297,8 @@ static int ipc_shm_channel_init(int chan_id,
 	/* TODO: sort pool configurations ascending by buf size */
 
 	/* init buffer pools */
-	local_pool_shm = PTR_ALIGN(chan->local_shm + fifo_size, 8);
-	remote_pool_shm = PTR_ALIGN(chan->remote_shm + fifo_size, 8);
+	local_pool_shm = PTR_ALIGN(chan->local_shm + fifo_size + 8, 8);
+	remote_pool_shm = PTR_ALIGN(chan->remote_shm + fifo_size + 8, 8);
 	for (i = 0; i < IPC_SHM_POOL_COUNT; i++) {
 		pool_cfg = &cfg->memory.managed.pools[i];
 

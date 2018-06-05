@@ -93,8 +93,8 @@ static void shm_sample_rx_cb(void *cb_arg, int chan_id, void *buf,
 	int err = 0;
 
 	/* process the received data */
-	sample_info("channel %d: received %d bytes message: %s",
-		    chan_id, (int)size, (char *)buf);
+	sample_info("channel %d: received %d bytes message: %.*s",
+		    chan_id, (int)size, (int)size, (char *)buf);
 
 	/* release the buffer */
 	err = ipc_shm_release_buf(chan_id, buf);
@@ -165,7 +165,7 @@ static int run_demo(void)
 		}
 
 		sample_info("channel %d: sent %d bytes message: %s",
-			    chan_id, SHM_SAMPLE_BUF_SIZE, (char *)buf);
+			    chan_id, (int)strlen(buf), (char *)buf);
 	}
 
 	sample_dbg("exit, error code is %d\n", err);

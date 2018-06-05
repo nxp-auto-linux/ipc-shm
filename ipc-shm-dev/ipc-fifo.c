@@ -145,7 +145,7 @@ uint16_t ipc_fifo_push(struct ipc_fifo *f, const void *buf, uint16_t nbytes)
 		goto out;
 	}
 
-	/* cast cast platform agnostic address to actual pointer */
+	/* cast platform agnostic address to actual pointer */
 	addr = (uint8_t *)&f->buf_addr;
 
 	/* caching is needed because of multithreading */
