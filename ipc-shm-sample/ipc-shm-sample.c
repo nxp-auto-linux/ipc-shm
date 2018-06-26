@@ -33,7 +33,7 @@ MODULE_VERSION(MODULE_VER);
 #define sample_info(fmt, ...) pr_info(MODULE_NAME": "fmt, ##__VA_ARGS__)
 #define sample_dbg(fmt, ...) pr_debug(sample_fmt(fmt), __func__, ##__VA_ARGS__)
 
-static char *ipc_shm_sample_msg = "Hello from "MODULE_NAME"!";
+static char *ipc_shm_sample_msg = "Hello from Linux!";
 module_param(ipc_shm_sample_msg, charp, 0660);
 MODULE_PARM_DESC(ipc_shm_sample_msg, "Message to be sent to the remote app.");
 
@@ -103,7 +103,7 @@ static void shm_sample_rx_cb(void *cb_arg, int chan_id, void *buf,
 			    "err code %d\n", chan_id, err);
 	}
 
-	/* update the semaphore */
+	/* signal echo reply via semaphore */
 	up(&priv.shm_sample_sema);
 }
 
@@ -118,31 +118,17 @@ static int run_demo(void)
 	int err = 0;
 	int i = 0;
 	int chan_id = 0;
-	uint8_t *buf = NULL;
+	char *buf = NULL;
+	char tmp[SHM_SAMPLE_BUF_SIZE];
 
 	sample_info("starting demo...\n");
 
-	/* initialize the semaphore with total number of available buffers */
+	/* initialize binary semaphore used for sync with rx callback */
 	sema_init(&priv.shm_sample_sema, 1);
 
 	sample_dbg("semaphore initialized...\n");
 
-	while (priv.run_cmd) {
-
-		/* get semaphore */
-		err = down_interruptible(&priv.shm_sample_sema);
-		if (err == -EINTR) {
-			sample_info("[loop %d]:interrupted...\n", i);
-			break;
-		}
-
-		sample_info("[loop %d]: starting...\n", ++i);
-		if (err) {
-			sample_err("failed to get semaphore for channel ID %d, "
-				   "error code %d\n", 0, err);
-			break;
-		}
-
+	for (i = 0; i < priv.run_cmd; i++) {
 		buf = ipc_shm_acquire_buf(chan_id, SHM_SAMPLE_BUF_SIZE);
 		if (!buf) {
 			sample_err("failed to get buffer for channel ID %d with size %d\n",
@@ -151,9 +137,12 @@ static int run_demo(void)
 			break;
 		}
 
-		/* write data to buf */
-		snprintf(buf, SHM_SAMPLE_BUF_SIZE, "%s #%d",
+		/* prepare message in temp buffer due to SRAM alignment reqs */
+		snprintf(tmp, SHM_SAMPLE_BUF_SIZE, "%s #%d",
 			 ipc_shm_sample_msg, i);
+
+		/* write data to buf */
+		strcpy(buf, tmp);
 
 		/* send data to peer */
 		err = ipc_shm_tx(chan_id, buf, strlen(buf));
@@ -166,9 +155,20 @@ static int run_demo(void)
 
 		sample_info("channel %d: sent %d bytes message: %s",
 			    chan_id, (int)strlen(buf), (char *)buf);
+
+		/* get semaphore and wait for rx cb to release it */
+		err = down_interruptible(&priv.shm_sample_sema);
+		if (err == -EINTR) {
+			sample_info("[loop %d]:interrupted...\n", i);
+			break;
+		} else if (err) {
+			sample_err("failed to get semaphore for channel ID %d, "
+				   "error code %d\n", 0, err);
+			break;
+		}
 	}
 
-	sample_dbg("exit, error code is %d\n", err);
+	sample_info("exit demo");
 	return err;
 }
 
@@ -203,10 +203,7 @@ static ssize_t ipc_sysfs_store(struct kobject *kobj,
 
 	if (strcmp(attr->attr.name, priv.run_attr.attr.name) == 0) {
 		priv.run_cmd = value;
-		if (priv.run_cmd == 0)
-			sample_info("stopping demo...\n");
-		else if (priv.run_cmd == 1)
-			run_demo();
+		run_demo();
 	}
 
 	return count;
