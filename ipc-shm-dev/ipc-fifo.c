@@ -1,9 +1,16 @@
 /* SPDX-License-Identifier: BSD-3-Clause */
 /*
- * Copyright (C) 2018 NXP Semiconductors
+ * Copyright 2018 NXP
  */
 #include <linux/module.h>
 #include "ipc-fifo.h"
+
+/**
+ * Fifo sentinel room between write and read index used to implement lock-free
+ * single-producer - single-consumer thread safety.
+ * Sentinel value is chosen to provides 8-byte fifo alignment if needed.
+ */
+#define FIFO_SENTINEL 8
 
 /** increment() - increment queue index and wrap around when size is exceeded */
 static inline uint16_t increment(uint16_t idx, uint16_t step, uint16_t size)
@@ -20,18 +27,8 @@ static inline uint16_t get_count(uint16_t size, uint16_t w, uint16_t r)
 /** get_free() - get number of free elements in queue */
 static inline uint16_t get_free(uint16_t size, uint16_t w, uint16_t r)
 {
-	return size - get_count(size, w, r) - 1;
-}
-
-/**
- * memcpy_fifo() - custom memcpy implementation used to prevent compiler
- *                 optimizations leading to alignment fault
- */
-static inline void memcpy_fifo(uint8_t *dst, uint8_t *src, uint32_t l)
-{
-    while (l-- > 0) {
-        *dst++ = *src++;
-    }
+	/* for thread safety fifo sentinel room is not written */
+	return size - get_count(size, w, r) - FIFO_SENTINEL;
 }
 
 /**
@@ -48,14 +45,10 @@ uint16_t ipc_fifo_pop(struct ipc_fifo *f, void *buf, uint16_t nbytes)
 	uint8_t *tmp = (uint8_t *) buf;
 	uint16_t w = 0; /* caches the write index */
 	uint16_t r = 0; /* caches the read index */
-	uint8_t *addr;
 
 	if ((f == NULL) || (buf == NULL) || (nbytes == 0)) {
 		goto out;
 	}
-
-	/* cast cast platform agnostic address to actual pointer */
-	addr = (uint8_t *)&f->buf_addr;
 
 	/* caching is needed because of multithreading */
 	w = f->w;
@@ -73,7 +66,7 @@ uint16_t ipc_fifo_pop(struct ipc_fifo *f, void *buf, uint16_t nbytes)
 	 */
 	if (r < w || n <= f->size - r) {
 		/* r < w or no roll over*/
-		memcpy_fifo(tmp, &addr[r], n);
+		memcpy(tmp, &f->data[r], n);
 	} else {
 		/*|x| = used, | | = free, r = read index, w = write index
 		 * buffer index =>  0 1 2 3 4 5 6 7 8 9
@@ -84,10 +77,10 @@ uint16_t ipc_fifo_pop(struct ipc_fifo *f, void *buf, uint16_t nbytes)
 		/* copy with roll over */
 		/* 1. copy from the read index to end of buffer */
 		partial_len = f->size - r;
-		memcpy_fifo(tmp, &addr[r], partial_len);
+		memcpy(tmp, &f->data[r], partial_len);
 
 		/* 2. copy remaining bytes from the buffer start */
-		memcpy_fifo(&tmp[partial_len], addr, n - partial_len);
+		memcpy(&tmp[partial_len], f->data, n - partial_len);
 	}
 
 	f->r = increment(r, n, f->size);
@@ -139,14 +132,10 @@ uint16_t ipc_fifo_push(struct ipc_fifo *f, const void *buf, uint16_t nbytes)
 	uint8_t *tmp = NULL;
 	uint16_t w = 0; /* caches the write index */
 	uint16_t r = 0; /* caches the read index */
-	uint8_t *addr;
 
 	if ((f == NULL) || (buf == NULL) || (nbytes == 0)) {
 		goto out;
 	}
-
-	/* cast platform agnostic address to actual pointer */
-	addr = (uint8_t *)&f->buf_addr;
 
 	/* caching is needed because of multithreading */
 	w = f->w;
@@ -163,10 +152,8 @@ uint16_t ipc_fifo_push(struct ipc_fifo *f, const void *buf, uint16_t nbytes)
 	 * r, w indices =>        w       r
 	 * ring buffer  => |x|x|x| | | | |x|x|x|
 	 */
-
 	if (r > w || nbytes <= f->size - w) {
-
-		memcpy_fifo(&addr[w], tmp, nbytes);
+		memcpy(&f->data[w], tmp, nbytes);
 	} else {
 
 		/*|x| = used, | | = free, r = read index, w = write index
@@ -178,11 +165,10 @@ uint16_t ipc_fifo_push(struct ipc_fifo *f, const void *buf, uint16_t nbytes)
 		/* copy with roll over */
 		/* 1. copy from the write index to end of buffer */
 		partial_len = f->size - w;
-
-		memcpy_fifo(&addr[w], tmp, partial_len);
+		memcpy(&f->data[w], tmp, partial_len);
 
 		/* 2. copy remaining bytes from the buffer start */
-		memcpy_fifo(addr, &tmp[partial_len], nbytes - partial_len);
+		memcpy(f->data, &tmp[partial_len], nbytes - partial_len);
 	}
 
 	n = nbytes; /* number of pushed elements */
@@ -193,17 +179,17 @@ out:
 }
 
 /**
- * ipc_fifo_init() - initializes the queue (head, tail, size, count, buffer
- * @base_addr:	[IN] address where to map the fifo structure
- * @buf_size:	[IN] the length of the actual fifo buffer
+ * ipc_fifo_init() - initializes and maps the fifo in memory
+ * @base_addr:	[IN] address where to map the fifo
+ * @size:	[IN] the needed size of fifo in bytes
  *
  * In order to implement Single-Producer - Single-Consumer thread-safety without
- * locking, this queue requires an additional byte in buffer that will never be
- * written. Caller must provide size = (needed capacity + 1).
+ * locking, this queue requires an additional tail room that will never be
+ * written.
  *
  * Return:	fifo pointer mapped to specified base_addr
  */
-struct ipc_fifo *ipc_fifo_init(void *base_addr, uint16_t buf_size)
+struct ipc_fifo *ipc_fifo_init(void *base_addr, uint16_t size)
 {
 	struct ipc_fifo *f;
 
@@ -211,9 +197,25 @@ struct ipc_fifo *ipc_fifo_init(void *base_addr, uint16_t buf_size)
 		return NULL;
 
 	f = (struct ipc_fifo *) base_addr;
-	f->size = buf_size;
+
+	/* add sentinel room needed to implement lock-free thread-safety */
+	f->size = size + FIFO_SENTINEL;
 	f->w = 0;
 	f->r = 0;
 
 	return f;
+}
+
+/**
+ * ipc_fifo_mem_size() - return fifo memory footprint
+ * @fifo:	[IN] fifo pointer
+ *
+ * Return fifo memory footprint including fifo control part and sentinel.
+ *
+ * Return:	size in memory ocupied by fifo
+ */
+int ipc_fifo_mem_size(struct ipc_fifo *fifo)
+{
+	/* fifo control room + fifo size */
+	return offsetof(struct ipc_fifo, data) + fifo->size;
 }

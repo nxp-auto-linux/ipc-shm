@@ -1,6 +1,6 @@
 /* SPDX-License-Identifier: BSD-3-Clause */
 /*
- * Copyright (C) 2018 NXP Semiconductors
+ * Copyright 2018 NXP
  */
 #include <linux/module.h>
 #include <linux/kernel.h>
@@ -170,7 +170,8 @@ static int ipc_buf_pool_init(int chan_id, int pool_id,
 	struct ipc_shm_channel *chan = get_channel(chan_id);
 	struct ipc_shm_pool *pool = &chan->pools[pool_id];
 	struct ipc_shm_bd bd;
-	int fifo_size, i, count;
+	int fifo_size, fifo_mem_size;
+	int i, count;
 
 	if (!cfg) {
 		shm_err("NULL buffer pool configuration argument\n");
@@ -187,29 +188,28 @@ static int ipc_buf_pool_init(int chan_id, int pool_id,
 	pool->buf_size = cfg->buf_size;
 
 	/* init acquire/release fifos */
-	/* fifo_size = needed capacity plus 1 byte (see @ipc_fifo_init) */
-	fifo_size = pool->num_bufs * sizeof(struct ipc_shm_bd) + 1;
-
-	/* init acquire bufs fifo mapped at start of remote pool shm and
-	 * populated by remote OS with local pool buffers (BDs)
-	 */
-	pool->acquire_bd_fifo = (struct ipc_fifo *) remote_shm;
+	fifo_size = pool->num_bufs * sizeof(struct ipc_shm_bd);
 
 	/* init release_bd_fifo mapped at start of local pool shm and
-	 * populated by us with remote pool buffers (BDs)
+	 * populated by us with remote pool buffer descriptors
 	 */
 	pool->release_bd_fifo = ipc_fifo_init(local_shm, fifo_size);
 
+	/* map acquire bufs fifo (remote release bufs fifo) at start of remote
+	 * pool shm. It is init and populated by remote OS with local pool BDs
+	 */
+	pool->acquire_bd_fifo = (struct ipc_fifo *) remote_shm;
+
+	/* init local/remote buffer pool addrs */
+	fifo_mem_size = ipc_fifo_mem_size(pool->release_bd_fifo);
+
 	/* init actual local buffer pool addr */
-	pool->local_pool_addr = PTR_ALIGN(
-		&pool->release_bd_fifo->buf_addr + fifo_size + 8, 8);
+	pool->local_pool_addr = local_shm + fifo_mem_size;
 
 	/* init actual remote buffer pool addr */
-	pool->remote_pool_addr = PTR_ALIGN(
-		&pool->acquire_bd_fifo->buf_addr + fifo_size + 8, 8);
+	pool->remote_pool_addr = remote_shm + fifo_mem_size;
 
-	pool->shm_size = (pool->local_pool_addr - local_shm)
-				+ (cfg->buf_size * cfg->num_bufs);
+	pool->shm_size = fifo_mem_size + (cfg->buf_size * cfg->num_bufs);
 
 	if (local_shm + pool->shm_size >
 		priv->local_virt_shm + priv->shm_size) {
@@ -252,6 +252,7 @@ static int ipc_shm_channel_init(int chan_id,
 	void *local_pool_shm;
 	void *remote_pool_shm;
 	int total_bufs, fifo_size;
+	int fifo_mem_size;
 	int err, i;
 
 	if (!cfg) {
@@ -285,20 +286,21 @@ static int ipc_shm_channel_init(int chan_id,
 	}
 
 	/* init tx/rx fifos */
-	/* fifo_size = needed capacity + 1 byte (see @ipc_fifo_init) */
-	fifo_size = total_bufs * sizeof(struct ipc_shm_bd) + 1;
+	fifo_size = total_bufs * sizeof(struct ipc_shm_bd);
 
 	/* init tx fifo mapped at the start of local channel shm */
 	chan->tx_fifo = ipc_fifo_init(chan->local_shm, fifo_size);
 
-	/* init rx fifo mapped at the start of remote channel shm */
-	chan->rx_fifo = ipc_fifo_init(chan->remote_shm, fifo_size);
+	/* map rx fifo (remote tx fifo) at the start of remote channel */
+	chan->rx_fifo = (struct ipc_fifo *) chan->remote_shm;
 
 	/* TODO: sort pool configurations ascending by buf size */
 
-	/* init buffer pools */
-	local_pool_shm = PTR_ALIGN(chan->local_shm + fifo_size + 8, 8);
-	remote_pool_shm = PTR_ALIGN(chan->remote_shm + fifo_size + 8, 8);
+	/* init&map buffer pools after tx fifo */
+	fifo_mem_size = ipc_fifo_mem_size(chan->tx_fifo);
+	local_pool_shm = chan->local_shm + fifo_mem_size;
+	remote_pool_shm = chan->remote_shm + fifo_mem_size;
+
 	for (i = 0; i < IPC_SHM_POOL_COUNT; i++) {
 		pool_cfg = &cfg->memory.managed.pools[i];
 
@@ -472,10 +474,10 @@ void *ipc_shm_acquire_buf(int chan_id, size_t request_size)
 		return NULL;
 	}
 
-	buf_addr = (uint8_t *)pool->local_pool_addr + (bd.buf_id * pool->buf_size);
+	buf_addr = pool->local_pool_addr + (bd.buf_id * pool->buf_size);
 
-	shm_dbg("Acquired buffer %d from pool %d from channel %d with address %p\n",
-		bd.buf_id, pool_id, chan_id, buf_addr);
+	shm_dbg("channel %d: pool %d: acquired buffer %d with address %p\n",
+		chan_id, pool_id, bd.buf_id, buf_addr);
 	return buf_addr;
 }
 EXPORT_SYMBOL(ipc_shm_acquire_buf);
@@ -540,8 +542,8 @@ int ipc_shm_release_buf(int chan_id, const void *buf)
 		return -EIO;
 	}
 
-	shm_dbg("Released buffer %d from pool %d from channel %d with address %p\n",
-		bd.buf_id, bd.pool_id, chan_id, buf);
+	shm_dbg("channel %d: pool %d: released buffer %d with address %p\n",
+		chan_id, bd.pool_id, bd.buf_id, buf);
 	return 0;
 }
 EXPORT_SYMBOL(ipc_shm_release_buf);

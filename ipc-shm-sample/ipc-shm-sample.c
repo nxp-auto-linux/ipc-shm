@@ -44,7 +44,7 @@ static void shm_sample_rx_cb(void *cb_arg, int chan_id, void *buf, size_t size);
  * @run_cmd:		run command state: 1 - start; 0 - stop
  * @ipc_kobj:		sysfs kernel object
  * @run_attr:		sysfs run command attributes
- * @shm_sample_sema:	semaphore used to sync with Autosar app
+ * @shm_sample_sema:	binary semaphore used to sync with Autosar app
  */
 struct ipc_sample_priv {
 	int run_cmd;
@@ -90,6 +90,7 @@ static struct ipc_shm_cfg shm_cfg = {
 static void shm_sample_rx_cb(void *cb_arg, int chan_id, void *buf,
 			     size_t size)
 {
+	struct ipc_sample_priv *prv = (struct ipc_sample_priv *)cb_arg;
 	int err = 0;
 
 	/* process the received data */
@@ -104,7 +105,7 @@ static void shm_sample_rx_cb(void *cb_arg, int chan_id, void *buf,
 	}
 
 	/* signal echo reply via semaphore */
-	up(&priv.shm_sample_sema);
+	up(&prv->shm_sample_sema);
 }
 
 /*
@@ -123,8 +124,9 @@ static int run_demo(void)
 
 	sample_info("starting demo...\n");
 
-	/* initialize binary semaphore used for sync with rx callback */
-	sema_init(&priv.shm_sample_sema, 1);
+	/* init binary semaphore with zero to block after tx until a reply is
+	 * received from remote OS and rx callback unlocks the semaphore */
+	sema_init(&priv.shm_sample_sema, 0);
 
 	sample_dbg("semaphore initialized...\n");
 
@@ -145,7 +147,7 @@ static int run_demo(void)
 		strcpy(buf, tmp);
 
 		/* send data to peer */
-		err = ipc_shm_tx(chan_id, buf, strlen(buf));
+		err = ipc_shm_tx(chan_id, buf, strlen(buf) + 1);
 		if (err) {
 			sample_err("tx failed for channel ID %d, size %d, "
 				   "error code %d\n", 0,
@@ -154,7 +156,7 @@ static int run_demo(void)
 		}
 
 		sample_info("channel %d: sent %d bytes message: %s",
-			    chan_id, (int)strlen(buf), (char *)buf);
+			    chan_id, (int)strlen(buf) + 1, (char *)buf);
 
 		/* get semaphore and wait for rx cb to release it */
 		err = down_interruptible(&priv.shm_sample_sema);
