@@ -10,7 +10,7 @@
 #include <linux/of_irq.h>
 #include "ipc-shm.h"
 #include "ipc-fifo.h"
-#include "ipc-hw-s32.h"
+#include "ipc-hw.h"
 
 #define DRIVER_NAME	"ipc-shm-dev"
 #define DRIVER_VERSION	"0.1"
@@ -149,7 +149,7 @@ static irqreturn_t ipc_shm_rx_irq(int irq, void *dev)
 				bd.data_size);
 	}
 
-	ipc_hw_irq_clear();
+	ipc_shm_hw_irq_clear(PLATFORM_DEFAULT);
 
 	return IRQ_HANDLED;
 }
@@ -367,14 +367,15 @@ int ipc_shm_init(const struct ipc_shm_cfg *cfg)
 	}
 
 	/* init rx interrupt */
-	mscm = of_find_compatible_node(NULL, NULL, DT_MSCM_NODE_COMP);
+	mscm = of_find_compatible_node(NULL, NULL, ipc_shm_hw_get_dt_comp());
 	if (!mscm) {
 		err = -ENXIO;
 		shm_err("Unable to find MSCM in device tree\n");
 		goto err_unmap_remote_shm;
 	}
 
-	priv->irq_num = of_irq_get(mscm, DT_MSCM_CPU2CPU_INTR);
+	priv->irq_num = of_irq_get(mscm,
+				ipc_shm_hw_get_dt_irq(PLATFORM_DEFAULT));
 	of_node_put(mscm); /* release refcount to mscm DT node*/
 
 	err = request_irq(priv->irq_num, ipc_shm_rx_irq, 0, DRIVER_NAME, priv);
@@ -384,23 +385,24 @@ int ipc_shm_init(const struct ipc_shm_cfg *cfg)
 	}
 
 	/* init MSCM */
-	err = ipc_hw_init();
+	err = ipc_shm_hw_init();
 	if (err) {
 		shm_err("Core-to-core interrupt initialization failed\n");
 		goto err_request_irq;
 	}
 
 	/* clear driver notifications */
-	ipc_hw_irq_clear();
+	ipc_shm_hw_irq_clear(PLATFORM_DEFAULT);
 
 	/* enable driver notifications */
-	ipc_hw_irq_enable();
+	ipc_shm_hw_irq_enable(PLATFORM_DEFAULT);
 
 	shm_dbg("ipc shm initialized\n");
 	return 0;
 
 err_request_irq:
 	free_irq(priv->irq_num, priv);
+	ipc_shm_hw_free();
 err_unmap_remote_shm:
 	iounmap(cfg->remote_shm_addr);
 err_release_remote_region:
@@ -418,8 +420,9 @@ int ipc_shm_free(void)
 {
 	struct ipc_shm_priv *priv = get_ipc_priv();
 
-	ipc_hw_irq_disable();
+	ipc_shm_hw_irq_disable(PLATFORM_DEFAULT);
 	free_irq(priv->irq_num, priv);
+	ipc_shm_hw_free();
 	iounmap(priv->remote_virt_shm);
 	release_mem_region((phys_addr_t)priv->remote_phys_shm, priv->shm_size);
 	iounmap(priv->local_virt_shm);
@@ -575,7 +578,7 @@ int ipc_shm_tx(int chan_id, void *buf, size_t data_size)
 	}
 
 	/* notify remote that data is available */
-	ipc_hw_irq_notify();
+	ipc_shm_hw_irq_notify(PLATFORM_DEFAULT, PLATFORM_DEFAULT);
 
 	return 0;
 }
@@ -584,7 +587,7 @@ EXPORT_SYMBOL(ipc_shm_tx);
 int ipc_shm_tx_unmanaged(int chan_id)
 {
 	/* notify remote that data is available */
-	ipc_hw_irq_notify();
+	ipc_shm_hw_irq_notify(PLATFORM_DEFAULT, PLATFORM_DEFAULT);
 
 	shm_err("Unmanaged channels not supported in current implementation\n");
 	return -EOPNOTSUPP;

@@ -8,7 +8,12 @@ PWD := $(shell pwd)
 ifneq ($(KERNELRELEASE),)
 # kbuild part of makefile
 obj-m := ipc-shm-dev.o
-ipc-shm-dev-y := ipc-shm.o ipc-fifo.o ipc-hw-s32.o
+ipc-shm-dev-y := ipc-shm.o ipc-fifo.o
+
+ifeq ($(CONFIG_SOC_S32GEN1),y)
+ipc-shm-dev-y += ipc-hw-s32gen1.o
+endif
+
 # Add here cc flags (e.g. header lookup paths, defines, etc)
 ccflags-y +=
 
