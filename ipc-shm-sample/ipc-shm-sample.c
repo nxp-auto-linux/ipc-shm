@@ -25,6 +25,9 @@ MODULE_VERSION(MODULE_VER);
 #define IPC_SHM_SIZE 0x100000 /* 1M local shm, 1M remote shm */
 #define REMOTE_SHM_ADDR (LOCAL_SHM_ADDR + IPC_SHM_SIZE)
 #define SHM_SAMPLE_BUF_SIZE 256
+#define S_BUF_LEN 8
+#define M_BUF_LEN 256
+#define L_BUF_LEN 4*1024
 
 /* convenience wrappers for printing messages */
 #define sample_fmt(fmt) MODULE_NAME": %s(): "fmt
@@ -33,9 +36,14 @@ MODULE_VERSION(MODULE_VER);
 #define sample_info(fmt, ...) pr_info(MODULE_NAME": "fmt, ##__VA_ARGS__)
 #define sample_dbg(fmt, ...) pr_debug(sample_fmt(fmt), __func__, ##__VA_ARGS__)
 
-static char *ipc_shm_sample_msg = "Hello from Linux!";
+static char *ipc_shm_sample_msg = "Hello world! ";
 module_param(ipc_shm_sample_msg, charp, 0660);
 MODULE_PARM_DESC(ipc_shm_sample_msg, "Message to be sent to the remote app.");
+
+static int msg_sizes[16] = {M_BUF_LEN};
+static int msg_argc = 1;
+module_param_array(msg_sizes, int, &msg_argc, 0000);
+MODULE_PARM_DESC(msg_sizes, "Sample message sizes");
 
 static void shm_sample_rx_cb(void *cb_arg, int chan_id, void *buf, size_t size);
 
@@ -51,6 +59,8 @@ struct ipc_sample_priv {
 	struct kobject *ipc_kobj;
 	struct kobj_attribute run_attr;
 	struct semaphore shm_sample_sema;
+	char last_rx_msg[L_BUF_LEN];
+	char last_tx_msg[L_BUF_LEN];
 };
 
 /* sample private data */
@@ -69,7 +79,15 @@ static struct ipc_shm_cfg shm_cfg = {
 					.pools = {
 						{
 							.num_bufs = 5,
-							.buf_size = 256
+							.buf_size = S_BUF_LEN
+						},
+						{
+							.num_bufs = 5,
+							.buf_size = M_BUF_LEN
+						},
+						{
+							.num_bufs = 5,
+							.buf_size = L_BUF_LEN
 						},
 					},
 				},
@@ -84,6 +102,30 @@ static struct ipc_shm_cfg shm_cfg = {
 };
 
 /*
+ * generate_data() - generates data a-z with rollover.
+ * @s: string that saves the generated data
+ * @len: generated data length
+ *
+ * Return: pointer to the string
+ */
+static char *generate_data(char *s, int len, int seq_no)
+{
+	int i, j;
+
+	if (!s)
+		goto out;
+
+	snprintf(s, len, "#%d ", seq_no);
+	for (i = strlen(s), j = 0; i < len - 1; i++, j++) {
+		s[i] = ipc_shm_sample_msg[j % strlen(ipc_shm_sample_msg)];
+	}
+	s[i] = '\0';
+
+out:
+	return s;
+}
+
+/*
  * shm RX callback. Prints the data, releases the channel and releases the
  * semaphore.
  */
@@ -94,8 +136,9 @@ static void shm_sample_rx_cb(void *cb_arg, int chan_id, void *buf,
 	int err = 0;
 
 	/* process the received data */
-	sample_info("channel %d: received %d bytes message: %.*s",
+	sample_info("ch %d: << %d bytes:%*.s\n",
 		    chan_id, (int)size, (int)size, (char *)buf);
+	memcpy(priv.last_rx_msg, buf, size);
 
 	/* release the buffer */
 	err = ipc_shm_release_buf(chan_id, buf);
@@ -117,61 +160,71 @@ static void shm_sample_rx_cb(void *cb_arg, int chan_id, void *buf,
 static int run_demo(void)
 {
 	int err = 0;
-	int i = 0;
+	int i, j;
+	int size = 0;
 	int chan_id = 0;
 	char *buf = NULL;
-	char tmp[SHM_SAMPLE_BUF_SIZE];
 
 	sample_info("starting demo...\n");
 
 	/* init binary semaphore with zero to block after tx until a reply is
-	 * received from remote OS and rx callback unlocks the semaphore */
+	 * received from remote OS and rx callback unlocks the semaphore
+	 */
 	sema_init(&priv.shm_sample_sema, 0);
 
 	sample_dbg("semaphore initialized...\n");
 
-	for (i = 0; i < priv.run_cmd; i++) {
-		buf = ipc_shm_acquire_buf(chan_id, SHM_SAMPLE_BUF_SIZE);
-		if (!buf) {
-			sample_err("failed to get buffer for channel ID %d with size %d\n",
-				chan_id, SHM_SAMPLE_BUF_SIZE);
-			err = -ENOMEM;
-			break;
-		}
+	for (i = 0; i < msg_argc; i++) {
+		size = msg_sizes[i];
+		for (j = 0; j < priv.run_cmd; j++) {
+			if (strcmp(priv.last_rx_msg, priv.last_tx_msg) != 0) {
+				sample_err("last rx msg != last tx msg\n");
+				sample_err(">> %s\n", priv.last_tx_msg);
+				sample_err("<< %s\n", priv.last_rx_msg);
+				err = -EINVAL;
+				return err;
+			}
 
-		/* prepare message in temp buffer due to SRAM alignment reqs */
-		snprintf(tmp, SHM_SAMPLE_BUF_SIZE, "%s #%d",
-			 ipc_shm_sample_msg, i);
+			buf = ipc_shm_acquire_buf(chan_id, size);
+			if (!buf) {
+				sample_err("failed to get buffer for channel ID"
+					   " %d and size %d\n", chan_id, size);
+				err = -ENOMEM;
+				return err;
+			}
 
-		/* write data to buf */
-		strcpy(buf, tmp);
+			/* write data to buf */
+			generate_data(buf, size, j + 1);
+			memcpy(priv.last_tx_msg, buf, size);
 
-		/* send data to peer */
-		err = ipc_shm_tx(chan_id, buf, strlen(buf) + 1);
-		if (err) {
-			sample_err("tx failed for channel ID %d, size %d, "
-				   "error code %d\n", 0,
-				   SHM_SAMPLE_BUF_SIZE, err);
-			break;
-		}
+			sample_info("ch %d: >> %d bytes:%*.s\n", chan_id, size,
+				    size, (char *)buf);
 
-		sample_info("channel %d: sent %d bytes message: %s",
-			    chan_id, (int)strlen(buf) + 1, (char *)buf);
+			/* send data to peer */
+			err = ipc_shm_tx(chan_id, buf, size);
+			if (err) {
+				sample_err("tx failed for channel ID %d, size "
+					   "%d, error code %d\n", 0, size, err);
+				return err;
+			}
 
-		/* get semaphore and wait for rx cb to release it */
-		err = down_interruptible(&priv.shm_sample_sema);
-		if (err == -EINTR) {
-			sample_info("[loop %d]:interrupted...\n", i);
-			break;
-		} else if (err) {
-			sample_err("failed to get semaphore for channel ID %d, "
-				   "error code %d\n", 0, err);
-			break;
+			/* get semaphore */
+			err = down_interruptible(&priv.shm_sample_sema);
+			if (err == -EINTR) {
+				sample_info("interrupted...\n");
+				return err;
+			}
+
+			if (err) {
+				sample_err("failed to get semaphore for channel"
+					   " ID %d, error code %d\n", 0, err);
+				return err;
+			}
 		}
 	}
 
-	sample_info("exit demo");
-	return err;
+	sample_info("demo ended\n");
+	return 0;
 }
 
 /*

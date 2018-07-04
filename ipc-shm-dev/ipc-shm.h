@@ -13,7 +13,9 @@
 /**
  * Number of buffer pools belonging to a managed channel
  */
-#define IPC_SHM_POOL_COUNT 1
+#ifndef IPC_SHM_POOL_COUNT
+#define IPC_SHM_POOL_COUNT 3
+#endif /* IPC_SHM_POOL_COUNT */
 
 /**
  * Maximum number of buffers per pool

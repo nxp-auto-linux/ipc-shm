@@ -25,10 +25,6 @@ MODULE_VERSION(DRIVER_VERSION);
 #error "Only 1 channel is supported in current implementation!"
 #endif
 
-#if IPC_SHM_POOL_COUNT != 1
-#error "Only 1 pool per channel is supported in current implementation!"
-#endif
-
 /* convenience wrappers for printing errors and debug messages */
 #define shm_fmt(fmt) DRIVER_NAME": %s(): "fmt
 #define shm_err(fmt, ...) pr_err(shm_fmt(fmt), __func__, ##__VA_ARGS__)
