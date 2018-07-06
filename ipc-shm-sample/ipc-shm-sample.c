@@ -71,34 +71,33 @@ static struct ipc_shm_cfg shm_cfg = {
 	.local_shm_addr = (void *)LOCAL_SHM_ADDR,
 	.remote_shm_addr = (void *)REMOTE_SHM_ADDR,
 	.shm_size = IPC_SHM_SIZE,
-	.channels = {
-		{
-			.type = SHM_CHANNEL_MANAGED,
-			.memory = {
-				.managed = {
-					.pools = {
-						{
-							.num_bufs = 5,
-							.buf_size = S_BUF_LEN
-						},
-						{
-							.num_bufs = 5,
-							.buf_size = M_BUF_LEN
-						},
-						{
-							.num_bufs = 5,
-							.buf_size = L_BUF_LEN
-						},
-					},
+};
+
+struct ipc_shm_channel_cfg sample_chan_cfg = {
+	.type = SHM_CHANNEL_MANAGED,
+	.memory = {
+		.managed = {
+			.pools = {
+				{
+					.num_bufs = 5,
+					.buf_size = S_BUF_LEN
+				},
+				{
+					.num_bufs = 5,
+					.buf_size = M_BUF_LEN
+				},
+				{
+					.num_bufs = 5,
+					.buf_size = L_BUF_LEN
 				},
 			},
-			.ops = {
-				.cb_arg = &priv,
-				.rx_cb = shm_sample_rx_cb,
-				.rx_unmanaged_cb = NULL,
-			},
 		},
-	}
+	},
+	.ops = {
+		.cb_arg = &priv,
+		.rx_cb = shm_sample_rx_cb,
+		.rx_unmanaged_cb = NULL,
+	},
 };
 
 /*
@@ -152,18 +151,76 @@ static void shm_sample_rx_cb(void *cb_arg, int chan_id, void *buf,
 }
 
 /*
- * Implements the ipc-shm sample.
- * The sample sends a message for each received message from the remote CPU.
+ * send_data() - Sends data to the remote CPU.
+ * @msg_len: demo message length
+ * @seq_no: demo message ID to be written in the test message
+ * @chan_id: ipc channel to be used for remote CPU communication
+ *
+ * Sends data to the remote CPU according to the input parameters.
  * It uses a semaphore for synchronization (incremented by the RX callback
- * and decremented before this thread sends data to the remote CPU).
+ * and decremented after the message is sent to the remote CPU).
+ */
+static int send_data(int msg_len, int seq_no, int chan_id)
+{
+	int err = 0;
+	char *buf = NULL;
+
+	/* last sent and received message must match */
+	if (strcmp(priv.last_rx_msg, priv.last_tx_msg) != 0) {
+		sample_err("last rx msg != last tx msg\n");
+		sample_err(">> %s\n", priv.last_tx_msg);
+		sample_err("<< %s\n", priv.last_rx_msg);
+		return -EINVAL;
+	}
+
+	buf = ipc_shm_acquire_buf(chan_id, msg_len);
+	if (!buf) {
+		sample_err("failed to get buffer for channel ID"
+			   " %d and size %d\n", chan_id, msg_len);
+		err = -ENOMEM;
+		return err;
+	}
+
+	/* write data to buf */
+	generate_data(buf, msg_len, seq_no);
+	memcpy(priv.last_tx_msg, buf, msg_len);
+
+	sample_info("ch %d: >> %d bytes:%*.s\n", chan_id, msg_len,
+		    msg_len, (char *)buf);
+
+	/* send data to peer */
+	err = ipc_shm_tx(chan_id, buf, msg_len);
+	if (err) {
+		sample_err("tx failed for channel ID %d, size "
+			   "%d, error code %d\n", 0, msg_len, err);
+		return err;
+	}
+
+	/* get semaphore */
+	err = down_interruptible(&priv.shm_sample_sema);
+	if (err == -EINTR) {
+		sample_info("interrupted...\n");
+		return err;
+	}
+
+	if (err) {
+		sample_err("failed to get semaphore for channel"
+			   " ID %d, error code %d\n", 0, err);
+		return err;
+	}
+
+	return 0;
+}
+
+/*
+ * run_demo() - Implements the ipc-shm sample.
+ *
+ * This sample communicates with the remote CPU for all combinations of
+ * configured message sizes, number of loops and configured channels.
  */
 static int run_demo(void)
 {
-	int err = 0;
-	int i, j;
-	int size = 0;
-	int chan_id = 0;
-	char *buf = NULL;
+	int err, i, loop, chan_id;
 
 	sample_info("starting demo...\n");
 
@@ -172,58 +229,17 @@ static int run_demo(void)
 	 */
 	sema_init(&priv.shm_sample_sema, 0);
 
-	sample_dbg("semaphore initialized...\n");
-
-	for (i = 0; i < msg_argc; i++) {
-		size = msg_sizes[i];
-		for (j = 0; j < priv.run_cmd; j++) {
-			if (strcmp(priv.last_rx_msg, priv.last_tx_msg) != 0) {
-				sample_err("last rx msg != last tx msg\n");
-				sample_err(">> %s\n", priv.last_tx_msg);
-				sample_err("<< %s\n", priv.last_rx_msg);
-				err = -EINVAL;
-				return err;
-			}
-
-			buf = ipc_shm_acquire_buf(chan_id, size);
-			if (!buf) {
-				sample_err("failed to get buffer for channel ID"
-					   " %d and size %d\n", chan_id, size);
-				err = -ENOMEM;
-				return err;
-			}
-
-			/* write data to buf */
-			generate_data(buf, size, j + 1);
-			memcpy(priv.last_tx_msg, buf, size);
-
-			sample_info("ch %d: >> %d bytes:%*.s\n", chan_id, size,
-				    size, (char *)buf);
-
-			/* send data to peer */
-			err = ipc_shm_tx(chan_id, buf, size);
-			if (err) {
-				sample_err("tx failed for channel ID %d, size "
-					   "%d, error code %d\n", 0, size, err);
-				return err;
-			}
-
-			/* get semaphore */
-			err = down_interruptible(&priv.shm_sample_sema);
-			if (err == -EINTR) {
-				sample_info("interrupted...\n");
-				return err;
-			}
-
-			if (err) {
-				sample_err("failed to get semaphore for channel"
-					   " ID %d, error code %d\n", 0, err);
-				return err;
+	for (chan_id = 0; chan_id < IPC_SHM_CHANNEL_COUNT; chan_id++) {
+		for (i = 0; i < msg_argc; i++) {
+			for (loop = 0; loop < priv.run_cmd; loop++) {
+				err = send_data(msg_sizes[i], loop + 1, chan_id);
+				if (err)
+					return err;
 			}
 		}
 	}
 
-	sample_info("demo ended\n");
+	sample_info("exit demo\n");
 	return 0;
 }
 
@@ -300,9 +316,14 @@ static void ipc_sysfs_free(void)
 
 static int __init sample_mod_init(void)
 {
-	int err = 0;
+	int i, err = 0;
 
 	sample_dbg("module version "MODULE_VER" init\n");
+
+	/* set channels configuration */
+	for (i = 0; i < IPC_SHM_CHANNEL_COUNT; i++) {
+		shm_cfg.channels[i] = sample_chan_cfg;
+	}
 
 	err = ipc_sysfs_init();
 	if (err)

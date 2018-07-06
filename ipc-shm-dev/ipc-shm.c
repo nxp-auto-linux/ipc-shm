@@ -21,10 +21,6 @@ MODULE_ALIAS(DRIVER_NAME);
 MODULE_DESCRIPTION("NXP Shared Memory Inter-Processor Communication Driver");
 MODULE_VERSION(DRIVER_VERSION);
 
-#if IPC_SHM_CHANNEL_COUNT != 1
-#error "Only 1 channel is supported in current implementation!"
-#endif
-
 /* convenience wrappers for printing errors and debug messages */
 #define shm_fmt(fmt) DRIVER_NAME": %s(): "fmt
 #define shm_err(fmt, ...) pr_err(shm_fmt(fmt), __func__, ##__VA_ARGS__)
@@ -270,6 +266,7 @@ static int ipc_shm_channel_init(int chan_id,
 	/* save cfg params */
 	chan->type = cfg->type;
 	chan->ops = cfg->ops;
+	chan->id = chan_id;
 
 	/* TODO: handle multiple channels when assigning shm */
 	chan->local_shm = priv->local_virt_shm;

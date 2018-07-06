@@ -8,7 +8,9 @@
 /**
  * Number of IPC shared memory channels
  */
+#ifndef IPC_SHM_CHANNEL_COUNT
 #define IPC_SHM_CHANNEL_COUNT 1
+#endif /* IPC_SHM_CHANNEL_COUNT */
 
 /**
  * Number of buffer pools belonging to a managed channel
