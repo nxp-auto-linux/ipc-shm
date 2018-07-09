@@ -14,6 +14,10 @@ ifeq ($(CONFIG_SOC_S32GEN1),y)
 ipc-shm-dev-y += ipc-hw-s32gen1.o
 endif
 
+ifeq ($(CONFIG_SOC_S32V234),y)
+ipc-shm-dev-y += ipc-hw-s32v234.o
+endif
+
 # Add here cc flags (e.g. header lookup paths, defines, etc)
 ccflags-y +=
 
