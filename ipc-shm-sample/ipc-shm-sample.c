@@ -8,7 +8,7 @@
 #include <linux/sysfs.h>
 #include <linux/string.h>
 #include <linux/stat.h>
-#include <linux/semaphore.h>
+#include <linux/completion.h>
 
 #include "../ipc-shm-dev/ipc-shm.h"
 
@@ -65,7 +65,6 @@ struct ipc_sample_priv {
 	int run_cmd;
 	struct kobject *ipc_kobj;
 	struct kobj_attribute run_attr;
-	struct semaphore shm_sample_sema;
 	char last_rx_msg[L_BUF_LEN];
 	char last_tx_msg[L_BUF_LEN];
 };
@@ -131,6 +130,8 @@ out:
 	return s;
 }
 
+static DECLARE_COMPLETION(reply_received);
+
 /*
  * shm RX callback. Prints the data, releases the channel and releases the
  * semaphore.
@@ -138,7 +139,6 @@ out:
 static void shm_sample_rx_cb(void *cb_arg, int chan_id, void *buf,
 			     size_t size)
 {
-	struct ipc_sample_priv *prv = (struct ipc_sample_priv *)cb_arg;
 	int err = 0;
 
 	/* process the received data */
@@ -153,8 +153,8 @@ static void shm_sample_rx_cb(void *cb_arg, int chan_id, void *buf,
 			    "err code %d\n", chan_id, err);
 	}
 
-	/* signal echo reply via semaphore */
-	up(&prv->shm_sample_sema);
+	/* signal reply received */
+	complete(&reply_received);
 }
 
 /*
@@ -203,16 +203,10 @@ static int send_data(int msg_len, int seq_no, int chan_id)
 		return err;
 	}
 
-	/* get semaphore */
-	err = down_interruptible(&priv.shm_sample_sema);
-	if (err == -EINTR) {
+	/* wait for reply signal from rx callback */
+	err = wait_for_completion_interruptible(&reply_received);
+	if (err == -ERESTARTSYS) {
 		sample_info("interrupted...\n");
-		return err;
-	}
-
-	if (err) {
-		sample_err("failed to get semaphore for channel"
-			   " ID %d, error code %d\n", 0, err);
 		return err;
 	}
 
@@ -227,19 +221,14 @@ static int send_data(int msg_len, int seq_no, int chan_id)
  */
 static int run_demo(void)
 {
-	int err, i, loop, chan_id;
+	int err, i, j, chan_id;
 
 	sample_info("starting demo...\n");
 
-	/* init binary semaphore with zero to block after tx until a reply is
-	 * received from remote OS and rx callback unlocks the semaphore
-	 */
-	sema_init(&priv.shm_sample_sema, 0);
-
 	for (chan_id = 0; chan_id < IPC_SHM_CHANNEL_COUNT; chan_id++) {
 		for (i = 0; i < msg_argc; i++) {
-			for (loop = 0; loop < priv.run_cmd; loop++) {
-				err = send_data(msg_sizes[i], loop + 1, chan_id);
+			for (j = 0; j < priv.run_cmd; j++) {
+				err = send_data(msg_sizes[i], j + 1, chan_id);
 				if (err)
 					return err;
 			}
