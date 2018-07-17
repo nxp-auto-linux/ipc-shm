@@ -21,6 +21,9 @@ MODULE_ALIAS(DRIVER_NAME);
 MODULE_DESCRIPTION("NXP Shared Memory Inter-Processor Communication Driver");
 MODULE_VERSION(DRIVER_VERSION);
 
+/* softirq work budget used to prevent CPU starvation */
+#define IPC_SOFTIRQ_BUDGET 128
+
 /* convenience wrappers for printing errors and debug messages */
 #define shm_fmt(fmt) DRIVER_NAME": %s(): "fmt
 #define shm_err(fmt, ...) pr_err(shm_fmt(fmt), __func__, ##__VA_ARGS__)
@@ -105,7 +108,8 @@ struct ipc_shm_channel {
  * @shm_size:		local/remote shared memory size
  * @local_virt_shm:	local shared memory virtual address
  * @remote_virt_shm:	remote shared memory virtual address
- * @irq_num:		Linux interrupt
+ * @irq_num:		Linux IRQ number
+ * @rx_work:		current work done by softirq
  * @channels:		ipc channels private data
  */
 struct ipc_shm_priv {
@@ -115,6 +119,7 @@ struct ipc_shm_priv {
 	void *local_virt_shm;
 	void *remote_virt_shm;
 	int irq_num;
+	int rx_work;
 	struct ipc_shm_channel channels[IPC_SHM_CHANNEL_COUNT];
 };
 
@@ -131,25 +136,48 @@ static inline struct ipc_shm_channel *get_channel(int chan_id)
 	return &ipc_shm_priv.channels[chan_id];
 }
 
-/* rx interrupt handler */
-static irqreturn_t ipc_shm_rx_irq(int irq, void *dev)
+static void ipc_shm_rx_softirq(unsigned long arg);
+DECLARE_TASKLET(ipc_shm_rx_tasklet, ipc_shm_rx_softirq, 0);
+
+/* tasklet for deferred interrupt handling */
+static void ipc_shm_rx_softirq(unsigned long arg)
 {
+	struct ipc_shm_priv *priv = get_ipc_priv();
 	/* TODO: handle multiple channels not just the first one */
 	struct ipc_shm_channel *chan = get_channel(0);
 	struct ipc_shm_pool *pool;
 	struct ipc_shm_bd bd;
 	void *buf_addr;
 
-	/* TODO: read rx fifo in a separate tasklet (intr coalescing) */
-	while (ipc_fifo_pop(chan->rx_fifo, &bd, sizeof(bd))) {
+	while (priv->rx_work < IPC_SOFTIRQ_BUDGET &&
+	       ipc_fifo_pop(chan->rx_fifo, &bd, sizeof(bd))) {
+
 		pool = &chan->pools[bd.pool_id];
 		buf_addr = pool->remote_pool_addr + bd.buf_id * pool->buf_size;
 
 		chan->ops.rx_cb(chan->ops.cb_arg, chan->id, buf_addr,
 				bd.data_size);
+
+		priv->rx_work++;
 	}
 
+	if (priv->rx_work < IPC_SOFTIRQ_BUDGET) {
+		/* work done, re-enable irq */
+		ipc_shm_hw_irq_enable(PLATFORM_DEFAULT);
+	} else {
+		/* work not done, reschedule softirq */
+		tasklet_schedule(&ipc_shm_rx_tasklet);
+	}
+}
+
+/* rx interrupt handler */
+static irqreturn_t ipc_shm_rx_irq(int irq, void *dev)
+{
+	ipc_shm_hw_irq_disable(PLATFORM_DEFAULT);
 	ipc_shm_hw_irq_clear(PLATFORM_DEFAULT);
+
+	get_ipc_priv()->rx_work = 0;
+	tasklet_schedule(&ipc_shm_rx_tasklet);
 
 	return IRQ_HANDLED;
 }
@@ -421,6 +449,7 @@ int ipc_shm_free(void)
 	struct ipc_shm_priv *priv = get_ipc_priv();
 
 	ipc_shm_hw_irq_disable(PLATFORM_DEFAULT);
+	tasklet_kill(&ipc_shm_rx_tasklet);
 	free_irq(priv->irq_num, priv);
 	ipc_shm_hw_free();
 	iounmap(priv->remote_virt_shm);
