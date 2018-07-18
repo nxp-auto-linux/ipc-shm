@@ -2,22 +2,18 @@
 /*
  * Copyright 2018 NXP
  */
-#ifndef IPC_SHM_DEV_IPC_SHM_H
-#define IPC_SHM_DEV_IPC_SHM_H
+#ifndef IPC_SHM_H
+#define IPC_SHM_H
 
 /**
- * Number of IPC shared memory channels
+ * Maximum number of shared memory channels that can be configured
  */
-#ifndef IPC_SHM_CHANNEL_COUNT
-#define IPC_SHM_CHANNEL_COUNT 1
-#endif /* IPC_SHM_CHANNEL_COUNT */
+#define IPC_SHM_MAX_CHANNELS 8
 
 /**
- * Number of buffer pools belonging to a managed channel
+ * Maximum number of buffer pools that can be configured for a managed channel
  */
-#ifndef IPC_SHM_POOL_COUNT
-#define IPC_SHM_POOL_COUNT 3
-#endif /* IPC_SHM_POOL_COUNT */
+#define IPC_SHM_MAX_POOLS 4
 
 /**
  * Maximum number of buffers per pool
@@ -36,8 +32,8 @@ enum ipc_shm_channel_type {
 
 /**
  * struct ipc_shm_pool_cfg - memory buffer pool parameters
- * @num_buffers:    number of buffers
- * @buf_size:       buffer size
+ * @num_bufs:	number of buffers
+ * @buf_size:	buffer size
  */
 struct ipc_shm_pool_cfg {
 	uint16_t num_bufs;
@@ -72,7 +68,8 @@ struct ipc_shm_channel_cfg {
 	/* managed/unmanaged channel memory params */
 	union {
 		struct {
-			struct ipc_shm_pool_cfg pools[IPC_SHM_POOL_COUNT];
+			int num_pools;
+			struct ipc_shm_pool_cfg *pools;
 		} managed;
 		struct {
 			uint32_t size;
@@ -80,7 +77,7 @@ struct ipc_shm_channel_cfg {
 	} memory;
 
 	/* rx API callbacks */
-	struct ipc_shm_channel_ops ops;
+	struct ipc_shm_channel_ops *ops;
 };
 
 /**
@@ -91,10 +88,11 @@ struct ipc_shm_channel_cfg {
  * @channels:		IPC channels' parameters array
  */
 struct ipc_shm_cfg {
-	void *local_shm_addr;
-	void *remote_shm_addr;
+	uintptr_t local_shm_addr;
+	uintptr_t remote_shm_addr;
 	int shm_size;
-	struct ipc_shm_channel_cfg channels[IPC_SHM_CHANNEL_COUNT];
+	int num_channels;
+	struct ipc_shm_channel_cfg *channels;
 };
 
 /**
@@ -131,7 +129,7 @@ void *ipc_shm_acquire_buf(int chan_id, size_t size);
 int ipc_shm_release_buf(int chan_id, const void *buf);
 
 /**
- * nxp_shm_tx() - send data on given channel and notify remote
+ * ipc_shm_tx() - send data on given channel and notify remote
  * @chan_id:        channel index
  * @buf:            buffer pointer
  * @size:           size of data written in buffer
@@ -153,4 +151,4 @@ int ipc_shm_tx(int chan_id, void *buf, size_t size);
  */
 int ipc_shm_tx_unmanaged(int chan_id);
 
-#endif /* IPC_SHM_DEV_IPC_SHM_H */
+#endif /* IPC_SHM_H */

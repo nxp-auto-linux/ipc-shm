@@ -2,8 +2,8 @@
 /*
  * Copyright (C) 2018 NXP Semiconductors
  */
-#ifndef IPC_HW_H_
-#define IPC_HW_H_
+#ifndef IPC_HW_H
+#define IPC_HW_H
 
 #define PLATFORM_DEFAULT    (-1) /* use platform default instead of parameter */
 
@@ -23,4 +23,4 @@ int ipc_shm_hw_irq_notify(int shm_irq_id, int remote_cpu);
 
 int ipc_shm_hw_irq_clear(int shm_irq_id);
 
-#endif /* IPC_HW_H_ */
+#endif /* IPC_HW_H */

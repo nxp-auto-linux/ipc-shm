@@ -422,7 +422,7 @@ void ipc_shm_hw_free(void)
  * of the first MSCM inter-core interrupt is 1. In order to obtain the correct
  * index for the interrupt routing register, this value is added to shm_irq_id.
  *
- * Return: 0 for success, EINVAL for invalid interrupt ID
+ * Return: 0 for success, -EINVAL for invalid interrupt ID
  */
 int ipc_shm_hw_irq_enable(int shm_irq_id)
 {
@@ -457,7 +457,7 @@ int ipc_shm_hw_irq_enable(int shm_irq_id)
  * of the first MSCM inter-core interrupt is 1. In order to obtain the correct
  * index for the interrupt routing register, this value is added to shm_irq_id.
  *
- * Return: 0 for success, EINVAL for invalid interrupt ID
+ * Return: 0 for success, -EINVAL for invalid interrupt ID
  */
 int ipc_shm_hw_irq_disable(int shm_irq_id)
 {
@@ -489,7 +489,7 @@ int ipc_shm_hw_irq_disable(int shm_irq_id)
  * If the value PLAFORM_DEFAULT is passed as either parameter, the default
  * value defined for the selected platform will be used instead.
  *
- * Return: 0 for success, EINVAL for invalid interrupt or remote processor ID
+ * Return: 0 for success, -EINVAL for invalid interrupt or remote processor ID
  */
 int ipc_shm_hw_irq_notify(int shm_irq_id, int remote_cpu)
 {
@@ -633,7 +633,7 @@ int ipc_shm_hw_irq_notify(int shm_irq_id, int remote_cpu)
  * If the value PLAFORM_DEFAULT is passed as parameter, the default
  * value defined for the selected platform will be used instead.
  *
- * Return: 0 for success, EINVAL for invalid interrupt ID
+ * Return: 0 for success, -EINVAL for invalid interrupt ID
  */
 int ipc_shm_hw_irq_clear(int shm_irq_id)
 {

@@ -2,32 +2,16 @@
 /*
  * Copyright 2018 NXP
  */
-#include <linux/module.h>
-#include <linux/kernel.h>
-#include <linux/interrupt.h>
 #include <linux/ioport.h>
 #include <linux/io.h>
-#include <linux/of_irq.h>
+#include "ipc-os.h"
 #include "ipc-shm.h"
 #include "ipc-fifo.h"
 #include "ipc-hw.h"
 
-#define DRIVER_NAME	"ipc-shm-dev"
-#define DRIVER_VERSION	"0.1"
-
-MODULE_AUTHOR("NXP");
-MODULE_LICENSE("Dual BSD/GPL");
-MODULE_ALIAS(DRIVER_NAME);
-MODULE_DESCRIPTION("NXP Shared Memory Inter-Processor Communication Driver");
-MODULE_VERSION(DRIVER_VERSION);
-
-/* softirq work budget used to prevent CPU starvation */
-#define IPC_SOFTIRQ_BUDGET 128
-
-/* convenience wrappers for printing errors and debug messages */
-#define shm_fmt(fmt) DRIVER_NAME": %s(): "fmt
-#define shm_err(fmt, ...) pr_err(shm_fmt(fmt), __func__, ##__VA_ARGS__)
-#define shm_dbg(fmt, ...) pr_debug(shm_fmt(fmt), __func__, ##__VA_ARGS__)
+#ifndef max
+#define max(x, y) ((x) > (y) ? (x) : (y))
+#endif
 
 /**
  * struct ipc_shm_bd - buffer descriptor (store buffer location and data size)
@@ -63,8 +47,8 @@ struct ipc_shm_bd {
  * acquire BDs fifo)when remote app calls ipc_shm_acquire_buf().
  * release_bd_fifo is initialized by us (mem protection requirement).
  *
- * our acquire fifo = remote release fifo
- * our release fifo = remote acquire fifo
+ * local acquire fifo = remote release fifo
+ * local release fifo = remote acquire fifo
  */
 struct ipc_shm_pool {
 	uint16_t num_bufs;
@@ -72,8 +56,8 @@ struct ipc_shm_pool {
 	uint32_t shm_size;
 	struct ipc_fifo *acquire_bd_fifo;
 	struct ipc_fifo *release_bd_fifo;
-	void *local_pool_addr;
-	void *remote_pool_addr;
+	uintptr_t local_pool_addr;
+	uintptr_t remote_pool_addr;
 };
 
 /**
@@ -81,46 +65,41 @@ struct ipc_shm_pool {
  * @id:		channel id
  * @type:	channel type (see ipc_shm_channel_type)
  * @ops:	channel rx API callbacks
- * @local_shm:  local channel shared memory virtual address
- * @remote_shm:	remote channel shared memory virtual address
  * @tx_fifo:	tx fifo mapped at the start of local channel shared memory
  * @rx_fifo:	rx fifo mapped at the start of remote channel shared memory
  * @pools:	buffer pools private data
  *
- * our tx_fifo = remote rx_fifo
- * our rx_fifo = remote tx_fifo
+ * local tx_fifo = remote rx_fifo
+ * local rx_fifo = remote tx_fifo
  */
 struct ipc_shm_channel {
 	int id;
 	enum ipc_shm_channel_type type;
 	struct ipc_shm_channel_ops ops;
-	void *local_shm;
-	void *remote_shm;
 	struct ipc_fifo *tx_fifo;
 	struct ipc_fifo *rx_fifo;
-	struct ipc_shm_pool pools[IPC_SHM_POOL_COUNT];
+	int num_pools;
+	struct ipc_shm_pool pools[IPC_SHM_MAX_POOLS];
 };
 
 /**
  * struct ipc_shm_priv - ipc shm private data
+ * @shm_size:		local/remote shared memory size
+ * @local_shm:		local shared memory address
+ * @remote_shm:		remote shared memory address
  * @local_phys_shm:	local shared memory physical address
  * @remote_phys_shm:	remote shared memory physical address
- * @shm_size:		local/remote shared memory size
- * @local_virt_shm:	local shared memory virtual address
- * @remote_virt_shm:	remote shared memory virtual address
- * @irq_num:		Linux IRQ number
- * @rx_work:		current work done by softirq
+ * num_channels:	number of shared memory channels
  * @channels:		ipc channels private data
  */
 struct ipc_shm_priv {
-	void *local_phys_shm;
-	void *remote_phys_shm;
 	int shm_size;
-	void *local_virt_shm;
-	void *remote_virt_shm;
-	int irq_num;
-	int rx_work;
-	struct ipc_shm_channel channels[IPC_SHM_CHANNEL_COUNT];
+	uintptr_t local_shm;
+	uintptr_t remote_shm;
+	uintptr_t local_phys_shm;
+	uintptr_t remote_phys_shm;
+	int num_channels;
+	struct ipc_shm_channel channels[IPC_SHM_MAX_CHANNELS];
 };
 
 /* ipc shm private data */
@@ -131,63 +110,92 @@ static inline struct ipc_shm_priv *get_ipc_priv(void)
 	return &ipc_shm_priv;
 }
 
-static inline struct ipc_shm_channel *get_channel(int chan_id)
+/* get channel without id validation (to be used in internal functions) */
+static inline struct ipc_shm_channel *__get_channel(int chan_id)
 {
 	return &ipc_shm_priv.channels[chan_id];
 }
 
-static void ipc_shm_rx_softirq(unsigned long arg);
-DECLARE_TASKLET(ipc_shm_rx_tasklet, ipc_shm_rx_softirq, 0);
-
-/* tasklet for deferred interrupt handling */
-static void ipc_shm_rx_softirq(unsigned long arg)
+/* get channel with id validation (to be used in API functions) */
+static inline struct ipc_shm_channel *get_channel(int chan_id)
 {
-	struct ipc_shm_priv *priv = get_ipc_priv();
-	/* TODO: handle multiple channels not just the first one */
-	struct ipc_shm_channel *chan = get_channel(0);
+	if (chan_id < 0 || chan_id >= get_ipc_priv()->num_channels) {
+		shm_err("Channel id outside valid range: 0 - %d\n",
+			get_ipc_priv()->num_channels);
+		return NULL;
+	}
+
+	return __get_channel(chan_id);
+}
+
+/**
+ * ipc_channel_rx() - handle rx for a single channel
+ * @chan_id:	channel id
+ * @budget:	available work budget (number of messaged to be processed)
+ *
+ * Return:	work done
+ */
+static int ipc_channel_rx(int chan_id, int budget)
+{
+	struct ipc_shm_channel *chan = __get_channel(chan_id);
 	struct ipc_shm_pool *pool;
 	struct ipc_shm_bd bd;
-	void *buf_addr;
+	uintptr_t buf_addr;
+	int work = 0;
 
-	while (priv->rx_work < IPC_SOFTIRQ_BUDGET &&
-	       ipc_fifo_pop(chan->rx_fifo, &bd, sizeof(bd))) {
+	while (work < budget && ipc_fifo_pop(chan->rx_fifo, &bd, sizeof(bd))) {
 
 		pool = &chan->pools[bd.pool_id];
 		buf_addr = pool->remote_pool_addr + bd.buf_id * pool->buf_size;
 
-		chan->ops.rx_cb(chan->ops.cb_arg, chan->id, buf_addr,
-				bd.data_size);
-
-		priv->rx_work++;
+		chan->ops.rx_cb(chan->ops.cb_arg, chan->id,
+				(void *)buf_addr, bd.data_size);
+		work++;
 	}
 
-	if (priv->rx_work < IPC_SOFTIRQ_BUDGET) {
-		/* work done, re-enable irq */
-		ipc_shm_hw_irq_enable(PLATFORM_DEFAULT);
-	} else {
-		/* work not done, reschedule softirq */
-		tasklet_schedule(&ipc_shm_rx_tasklet);
-	}
+	return work;
 }
 
-/* rx interrupt handler */
-static irqreturn_t ipc_shm_rx_irq(int irq, void *dev)
+/**
+ * ipc_shm_rx() - shm rx handler, called from softirq
+ * @budget:	available work budget (number of messaged to be processed)
+ *
+ * This function handles all channels using a fair handling algorithm: all
+ * channels are treated equally and no channel is starving.
+ *
+ * Return:	work done
+ */
+static int ipc_shm_rx(int budget)
 {
-	ipc_shm_hw_irq_disable(PLATFORM_DEFAULT);
-	ipc_shm_hw_irq_clear(PLATFORM_DEFAULT);
+	int num_chans = get_ipc_priv()->num_channels;
+	int chan_budget, chan_work;
+	int more_work = 1;
+	int work = 0;
+	int i;
 
-	get_ipc_priv()->rx_work = 0;
-	tasklet_schedule(&ipc_shm_rx_tasklet);
+	/* fair channel handling algorithm */
+	while (work < budget && more_work) {
+		chan_budget = max(((int)budget - work) / num_chans, 1);
+		more_work = 0;
 
-	return IRQ_HANDLED;
+		for (i = 0; i < num_chans; i++) {
+			chan_work = ipc_channel_rx(i, chan_budget);
+			work += chan_work;
+
+			if (chan_work == chan_budget)
+				more_work = 1;
+		}
+	}
+
+	return work;
 }
 
 static int ipc_buf_pool_init(int chan_id, int pool_id,
-			     void *local_shm, void *remote_shm,
+			     uintptr_t local_shm, uintptr_t remote_shm,
 			     const struct ipc_shm_pool_cfg *cfg)
 {
 	struct ipc_shm_priv *priv = get_ipc_priv();
-	struct ipc_shm_channel *chan = get_channel(chan_id);
+	struct ipc_shm_channel *chan = __get_channel(chan_id);
 	struct ipc_shm_pool *pool = &chan->pools[pool_id];
 	struct ipc_shm_bd bd;
 	int fifo_size, fifo_mem_size;
@@ -231,8 +239,8 @@ static int ipc_buf_pool_init(int chan_id, int pool_id,
 
 	pool->shm_size = fifo_mem_size + (cfg->buf_size * cfg->num_bufs);
 
-	if (local_shm + pool->shm_size >
-		priv->local_virt_shm + priv->shm_size) {
+	/* check if pool fits into shared memory */
+	if (local_shm + pool->shm_size > priv->local_shm + priv->shm_size) {
 		shm_err("Not enough shared memory for pool %d from channel %d\n",
 			pool_id, chan_id);
 		return -ENOMEM;
@@ -246,7 +254,8 @@ static int ipc_buf_pool_init(int chan_id, int pool_id,
 
 		count = ipc_fifo_push(pool->release_bd_fifo, &bd, sizeof(bd));
 		if (count != sizeof(bd)) {
-			shm_err("Unable to init release buffer descriptors fifo for pool %d of channel %d\n",
+			shm_err("Unable to init release buffer descriptors fifo "
+				"for pool %d of channel %d\n",
 				pool_id, chan_id);
 			return -EIO;
 		}
@@ -264,13 +273,13 @@ static int ipc_buf_pool_init(int chan_id, int pool_id,
  * Return: 0 for success, error code otherwise
  */
 static int ipc_shm_channel_init(int chan_id,
+				uintptr_t local_shm, uintptr_t remote_shm,
 				const struct ipc_shm_channel_cfg *cfg)
 {
-	struct ipc_shm_priv *priv = get_ipc_priv();
-	struct ipc_shm_channel *chan = get_channel(chan_id);
+	struct ipc_shm_channel *chan = __get_channel(chan_id);
 	const struct ipc_shm_pool_cfg *pool_cfg;
-	void *local_pool_shm;
-	void *remote_pool_shm;
+	uintptr_t local_pool_shm;
+	uintptr_t remote_pool_shm;
 	int total_bufs, fifo_size;
 	int fifo_mem_size;
 	int err, i;
@@ -280,29 +289,33 @@ static int ipc_shm_channel_init(int chan_id,
 		return -EINVAL;
 	}
 
-	if (!cfg->ops.rx_cb) {
+	if (!cfg->ops->rx_cb) {
 		shm_err("Receive callback not specified\n");
 		return -EINVAL;
 	}
 
-	/* TODO: only managed channels are supported for now */
+	/* only managed channels are supported for now */
 	if (cfg->type != SHM_CHANNEL_MANAGED) {
 		shm_err("Channel type not supported\n");
 		return -EOPNOTSUPP;
 	}
 
+	if (cfg->memory.managed.num_pools < 1 ||
+	    cfg->memory.managed.num_pools > IPC_SHM_MAX_POOLS) {
+		shm_err("Number of pools must be between 1 and %d\n",
+			IPC_SHM_MAX_POOLS);
+		return -EINVAL;
+	}
+
 	/* save cfg params */
 	chan->type = cfg->type;
-	chan->ops = cfg->ops;
 	chan->id = chan_id;
+	chan->num_pools = cfg->memory.managed.num_pools;
+	memcpy(&chan->ops, cfg->ops, sizeof(chan->ops));
 
-	/* TODO: handle multiple channels when assigning shm */
-	chan->local_shm = priv->local_virt_shm;
-	chan->remote_shm = priv->remote_virt_shm;
-
-	/* compute total number of buffers from all pools */
+	/* count total number of buffers from all pools */
 	total_bufs = 0;
-	for (i = 0; i < IPC_SHM_POOL_COUNT; i++) {
+	for (i = 0; i < chan->num_pools; i++) {
 		total_bufs += cfg->memory.managed.pools[i].num_bufs;
 	}
 
@@ -310,19 +323,19 @@ static int ipc_shm_channel_init(int chan_id,
 	fifo_size = total_bufs * sizeof(struct ipc_shm_bd);
 
 	/* init tx fifo mapped at the start of local channel shm */
-	chan->tx_fifo = ipc_fifo_init(chan->local_shm, fifo_size);
+	chan->tx_fifo = ipc_fifo_init(local_shm, fifo_size);
 
 	/* map rx fifo (remote tx fifo) at the start of remote channel */
-	chan->rx_fifo = (struct ipc_fifo *) chan->remote_shm;
+	chan->rx_fifo = (struct ipc_fifo *) remote_shm;
 
-	/* TODO: sort pool configurations ascending by buf size */
+	/* TODO: check if pools are sorted ascending by buf size */
 
 	/* init&map buffer pools after tx fifo */
 	fifo_mem_size = ipc_fifo_mem_size(chan->tx_fifo);
-	local_pool_shm = chan->local_shm + fifo_mem_size;
-	remote_pool_shm = chan->remote_shm + fifo_mem_size;
+	local_pool_shm = local_shm + fifo_mem_size;
+	remote_pool_shm = remote_shm + fifo_mem_size;
 
-	for (i = 0; i < IPC_SHM_POOL_COUNT; i++) {
+	for (i = 0; i < chan->num_pools; i++) {
 		pool_cfg = &cfg->memory.managed.pools[i];
 
 		err = ipc_buf_pool_init(chan->id, i, local_pool_shm,
@@ -339,11 +352,27 @@ static int ipc_shm_channel_init(int chan_id,
 	return 0;
 }
 
+/* Get channel memory size = tx fifo size + size of channel buffer pools */
+static int get_chan_mem_size(int chan_id)
+{
+	struct ipc_shm_channel *chan = __get_channel(chan_id);
+	int size = ipc_fifo_mem_size(chan->tx_fifo);
+	int i;
+
+	for (i = 0; i < chan->num_pools; i++) {
+		size += chan->pools[i].shm_size;
+	}
+
+	return size;
+}
+
 int ipc_shm_init(const struct ipc_shm_cfg *cfg)
 {
 	struct ipc_shm_priv *priv = get_ipc_priv();
-	struct device_node *mscm = NULL;
 	struct resource *res;
+	uintptr_t local_chan_shm;
+	uintptr_t remote_chan_shm;
+	int chan_size;
 	int err, i;
 
 	if (!cfg) {
@@ -351,10 +380,18 @@ int ipc_shm_init(const struct ipc_shm_cfg *cfg)
 		return -EINVAL;
 	}
 
+	if (cfg->num_channels < 1 ||
+	    cfg->num_channels > IPC_SHM_MAX_CHANNELS) {
+		shm_err("Number of channels must be between 1 and %d\n",
+			IPC_SHM_MAX_CHANNELS);
+		return -EINVAL;
+	}
+
 	/* save api params */
 	priv->local_phys_shm = cfg->local_shm_addr;
 	priv->remote_phys_shm = cfg->remote_shm_addr;
 	priv->shm_size = cfg->shm_size;
+	priv->num_channels = cfg->num_channels;
 
 	/* request and map local physical shared memory */
 	res = request_mem_region((phys_addr_t)cfg->local_shm_addr,
@@ -364,9 +401,9 @@ int ipc_shm_init(const struct ipc_shm_cfg *cfg)
 		return -EADDRINUSE;
 	}
 
-	priv->local_virt_shm = ioremap_nocache((phys_addr_t)cfg->local_shm_addr,
-					       cfg->shm_size);
-	if (!priv->local_virt_shm) {
+	priv->local_shm = (uintptr_t)ioremap_nocache(cfg->local_shm_addr,
+						     cfg->shm_size);
+	if (!priv->local_shm) {
 		err = -ENOMEM;
 		goto err_release_local_region;
 	}
@@ -380,43 +417,39 @@ int ipc_shm_init(const struct ipc_shm_cfg *cfg)
 		goto err_unmap_local_shm;
 	}
 
-	priv->remote_virt_shm = ioremap_nocache(
-		(phys_addr_t) cfg->remote_shm_addr, cfg->shm_size);
-	if (!priv->remote_virt_shm) {
+	priv->remote_shm = (uintptr_t)ioremap_nocache(cfg->remote_shm_addr,
+						      cfg->shm_size);
+	if (!priv->remote_shm) {
 		err = -ENOMEM;
 		goto err_release_remote_region;
 	}
 
 	/* init channels */
-	for (i = 0; i < IPC_SHM_CHANNEL_COUNT; i++) {
-		err = ipc_shm_channel_init(i, &cfg->channels[i]);
+	local_chan_shm = priv->local_shm;
+	remote_chan_shm = priv->remote_shm;
+	shm_dbg("initializing channels...\n");
+	for (i = 0; i < priv->num_channels; i++) {
+		err = ipc_shm_channel_init(i, local_chan_shm, remote_chan_shm,
+					   &cfg->channels[i]);
 		if (err)
 			goto err_unmap_remote_shm;
+
+		/* compute next channel local/remote shm base address */
+		chan_size = get_chan_mem_size(i);
+		local_chan_shm += chan_size;
+		remote_chan_shm += chan_size;
 	}
 
-	/* init rx interrupt */
-	mscm = of_find_compatible_node(NULL, NULL, ipc_shm_hw_get_dt_comp());
-	if (!mscm) {
-		err = -ENXIO;
-		shm_err("Unable to find MSCM in device tree\n");
+	/* init OS specific part */
+	err = ipc_os_init(ipc_shm_rx);
+	if (err)
 		goto err_unmap_remote_shm;
-	}
-
-	priv->irq_num = of_irq_get(mscm,
-				ipc_shm_hw_get_dt_irq(PLATFORM_DEFAULT));
-	of_node_put(mscm); /* release refcount to mscm DT node*/
-
-	err = request_irq(priv->irq_num, ipc_shm_rx_irq, 0, DRIVER_NAME, priv);
-	if (err) {
-		shm_err("Request interrupt %d failed\n", priv->irq_num);
-		goto err_unmap_remote_shm;
-	}
 
 	/* init MSCM */
 	err = ipc_shm_hw_init();
 	if (err) {
 		shm_err("Core-to-core interrupt initialization failed\n");
-		goto err_request_irq;
+		goto err_free_ipc_os;
 	}
 
 	/* clear driver notifications */
@@ -428,15 +461,14 @@ int ipc_shm_init(const struct ipc_shm_cfg *cfg)
 	shm_dbg("ipc shm initialized\n");
 	return 0;
 
-err_request_irq:
-	free_irq(priv->irq_num, priv);
-	ipc_shm_hw_free();
+err_free_ipc_os:
+	ipc_os_free();
 err_unmap_remote_shm:
-	iounmap(cfg->remote_shm_addr);
+	iounmap((void *)cfg->remote_shm_addr);
 err_release_remote_region:
 	release_mem_region((phys_addr_t)cfg->remote_shm_addr, cfg->shm_size);
 err_unmap_local_shm:
-	iounmap(cfg->local_shm_addr);
+	iounmap((void *)cfg->local_shm_addr);
 err_release_local_region:
 	release_mem_region((phys_addr_t)cfg->local_shm_addr, cfg->shm_size);
 
@@ -449,12 +481,11 @@ int ipc_shm_free(void)
 	struct ipc_shm_priv *priv = get_ipc_priv();
 
 	ipc_shm_hw_irq_disable(PLATFORM_DEFAULT);
-	tasklet_kill(&ipc_shm_rx_tasklet);
-	free_irq(priv->irq_num, priv);
 	ipc_shm_hw_free();
-	iounmap(priv->remote_virt_shm);
+	ipc_os_free();
+	iounmap((void *)priv->remote_shm);
 	release_mem_region((phys_addr_t)priv->remote_phys_shm, priv->shm_size);
-	iounmap(priv->local_virt_shm);
+	iounmap((void *)priv->local_shm);
 	release_mem_region((phys_addr_t)priv->local_phys_shm, priv->shm_size);
 
 	shm_dbg("ipc shm released\n");
@@ -464,23 +495,19 @@ EXPORT_SYMBOL(ipc_shm_free);
 
 void *ipc_shm_acquire_buf(int chan_id, size_t request_size)
 {
-	struct ipc_shm_channel *chan;
-	struct ipc_shm_pool *pool;
+	struct ipc_shm_channel *chan = NULL;
+	struct ipc_shm_pool *pool = NULL;
 	struct ipc_shm_bd bd;
-	void *buf_addr = NULL;
+	uintptr_t buf_addr;
 	int count;
 	int pool_id;
 
-	if (chan_id < 0 || chan_id >= IPC_SHM_CHANNEL_COUNT) {
-		shm_err("Channel id outside valid range: 0 - %d\n",
-			IPC_SHM_CHANNEL_COUNT);
-		return NULL;
-	}
-
 	chan = get_channel(chan_id);
+	if (!chan)
+		return NULL;
 
 	/* find first non-empty pool that accommodates the requested size */
-	for (pool_id = 0; pool_id < IPC_SHM_POOL_COUNT; pool_id++) {
+	for (pool_id = 0; pool_id < chan->num_pools; pool_id++) {
 		pool = &chan->pools[pool_id];
 
 		/* check if pool buf size covers the requested size */
@@ -489,21 +516,20 @@ void *ipc_shm_acquire_buf(int chan_id, size_t request_size)
 
 		/* check if pool has any free buffers left */
 		count = ipc_fifo_pop(pool->acquire_bd_fifo, &bd, sizeof(bd));
-
 		if (count == sizeof(bd))
 			break;
 	}
 
-	if (pool_id == IPC_SHM_POOL_COUNT) {
+	if (pool_id == chan->num_pools) {
 		shm_dbg("No free buffer found in channel %d\n", chan_id);
 		return NULL;
 	}
 
-	buf_addr = pool->local_pool_addr + (bd.buf_id * pool->buf_size);
+	buf_addr = pool->local_pool_addr + bd.buf_id * pool->buf_size;
 
-	shm_dbg("channel %d: pool %d: acquired buffer %d with address %p\n",
+	shm_dbg("ch %d: pool %d: acquired buffer %d with address %lx\n",
 		chan_id, pool_id, bd.buf_id, buf_addr);
-	return buf_addr;
+	return (void *)buf_addr;
 }
 EXPORT_SYMBOL(ipc_shm_acquire_buf);
 
@@ -515,15 +541,15 @@ EXPORT_SYMBOL(ipc_shm_acquire_buf);
  *
  * Return: pool index on success, -1 otherwise
  */
-static int find_pool_for_buf(int chan_id, const void *buf, int remote)
+static int find_pool_for_buf(int chan_id, uintptr_t buf, int remote)
 {
-	struct ipc_shm_channel *chan = get_channel(chan_id);
+	struct ipc_shm_channel *chan = __get_channel(chan_id);
 	struct ipc_shm_pool *pool;
-	void *addr;
+	uintptr_t addr;
 	int pool_id;
 	int pool_size;
 
-	for (pool_id = 0; pool_id < IPC_SHM_POOL_COUNT; pool_id++) {
+	for (pool_id = 0; pool_id < chan->num_pools; pool_id++) {
 		pool = &chan->pools[pool_id];
 
 		addr = remote ? pool->remote_pool_addr : pool->local_pool_addr;
@@ -538,26 +564,25 @@ static int find_pool_for_buf(int chan_id, const void *buf, int remote)
 
 int ipc_shm_release_buf(int chan_id, const void *buf)
 {
+	struct ipc_shm_channel *chan;
 	struct ipc_shm_pool *pool;
 	struct ipc_shm_bd bd;
 	int count;
 
-	if (chan_id < 0 || chan_id >= IPC_SHM_CHANNEL_COUNT) {
-		shm_err("Channel id outside valid range: 0 - %d\n",
-			IPC_SHM_CHANNEL_COUNT);
+	chan = get_channel(chan_id);
+	if (!chan)
 		return -EINVAL;
-	}
 
 	/* Find the pool that owns the buffer */
-	bd.pool_id = find_pool_for_buf(chan_id, buf, 1);
+	bd.pool_id = find_pool_for_buf(chan_id, (uintptr_t)buf, 1);
 	if (bd.pool_id == -1) {
 		shm_err("Buffer address %p doesn't belong to channel %d\n",
 			buf, chan_id);
 		return -EINVAL;
 	}
 
-	pool = &get_channel(chan_id)->pools[bd.pool_id];
-	bd.buf_id = (buf - pool->remote_pool_addr) / pool->buf_size;
+	pool = &chan->pools[bd.pool_id];
+	bd.buf_id = ((uintptr_t)buf - pool->remote_pool_addr) / pool->buf_size;
 	bd.data_size = 0; /* reset size of written data in buffer */
 
 	count = ipc_fifo_push(pool->release_bd_fifo, &bd, sizeof(bd));
@@ -567,7 +592,7 @@ int ipc_shm_release_buf(int chan_id, const void *buf)
 		return -EIO;
 	}
 
-	shm_dbg("channel %d: pool %d: released buffer %d with address %p\n",
+	shm_dbg("ch %d: pool %d: released buffer %d with address %p\n",
 		chan_id, bd.pool_id, bd.buf_id, buf);
 	return 0;
 }
@@ -580,23 +605,20 @@ int ipc_shm_tx(int chan_id, void *buf, size_t data_size)
 	struct ipc_shm_bd bd;
 	int count;
 
-	if (chan_id < 0 || chan_id >= IPC_SHM_CHANNEL_COUNT) {
-		shm_err("Channel id outside valid range: 0 - %d\n",
-			IPC_SHM_CHANNEL_COUNT);
+	chan = get_channel(chan_id);
+	if (!chan)
 		return -EINVAL;
-	}
 
 	/* Find the pool that owns the buffer */
-	bd.pool_id = find_pool_for_buf(chan_id, buf, 0);
+	bd.pool_id = find_pool_for_buf(chan_id, (uintptr_t)buf, 0);
 	if (bd.pool_id == -1) {
 		shm_err("Buffer address %p doesn't belong to channel %d\n",
 			buf, chan_id);
 		return -EINVAL;
 	}
 
-	chan = get_channel(chan_id);
 	pool = &chan->pools[bd.pool_id];
-	bd.buf_id = (buf - pool->local_pool_addr) / pool->buf_size;
+	bd.buf_id = ((uintptr_t)buf - pool->local_pool_addr) / pool->buf_size;
 	bd.data_size = data_size;
 
 	/* push buffer descriptor in tx fifo */
@@ -615,24 +637,9 @@ EXPORT_SYMBOL(ipc_shm_tx);
 
 int ipc_shm_tx_unmanaged(int chan_id)
 {
-	/* notify remote that data is available */
-	ipc_shm_hw_irq_notify(PLATFORM_DEFAULT, PLATFORM_DEFAULT);
+	(void)chan_id;
 
 	shm_err("Unmanaged channels not supported in current implementation\n");
 	return -EOPNOTSUPP;
 }
 EXPORT_SYMBOL(ipc_shm_tx_unmanaged);
-
-static int __init shm_mod_init(void)
-{
-	shm_dbg("driver version %s init\n", DRIVER_VERSION);
-	return 0;
-}
-
-static void __exit shm_mod_exit(void)
-{
-	shm_dbg("driver version %s exit\n", DRIVER_VERSION);
-}
-
-module_init(shm_mod_init);
-module_exit(shm_mod_exit);

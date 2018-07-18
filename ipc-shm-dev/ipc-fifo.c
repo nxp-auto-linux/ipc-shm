@@ -2,8 +2,12 @@
 /*
  * Copyright 2018 NXP
  */
-#include <linux/module.h>
+#include "ipc-os.h"
 #include "ipc-fifo.h"
+
+#ifndef min
+#define min(x, y) ((x) < (y) ? (x) : (y))
+#endif
 
 /**
  * Fifo sentinel room between write and read index used to implement lock-free
@@ -47,7 +51,7 @@ uint16_t ipc_fifo_pop(struct ipc_fifo *f, void *buf, uint16_t nbytes)
 	uint16_t r = 0; /* caches the read index */
 
 	if ((f == NULL) || (buf == NULL) || (nbytes == 0)) {
-		goto out;
+		return 0;
 	}
 
 	/* caching is needed because of multithreading */
@@ -85,7 +89,6 @@ uint16_t ipc_fifo_pop(struct ipc_fifo *f, void *buf, uint16_t nbytes)
 
 	f->r = increment(r, n, f->size);
 
-out:
 	return n;
 }
 
@@ -102,7 +105,7 @@ uint16_t ipc_fifo_discard(struct ipc_fifo *f, uint16_t nbytes)
 	uint16_t r = 0;
 
 	if ((f == NULL) || (nbytes == 0)) {
-		goto out;
+		return 0;
 	}
 
 	r = f->r; /* caching is needed because of multithreading */
@@ -111,7 +114,6 @@ uint16_t ipc_fifo_discard(struct ipc_fifo *f, uint16_t nbytes)
 	len = min(nbytes, get_count(f->size, f->w, r));
 	f->r = increment(f->r, len, f->size);
 
-out:
 	return len;
 }
 
@@ -134,7 +136,7 @@ uint16_t ipc_fifo_push(struct ipc_fifo *f, const void *buf, uint16_t nbytes)
 	uint16_t r = 0; /* caches the read index */
 
 	if ((f == NULL) || (buf == NULL) || (nbytes == 0)) {
-		goto out;
+		return 0;
 	}
 
 	/* caching is needed because of multithreading */
@@ -143,7 +145,7 @@ uint16_t ipc_fifo_push(struct ipc_fifo *f, const void *buf, uint16_t nbytes)
 
 	/* check if enough space */
 	if (get_free(f->size, w, r) < nbytes)
-		goto out;
+		return 0;
 
 	tmp = (uint8_t *) buf;
 
@@ -174,7 +176,6 @@ uint16_t ipc_fifo_push(struct ipc_fifo *f, const void *buf, uint16_t nbytes)
 	n = nbytes; /* number of pushed elements */
 	f->w = increment(w, nbytes, f->size);
 
-out:
 	return n;
 }
 
@@ -189,7 +190,7 @@ out:
  *
  * Return:	fifo pointer mapped to specified base_addr
  */
-struct ipc_fifo *ipc_fifo_init(void *base_addr, uint16_t size)
+struct ipc_fifo *ipc_fifo_init(uintptr_t base_addr, uint16_t size)
 {
 	struct ipc_fifo *f;
 
@@ -217,5 +218,5 @@ struct ipc_fifo *ipc_fifo_init(void *base_addr, uint16_t size)
 int ipc_fifo_mem_size(struct ipc_fifo *fifo)
 {
 	/* fifo control room + fifo size */
-	return offsetof(struct ipc_fifo, data) + fifo->size;
+	return sizeof(struct ipc_fifo) + fifo->size;
 }

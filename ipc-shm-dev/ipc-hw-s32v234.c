@@ -162,7 +162,7 @@ int ipc_shm_hw_get_dt_irq(int shm_irq_id)
 /**
  * ipc_shm_hw_init() - map MSCM IP block to proper address
  *
- * Return: 0 for success, ENOMEM for invalid interrupt ID
+ * Return: 0 for success, -ENOMEM for invalid interrupt ID
  */
 int ipc_shm_hw_init(void)
 {
@@ -194,7 +194,7 @@ void ipc_shm_hw_free(void)
  * If the value PLAFORM_DEFAULT is passed as parameter, the default
  * value defined for the selected platform will be used instead.
  *
- * Return: 0 for success, EINVAL for invalid interrupt ID
+ * Return: 0 for success, -EINVAL for invalid interrupt ID
  */
 int ipc_shm_hw_irq_enable(int shm_irq_id)
 {
@@ -225,7 +225,7 @@ int ipc_shm_hw_irq_enable(int shm_irq_id)
  * If the value PLAFORM_DEFAULT is passed as parameter, the default
  * value defined for the selected platform will be used instead.
  *
- * Return: 0 for success, EINVAL for invalid interrupt ID
+ * Return: 0 for success, -EINVAL for invalid interrupt ID
  */
 int ipc_shm_hw_irq_disable(int shm_irq_id)
 {
@@ -257,7 +257,7 @@ int ipc_shm_hw_irq_disable(int shm_irq_id)
  * If the value PLAFORM_DEFAULT is passed as either parameter, the default
  * value defined for the selected platform will be used instead.
  *
- * Return: 0 for success, EINVAL for invalid interrupt or remote processor ID
+ * Return: 0 for success, -EINVAL for invalid interrupt or remote processor ID
  */
 int ipc_shm_hw_irq_notify(int shm_irq_id, int remote_cpu)
 {
@@ -289,7 +289,7 @@ int ipc_shm_hw_irq_notify(int shm_irq_id, int remote_cpu)
  * If the value PLAFORM_DEFAULT is passed as parameter, the default
  * value defined for the selected platform will be used instead.
  *
- * Return: 0 for success, EINVAL for invalid interrupt ID
+ * Return: 0 for success, -EINVAL for invalid interrupt ID
  */
 int ipc_shm_hw_irq_clear(int shm_irq_id)
 {

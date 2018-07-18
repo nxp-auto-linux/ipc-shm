@@ -2,8 +2,8 @@
 /*
  * Copyright 2018 NXP
  */
-#ifndef IPC_FIFO_H_
-#define IPC_FIFO_H_
+#ifndef IPC_FIFO_H
+#define IPC_FIFO_H
 
 /**
  * struct ipcf_fifo - Memory Mapped Lock-Free Circular Queue
@@ -24,10 +24,10 @@ struct ipc_fifo {
 	uint8_t data[];
 };
 
-struct ipc_fifo *ipc_fifo_init(void *base_addr, uint16_t buf_size);
+struct ipc_fifo *ipc_fifo_init(uintptr_t base_addr, uint16_t buf_size);
 uint16_t ipc_fifo_push(struct ipc_fifo *f, const void *buf, uint16_t nbytes);
 uint16_t ipc_fifo_pop(struct ipc_fifo *f, void *buf, uint16_t nbytes);
 uint16_t ipc_fifo_discard(struct ipc_fifo *f, uint16_t nbytes);
 int ipc_fifo_mem_size(struct ipc_fifo *fifo);
 
-#endif /* IPC_FIFO_H_ */
+#endif /* IPC_FIFO_H */

@@ -15,8 +15,8 @@ drivers/applications are not fully qualified and are not intended for
 production. The purpose of this demo implementation is to provide basic driver
 functionality having minimal quality in terms of testing and documentation.
 
-This sample application demonstrates a ping-pong communication between 2 apps
-(one in Linux, one in Autosar OS) using the shared memory driver.
+This sample application demonstrates a ping-pong communication between 2 apps,
+one in Linux, one in RTOS (Autosar/FreeRTOS), using the shared memory driver.
 The Linux app initializes the shared memory driver, sends messages to the
 remote app as long as there are available transmit buffers and sleeps when
 there is no free transmit buffer left. The Linux app wakes after a message is
@@ -70,12 +70,11 @@ Manual for details.
     insmod /lib/modules/`uname -r`/extra/ipc-shm-sample.ko
 3.4 Clear the kernel log:
     dmesg -c > /dev/null
-3.5 Start the demo, sample messages are logged in kernel log:
-    echo 1 > /sys/kernel/ipc-shm-sample/run &
-3.6 Stop the demo:
-    echo 0 > /sys/kernel/ipc-shm-sample/run
-3.7 Display sample log:
+3.5 Send ping messages to remote OS (output is logged in kernel log):
+    echo 10 > /sys/kernel/ipc-shm-sample/ping
+3.6 Display sample output from kernel log:
     dmesg
+3.7 Optionaly, repeat steps 3.4 - 3.6 with different number of messages
 3.8 Unload the modules:
     rmmod ipc-shm-sample ipc-shm
 

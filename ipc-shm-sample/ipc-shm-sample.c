@@ -31,10 +31,9 @@ MODULE_VERSION(MODULE_VER);
 
 #define IPC_SHM_SIZE 0x100000 /* 1M local shm, 1M remote shm */
 #define REMOTE_SHM_ADDR (LOCAL_SHM_ADDR + IPC_SHM_SIZE)
-#define SHM_SAMPLE_BUF_SIZE 256
-#define S_BUF_LEN 8
+#define S_BUF_LEN 16
 #define M_BUF_LEN 256
-#define L_BUF_LEN 4*1024
+#define L_BUF_LEN 4096
 
 /* convenience wrappers for printing messages */
 #define sample_fmt(fmt) MODULE_NAME": %s(): "fmt
@@ -47,103 +46,122 @@ static char *ipc_shm_sample_msg = "Hello world! ";
 module_param(ipc_shm_sample_msg, charp, 0660);
 MODULE_PARM_DESC(ipc_shm_sample_msg, "Message to be sent to the remote app.");
 
-static int msg_sizes[16] = {M_BUF_LEN};
-static int msg_argc = 1;
-module_param_array(msg_sizes, int, &msg_argc, 0000);
+static int msg_sizes[IPC_SHM_MAX_POOLS] = {S_BUF_LEN};
+static int msg_sizes_argc = 1;
+module_param_array(msg_sizes, int, &msg_sizes_argc, 0000);
 MODULE_PARM_DESC(msg_sizes, "Sample message sizes");
 
 static void shm_sample_rx_cb(void *cb_arg, int chan_id, void *buf, size_t size);
 
 /**
  * struct ipc_sample_priv - sample private data
- * @run_cmd:		run command state: 1 - start; 0 - stop
+ * @num_msgs:		number of messages to be sent on each channel
  * @ipc_kobj:		sysfs kernel object
- * @run_attr:		sysfs run command attributes
- * @shm_sample_sema:	binary semaphore used to sync with Autosar app
+ * @ping_attr:		sysfs ping command attributes
+ * @last_rx_msg:	last received message
+ * @last_tx_msg:	last transmitted message
+ * @num_channels:	number of channels configured in this sample
  */
 struct ipc_sample_priv {
-	int run_cmd;
+	int num_msgs;
 	struct kobject *ipc_kobj;
-	struct kobj_attribute run_attr;
+	struct kobj_attribute ping_attr;
 	char last_rx_msg[L_BUF_LEN];
 	char last_tx_msg[L_BUF_LEN];
+	int num_channels;
 };
 
 /* sample private data */
 static struct ipc_sample_priv priv;
 
-/* IPC shared memory parameters (see ipc-shm.h) */
-static struct ipc_shm_cfg shm_cfg = {
-	.local_shm_addr = (void *)LOCAL_SHM_ADDR,
-	.remote_shm_addr = (void *)REMOTE_SHM_ADDR,
-	.shm_size = IPC_SHM_SIZE,
-};
 
-struct ipc_shm_channel_cfg sample_chan_cfg = {
-	.type = SHM_CHANNEL_MANAGED,
-	.memory = {
-		.managed = {
-			.pools = {
-				{
-					.num_bufs = 5,
-					.buf_size = S_BUF_LEN
-				},
-				{
-					.num_bufs = 5,
-					.buf_size = M_BUF_LEN
-				},
-				{
-					.num_bufs = 5,
-					.buf_size = L_BUF_LEN
-				},
-			},
-		},
-	},
-	.ops = {
+/* Init IPC shared memory driver (see ipc-shm.h) */
+static int init_ipc_shm(void)
+{
+	/* channel call-backs */
+	struct ipc_shm_channel_ops ops = {
 		.cb_arg = &priv,
 		.rx_cb = shm_sample_rx_cb,
 		.rx_unmanaged_cb = NULL,
-	},
-};
+	};
+
+	/* memory buffer pools */
+	struct ipc_shm_pool_cfg buf_pools[] = {
+		{
+			.num_bufs = 5,
+			.buf_size = S_BUF_LEN
+		},
+		{
+			.num_bufs = 5,
+			.buf_size = M_BUF_LEN
+		},
+		{
+			.num_bufs = 5,
+			.buf_size = L_BUF_LEN
+		},
+	};
+
+	/* channel configuration */
+	struct ipc_shm_channel_cfg chan_cfg = {
+		.type = SHM_CHANNEL_MANAGED,
+		.memory = {
+			.managed = {
+				.num_pools = ARRAY_SIZE(buf_pools),
+				.pools = buf_pools,
+			},
+		},
+		.ops = &ops
+	};
+
+	/* use same configuration for all channels in this sample */
+	struct ipc_shm_channel_cfg channels[] = {chan_cfg, chan_cfg};
+
+	/* ipc shm configuration */
+	struct ipc_shm_cfg shm_cfg = {
+		.local_shm_addr = LOCAL_SHM_ADDR,
+		.remote_shm_addr = REMOTE_SHM_ADDR,
+		.shm_size = IPC_SHM_SIZE,
+		.num_channels = ARRAY_SIZE(channels),
+		.channels = channels
+	};
+
+	priv.num_channels = shm_cfg.num_channels;
+
+	return ipc_shm_init(&shm_cfg);
+}
 
 /*
- * generate_data() - generates data a-z with rollover.
- * @s: string that saves the generated data
- * @len: generated data length
+ * generate_msg() - generates message from module param ipc_shm_sample_msg
+ * @s:		destination buffer
+ * @len:	destination buffer length
+ * @msg_no:	message number
  *
- * Return: pointer to the string
+ * Generate message by repeated concatenation of module param ipc_shm_sample_msg
  */
-static char *generate_data(char *s, int len, int seq_no)
+static void generate_msg(char *s, int len, int msg_no)
 {
 	int i, j;
 
-	if (!s)
-		goto out;
-
-	snprintf(s, len, "#%d ", seq_no);
+	snprintf(s, len, "#%d ", msg_no);
 	for (i = strlen(s), j = 0; i < len - 1; i++, j++) {
 		s[i] = ipc_shm_sample_msg[j % strlen(ipc_shm_sample_msg)];
 	}
 	s[i] = '\0';
-
-out:
-	return s;
 }
 
+/* Completion variable used to sync send_msg func with rx cb */
 static DECLARE_COMPLETION(reply_received);
 
 /*
- * shm RX callback. Prints the data, releases the channel and releases the
- * semaphore.
+ * shm RX callback. Prints the data, releases the channel and signals the
+ * completion variable.
  */
-static void shm_sample_rx_cb(void *cb_arg, int chan_id, void *buf,
-			     size_t size)
+static void shm_sample_rx_cb(void *cb_arg, int chan_id, void *buf, size_t size)
 {
 	int err = 0;
 
 	/* process the received data */
-	sample_info("ch %d: << %d bytes:%*.s\n",
-		    chan_id, (int)size, (int)size, (char *)buf);
+	sample_info("ch %d << %ld bytes: %s\n", chan_id, size, (char *)buf);
 	memcpy(priv.last_rx_msg, buf, size);
 
 	/* release the buffer */
@@ -158,16 +176,14 @@ static void shm_sample_rx_cb(void *cb_arg, int chan_id, void *buf,
 }
 
 /*
- * send_data() - Sends data to the remote CPU.
- * @msg_len: demo message length
- * @seq_no: demo message ID to be written in the test message
+ * send_msg() - Sends message to the remote OS
+ * @msg_len: message length
+ * @msg_no: message sequence number to be written in the test message
  * @chan_id: ipc channel to be used for remote CPU communication
  *
- * Sends data to the remote CPU according to the input parameters.
- * It uses a semaphore for synchronization (incremented by the RX callback
- * and decremented after the message is sent to the remote CPU).
+ * It uses a completion variable for synchronization with reply callback.
  */
-static int send_data(int msg_len, int seq_no, int chan_id)
+static int send_msg(int msg_len, int msg_no, int chan_id)
 {
 	int err = 0;
 	char *buf = NULL;
@@ -189,11 +205,10 @@ static int send_data(int msg_len, int seq_no, int chan_id)
 	}
 
 	/* write data to buf */
-	generate_data(buf, msg_len, seq_no);
+	generate_msg(buf, msg_len, msg_no);
 	memcpy(priv.last_tx_msg, buf, msg_len);
 
-	sample_info("ch %d: >> %d bytes:%*.s\n", chan_id, msg_len,
-		    msg_len, (char *)buf);
+	sample_info("ch %d >> %d bytes: %s\n", chan_id, msg_len, buf);
 
 	/* send data to peer */
 	err = ipc_shm_tx(chan_id, buf, msg_len);
@@ -221,21 +236,26 @@ static int send_data(int msg_len, int seq_no, int chan_id)
  */
 static int run_demo(void)
 {
-	int err, i, j, chan_id;
+	int err, msg, chan_id, i;
 
 	sample_info("starting demo...\n");
 
-	for (chan_id = 0; chan_id < IPC_SHM_CHANNEL_COUNT; chan_id++) {
-		for (i = 0; i < msg_argc; i++) {
-			for (j = 0; j < priv.run_cmd; j++) {
-				err = send_data(msg_sizes[i], j + 1, chan_id);
+	msg = 0;
+	while (msg < priv.num_msgs) {
+		for (chan_id = 0; chan_id < priv.num_channels; chan_id++) {
+			for (i = 0; i < msg_sizes_argc; i++) {
+				err = send_msg(msg_sizes[i], msg + 1, chan_id);
 				if (err)
 					return err;
+
+				if (++msg == priv.num_msgs) {
+					sample_info("exit demo\n");
+					return 0;
+				}
 			}
 		}
 	}
 
-	sample_info("exit demo\n");
 	return 0;
 }
 
@@ -247,8 +267,8 @@ static ssize_t ipc_sysfs_show(struct kobject *kobj, struct kobj_attribute *attr,
 {
 	int value = 0;
 
-	if (strcmp(attr->attr.name, priv.run_attr.attr.name) == 0) {
-		value = priv.run_cmd;
+	if (strcmp(attr->attr.name, priv.ping_attr.attr.name) == 0) {
+		value = priv.num_msgs;
 	}
 
 	return sprintf(buf, "%d\n", value);
@@ -268,8 +288,8 @@ static ssize_t ipc_sysfs_store(struct kobject *kobj,
 	if (err)
 		return err;
 
-	if (strcmp(attr->attr.name, priv.run_attr.attr.name) == 0) {
-		priv.run_cmd = value;
+	if (strcmp(attr->attr.name, priv.ping_attr.attr.name) == 0) {
+		priv.num_msgs = value;
 		run_demo();
 	}
 
@@ -279,20 +299,20 @@ static ssize_t ipc_sysfs_store(struct kobject *kobj,
 /*
  * Init sysfs folder and command file
  */
-static int ipc_sysfs_init(void)
+static int init_sysfs(void)
 {
 	int err = 0;
-	struct kobj_attribute run_attr =
-		__ATTR(run, 0600, ipc_sysfs_show, ipc_sysfs_store);
-	priv.run_attr = run_attr;
+	struct kobj_attribute ping_attr =
+		__ATTR(ping, 0600, ipc_sysfs_show, ipc_sysfs_store);
+	priv.ping_attr = ping_attr;
 
 	/* create ipc-sample folder in sys/kernel */
 	priv.ipc_kobj = kobject_create_and_add(MODULE_NAME, kernel_kobj);
 	if (!priv.ipc_kobj)
 		return -ENOMEM;
 
-	/* create sysfs file for ipc sample run command */
-	err = sysfs_create_file(priv.ipc_kobj, &priv.run_attr.attr);
+	/* create sysfs file for ipc sample ping command */
+	err = sysfs_create_file(priv.ipc_kobj, &priv.ping_attr.attr);
 	if (err) {
 		sample_err("sysfs file creation failed, error code %d\n", err);
 		goto err_kobj_free;
@@ -305,45 +325,36 @@ err_kobj_free:
 	return err;
 }
 
-static void ipc_sysfs_free(void)
+static void free_sysfs(void)
 {
 	kobject_put(priv.ipc_kobj);
 }
 
 static int __init sample_mod_init(void)
 {
-	int i, err = 0;
+	int err = 0;
 
 	sample_dbg("module version "MODULE_VER" init\n");
 
-	/* set channels configuration */
-	for (i = 0; i < IPC_SHM_CHANNEL_COUNT; i++) {
-		shm_cfg.channels[i] = sample_chan_cfg;
-	}
-
-	err = ipc_sysfs_init();
+	/* init ipc shm driver */
+	err = init_ipc_shm();
 	if (err)
 		return err;
 
-	err = ipc_shm_init(&shm_cfg);
+	/* init sample sysfs UI */
+	err = init_sysfs();
 	if (err)
-		goto err_sysfs_free;
+		return err;
 
 	return 0;
-
-err_sysfs_free:
-	ipc_sysfs_free();
-	return err;
 }
 
 static void __exit sample_mod_exit(void)
 {
 	sample_dbg("module version "MODULE_VER" exit\n");
-	/* stop the demo */
-	priv.run_cmd = 0;
 
+	free_sysfs();
 	ipc_shm_free();
-	ipc_sysfs_free();
 }
 
 module_init(sample_mod_init);
