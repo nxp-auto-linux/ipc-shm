@@ -76,7 +76,6 @@ Manual for details.
     dmesg
 3.7 Optionaly, repeat steps 3.4 - 3.6 with different number of messages
 3.8 Unload the modules:
-    rmmod ipc-shm-sample ipc-shm
+    rmmod ipc-shm-sample ipc-shm-dev
 
-This sample application is designed for S32Gxxx NXP Auto Linux BSP18, latest
-NXP_S32G_ECU and latest VSDK.
+See the IPCF quick start guide for more details.

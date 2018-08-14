@@ -280,8 +280,9 @@ static int ipc_shm_channel_init(int chan_id,
 	const struct ipc_shm_pool_cfg *pool_cfg;
 	uintptr_t local_pool_shm;
 	uintptr_t remote_pool_shm;
-	int total_bufs, fifo_size;
-	int fifo_mem_size;
+	int fifo_mem_size, fifo_size;
+	int prev_buf_size = 0;
+	int total_bufs = 0;
 	int err, i;
 
 	if (!cfg) {
@@ -313,10 +314,19 @@ static int ipc_shm_channel_init(int chan_id,
 	chan->num_pools = cfg->memory.managed.num_pools;
 	memcpy(&chan->ops, cfg->ops, sizeof(chan->ops));
 
-	/* count total number of buffers from all pools */
-	total_bufs = 0;
+	/* check that pools are sorted in ascending order by buf size
+	 * and count total number of buffers from all pools
+	 */
 	for (i = 0; i < chan->num_pools; i++) {
-		total_bufs += cfg->memory.managed.pools[i].num_bufs;
+		pool_cfg = &cfg->memory.managed.pools[i];
+
+		if (pool_cfg->buf_size < prev_buf_size) {
+			shm_dbg("Pools must be sorted in ascending order by buffer size\n");
+			return -EINVAL;
+		}
+		prev_buf_size = pool_cfg->buf_size;
+
+		total_bufs += pool_cfg->num_bufs;
 	}
 
 	/* init tx/rx fifos */
@@ -328,18 +338,15 @@ static int ipc_shm_channel_init(int chan_id,
 	/* map rx fifo (remote tx fifo) at the start of remote channel */
 	chan->rx_fifo = (struct ipc_fifo *) remote_shm;
 
-	/* TODO: check if pools are sorted ascending by buf size */
-
 	/* init&map buffer pools after tx fifo */
 	fifo_mem_size = ipc_fifo_mem_size(chan->tx_fifo);
 	local_pool_shm = local_shm + fifo_mem_size;
 	remote_pool_shm = remote_shm + fifo_mem_size;
 
 	for (i = 0; i < chan->num_pools; i++) {
-		pool_cfg = &cfg->memory.managed.pools[i];
-
-		err = ipc_buf_pool_init(chan->id, i, local_pool_shm,
-					remote_pool_shm, pool_cfg);
+		err = ipc_buf_pool_init(chan->id, i,
+					local_pool_shm, remote_pool_shm,
+					&cfg->memory.managed.pools[i]);
 		if (err)
 			return err;
 
