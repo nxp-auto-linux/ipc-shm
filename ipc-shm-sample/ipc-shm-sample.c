@@ -55,7 +55,7 @@ static void shm_sample_rx_cb(void *cb_arg, int chan_id, void *buf, size_t size);
 
 /**
  * struct ipc_sample_priv - sample private data
- * @num_msgs:		number of messages to be sent on each channel
+ * @num_msgs:		number of messages to be sent to remote app
  * @ipc_kobj:		sysfs kernel object
  * @ping_attr:		sysfs ping command attributes
  * @last_rx_msg:	last received message
@@ -200,8 +200,7 @@ static int send_msg(int msg_len, int msg_no, int chan_id)
 	if (!buf) {
 		sample_err("failed to get buffer for channel ID"
 			   " %d and size %d\n", chan_id, msg_len);
-		err = -ENOMEM;
-		return err;
+		return -ENOMEM;
 	}
 
 	/* write data to buf */

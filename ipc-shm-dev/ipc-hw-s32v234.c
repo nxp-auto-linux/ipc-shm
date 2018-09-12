@@ -130,7 +130,7 @@ static struct mscm_regs *mscm;
  *
  * Return: MSCM compatible value string for current platform
  */
-char *ipc_shm_hw_get_dt_comp(void)
+char *ipc_hw_get_dt_comp(void)
 {
 	return DT_MSCM_NODE_COMP;
 }
@@ -145,7 +145,7 @@ char *ipc_shm_hw_get_dt_comp(void)
  *
  * Return: device tree index of the MSCM interrupt used, -1 for invalid irq
  */
-int ipc_shm_hw_get_dt_irq(int shm_irq_id)
+int ipc_hw_get_dt_irq(int shm_irq_id)
 {
 	/* assign default value to interrupt ID if so indicated */
 	if (shm_irq_id == PLATFORM_DEFAULT) {
@@ -164,7 +164,7 @@ int ipc_shm_hw_get_dt_irq(int shm_irq_id)
  *
  * Return: 0 for success, -ENOMEM for invalid interrupt ID
  */
-int ipc_shm_hw_init(void)
+int ipc_hw_init(void)
 {
 	/* map MSCM hardware peripheral block */
 	mscm = (struct mscm_regs *) ioremap_nocache(
@@ -180,7 +180,7 @@ int ipc_shm_hw_init(void)
 /**
  * ipc_shm_hw_free() - unmap MSCM IP block
  */
-void ipc_shm_hw_free(void)
+void ipc_hw_free(void)
 {
 	/* unmap MSCM hardware peripheral block */
 	iounmap(mscm);
@@ -196,7 +196,7 @@ void ipc_shm_hw_free(void)
  *
  * Return: 0 for success, -EINVAL for invalid interrupt ID
  */
-int ipc_shm_hw_irq_enable(int shm_irq_id)
+int ipc_hw_irq_enable(int shm_irq_id)
 {
 	uint16_t irsprc_mask;
 
@@ -227,7 +227,7 @@ int ipc_shm_hw_irq_enable(int shm_irq_id)
  *
  * Return: 0 for success, -EINVAL for invalid interrupt ID
  */
-int ipc_shm_hw_irq_disable(int shm_irq_id)
+int ipc_hw_irq_disable(int shm_irq_id)
 {
 	uint16_t irsprc_mask;
 
@@ -259,7 +259,7 @@ int ipc_shm_hw_irq_disable(int shm_irq_id)
  *
  * Return: 0 for success, -EINVAL for invalid interrupt or remote processor ID
  */
-int ipc_shm_hw_irq_notify(int shm_irq_id, int remote_cpu)
+int ipc_hw_irq_notify(int shm_irq_id, int remote_cpu)
 {
 	/* assign default value to interrupt and processor ID if so indicated */
 	if (shm_irq_id == PLATFORM_DEFAULT) {
@@ -291,7 +291,7 @@ int ipc_shm_hw_irq_notify(int shm_irq_id, int remote_cpu)
  *
  * Return: 0 for success, -EINVAL for invalid interrupt ID
  */
-int ipc_shm_hw_irq_clear(int shm_irq_id)
+int ipc_hw_irq_clear(int shm_irq_id)
 {
 	/* assign default value to interrupt ID if so indicated */
 	if (shm_irq_id == PLATFORM_DEFAULT) {

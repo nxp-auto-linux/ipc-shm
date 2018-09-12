@@ -105,10 +105,8 @@ int ipc_shm_init(const struct ipc_shm_cfg *cfg);
 
 /**
  * ipc_shm_free() - release shared memory device
- *
- * Return: 0 on success, error code otherwise
  */
-int ipc_shm_free(void);
+void ipc_shm_free(void);
 
 /**
  * ipc_shm_acquire_buf() - request a buffer for the given channel

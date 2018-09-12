@@ -350,17 +350,17 @@ struct mscm_regs {
 static struct mscm_regs *mscm;
 
 /**
- * ipc_shm_hw_get_dt_comp() - device tree compatible getter
+ * ipc_hw_get_dt_comp() - device tree compatible getter
  *
  * Return: MSCM compatible value string for current platform
  */
-char *ipc_shm_hw_get_dt_comp(void)
+char *ipc_hw_get_dt_comp(void)
 {
 	return DT_MSCM_NODE_COMP;
 }
 
 /**
- * ipc_shm_hw_get_dt_irq() - device tree compatible getter
+ * ipc_hw_get_dt_irq() - device tree compatible getter
  *
  * @shm_irq_id:     MSCM inter-core interrupt ID reserved for shm driver
  *
@@ -369,7 +369,7 @@ char *ipc_shm_hw_get_dt_comp(void)
  *
  * Return: device tree index of the MSCM interrupt used, -1 for invalid irq
  */
-int ipc_shm_hw_get_dt_irq(int shm_irq_id)
+int ipc_hw_get_dt_irq(int shm_irq_id)
 {
 	/* assign default value to interrupt ID if so indicated */
 	if (shm_irq_id == PLATFORM_DEFAULT) {
@@ -384,11 +384,11 @@ int ipc_shm_hw_get_dt_irq(int shm_irq_id)
 }
 
 /**
- * ipc_shm_hw_init() - map MSCM IP block to proper address
+ * ipc_hw_init() - map MSCM IP block to proper address
  *
  * Return: 0 for success, ENOMEM for invalid interrupt ID
  */
-int ipc_shm_hw_init(void)
+int ipc_hw_init(void)
 {
 	/* map MSCM hardware peripheral block */
 	mscm = (struct mscm_regs *) ioremap_nocache(
@@ -402,16 +402,16 @@ int ipc_shm_hw_init(void)
 }
 
 /**
- * ipc_shm_hw_free() - unmap MSCM IP block
+ * ipc_hw_free() - unmap MSCM IP block
  */
-void ipc_shm_hw_free(void)
+void ipc_hw_free(void)
 {
 	/* unmap MSCM hardware peripheral block */
 	iounmap(mscm);
 }
 
 /**
- * ipc_shm_hw_irq_enable() - enable notifications from remote
+ * ipc_hw_irq_enable() - enable notifications from remote
  *
  * @shm_irq_id:     MSCM inter-core interrupt ID reserved for shm driver
  *
@@ -424,7 +424,7 @@ void ipc_shm_hw_free(void)
  *
  * Return: 0 for success, -EINVAL for invalid interrupt ID
  */
-int ipc_shm_hw_irq_enable(int shm_irq_id)
+int ipc_hw_irq_enable(int shm_irq_id)
 {
 	uint16_t irsprc_mask;
 
@@ -446,7 +446,7 @@ int ipc_shm_hw_irq_enable(int shm_irq_id)
 }
 
 /**
- * ipc_shm_hw_irq_disable() - disable notifications from remote
+ * ipc_hw_irq_disable() - disable notifications from remote
  *
  * @shm_irq_id:     MSCM inter-core interrupt ID reserved for shm driver
  *
@@ -459,7 +459,7 @@ int ipc_shm_hw_irq_enable(int shm_irq_id)
  *
  * Return: 0 for success, -EINVAL for invalid interrupt ID
  */
-int ipc_shm_hw_irq_disable(int shm_irq_id)
+int ipc_hw_irq_disable(int shm_irq_id)
 {
 	uint16_t irsprc_mask;
 
@@ -481,7 +481,7 @@ int ipc_shm_hw_irq_disable(int shm_irq_id)
 }
 
 /**
- * ipc_shm_hw_irq_notify() - notify remote that data is available
+ * ipc_hw_irq_notify() - notify remote that data is available
  *
  * @shm_irq_id:     MSCM inter-core interrupt ID reserved for shm driver
  * @remote_cpu:     ID of the remote core to trigger the interrupt on
@@ -491,7 +491,7 @@ int ipc_shm_hw_irq_disable(int shm_irq_id)
  *
  * Return: 0 for success, -EINVAL for invalid interrupt or remote processor ID
  */
-int ipc_shm_hw_irq_notify(int shm_irq_id, int remote_cpu)
+int ipc_hw_irq_notify(int shm_irq_id, int remote_cpu)
 {
 	int current_cpu;
 
@@ -619,14 +619,13 @@ int ipc_shm_hw_irq_notify(int shm_irq_id, int remote_cpu)
 		break;
 	default:
 		return -EINVAL;
-		break;
 	}
 
 	return 0;
 }
 
 /**
- * ipc_shm_hw_irq_clear() - clear available data notification
+ * ipc_hw_irq_clear() - clear available data notification
  *
  * @shm_irq_id:     MSCM inter-core interrupt ID reserved for shm driver
  *
@@ -635,7 +634,7 @@ int ipc_shm_hw_irq_notify(int shm_irq_id, int remote_cpu)
  *
  * Return: 0 for success, -EINVAL for invalid interrupt ID
  */
-int ipc_shm_hw_irq_clear(int shm_irq_id)
+int ipc_hw_irq_clear(int shm_irq_id)
 {
 	int current_cpu;
 
@@ -711,7 +710,6 @@ int ipc_shm_hw_irq_clear(int shm_irq_id)
 		break;
 	default:
 		return -EINVAL;
-		break;
 	}
 
 	return 0;

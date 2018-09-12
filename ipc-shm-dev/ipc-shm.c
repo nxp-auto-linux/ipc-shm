@@ -2,12 +2,9 @@
 /*
  * Copyright 2018 NXP
  */
-#include <linux/ioport.h>
-#include <linux/io.h>
 #include "ipc-os.h"
-#include "ipc-shm.h"
-#include "ipc-fifo.h"
 #include "ipc-hw.h"
+#include "ipc-fifo.h"
 
 #ifndef max
 #define max(x, y) ((x) > (y) ? (x) : (y))
@@ -85,19 +82,11 @@ struct ipc_shm_channel {
 /**
  * struct ipc_shm_priv - ipc shm private data
  * @shm_size:		local/remote shared memory size
- * @local_shm:		local shared memory address
- * @remote_shm:		remote shared memory address
- * @local_phys_shm:	local shared memory physical address
- * @remote_phys_shm:	remote shared memory physical address
  * num_channels:	number of shared memory channels
  * @channels:		ipc channels private data
  */
 struct ipc_shm_priv {
 	int shm_size;
-	uintptr_t local_shm;
-	uintptr_t remote_shm;
-	uintptr_t local_phys_shm;
-	uintptr_t remote_phys_shm;
 	int num_channels;
 	struct ipc_shm_channel channels[IPC_SHM_MAX_CHANNELS];
 };
@@ -240,7 +229,8 @@ static int ipc_buf_pool_init(int chan_id, int pool_id,
 	pool->shm_size = fifo_mem_size + (cfg->buf_size * cfg->num_bufs);
 
 	/* check if pool fits into shared memory */
-	if (local_shm + pool->shm_size > priv->local_shm + priv->shm_size) {
+	if (local_shm + pool->shm_size >
+		ipc_os_get_local_shm() + priv->shm_size) {
 		shm_err("Not enough shared memory for pool %d from channel %d\n",
 			pool_id, chan_id);
 		return -ENOMEM;
@@ -281,7 +271,7 @@ static int ipc_shm_channel_init(int chan_id,
 	uintptr_t local_pool_shm;
 	uintptr_t remote_pool_shm;
 	int fifo_mem_size, fifo_size;
-	int prev_buf_size = 0;
+	uint32_t prev_buf_size = 0;
 	int total_bufs = 0;
 	int err, i;
 
@@ -376,7 +366,6 @@ static int get_chan_mem_size(int chan_id)
 int ipc_shm_init(const struct ipc_shm_cfg *cfg)
 {
 	struct ipc_shm_priv *priv = get_ipc_priv();
-	struct resource *res;
 	uintptr_t local_chan_shm;
 	uintptr_t remote_chan_shm;
 	int chan_size;
@@ -395,51 +384,23 @@ int ipc_shm_init(const struct ipc_shm_cfg *cfg)
 	}
 
 	/* save api params */
-	priv->local_phys_shm = cfg->local_shm_addr;
-	priv->remote_phys_shm = cfg->remote_shm_addr;
 	priv->shm_size = cfg->shm_size;
 	priv->num_channels = cfg->num_channels;
 
-	/* request and map local physical shared memory */
-	res = request_mem_region((phys_addr_t)cfg->local_shm_addr,
-				 cfg->shm_size, DRIVER_NAME" local");
-	if (!res) {
-		shm_err("Unable to reserve local shm region\n");
-		return -EADDRINUSE;
-	}
-
-	priv->local_shm = (uintptr_t)ioremap_nocache(cfg->local_shm_addr,
-						     cfg->shm_size);
-	if (!priv->local_shm) {
-		err = -ENOMEM;
-		goto err_release_local_region;
-	}
-
-	/* request and map remote physical shared memory */
-	res = request_mem_region((phys_addr_t)cfg->remote_shm_addr,
-				 cfg->shm_size, DRIVER_NAME" remote");
-	if (!res) {
-		shm_err("Unable to reserve remote shm region\n");
-		err = -EADDRINUSE;
-		goto err_unmap_local_shm;
-	}
-
-	priv->remote_shm = (uintptr_t)ioremap_nocache(cfg->remote_shm_addr,
-						      cfg->shm_size);
-	if (!priv->remote_shm) {
-		err = -ENOMEM;
-		goto err_release_remote_region;
-	}
+	/* init OS specific resources */
+	err = ipc_os_init(cfg, ipc_shm_rx);
+	if (err)
+		return err;
 
 	/* init channels */
-	local_chan_shm = priv->local_shm;
-	remote_chan_shm = priv->remote_shm;
+	local_chan_shm = ipc_os_get_local_shm();
+	remote_chan_shm = ipc_os_get_remote_shm();
 	shm_dbg("initializing channels...\n");
 	for (i = 0; i < priv->num_channels; i++) {
 		err = ipc_shm_channel_init(i, local_chan_shm, remote_chan_shm,
 					   &cfg->channels[i]);
 		if (err)
-			goto err_unmap_remote_shm;
+			goto err_free_os;
 
 		/* compute next channel local/remote shm base address */
 		chan_size = get_chan_mem_size(i);
@@ -447,58 +408,29 @@ int ipc_shm_init(const struct ipc_shm_cfg *cfg)
 		remote_chan_shm += chan_size;
 	}
 
-	/* init OS specific part */
-	err = ipc_os_init(ipc_shm_rx);
+	/* enable interrupt notifications */
+	err = ipc_hw_irq_enable(PLATFORM_DEFAULT);
 	if (err)
-		goto err_unmap_remote_shm;
-
-	/* init MSCM */
-	err = ipc_shm_hw_init();
-	if (err) {
-		shm_err("Core-to-core interrupt initialization failed\n");
-		goto err_free_ipc_os;
-	}
-
-	/* clear driver notifications */
-	ipc_shm_hw_irq_clear(PLATFORM_DEFAULT);
-
-	/* enable driver notifications */
-	ipc_shm_hw_irq_enable(PLATFORM_DEFAULT);
+		goto err_free_os;
 
 	shm_dbg("ipc shm initialized\n");
 	return 0;
 
-err_free_ipc_os:
+err_free_os:
 	ipc_os_free();
-err_unmap_remote_shm:
-	iounmap((void *)cfg->remote_shm_addr);
-err_release_remote_region:
-	release_mem_region((phys_addr_t)cfg->remote_shm_addr, cfg->shm_size);
-err_unmap_local_shm:
-	iounmap((void *)cfg->local_shm_addr);
-err_release_local_region:
-	release_mem_region((phys_addr_t)cfg->local_shm_addr, cfg->shm_size);
 
 	return err;
 }
-EXPORT_SYMBOL(ipc_shm_init);
 
-int ipc_shm_free(void)
+void ipc_shm_free(void)
 {
-	struct ipc_shm_priv *priv = get_ipc_priv();
+	/* disable hardirq */
+	ipc_hw_irq_disable(PLATFORM_DEFAULT);
 
-	ipc_shm_hw_irq_disable(PLATFORM_DEFAULT);
-	ipc_shm_hw_free();
 	ipc_os_free();
-	iounmap((void *)priv->remote_shm);
-	release_mem_region((phys_addr_t)priv->remote_phys_shm, priv->shm_size);
-	iounmap((void *)priv->local_shm);
-	release_mem_region((phys_addr_t)priv->local_phys_shm, priv->shm_size);
 
 	shm_dbg("ipc shm released\n");
-	return 0;
 }
-EXPORT_SYMBOL(ipc_shm_free);
 
 void *ipc_shm_acquire_buf(int chan_id, size_t request_size)
 {
@@ -538,7 +470,6 @@ void *ipc_shm_acquire_buf(int chan_id, size_t request_size)
 		chan_id, pool_id, bd.buf_id, buf_addr);
 	return (void *)buf_addr;
 }
-EXPORT_SYMBOL(ipc_shm_acquire_buf);
 
 /**
  * find_pool_for_buf() - Find the pool that owns the specified buffer.
@@ -603,7 +534,6 @@ int ipc_shm_release_buf(int chan_id, const void *buf)
 		chan_id, bd.pool_id, bd.buf_id, buf);
 	return 0;
 }
-EXPORT_SYMBOL(ipc_shm_release_buf);
 
 int ipc_shm_tx(int chan_id, void *buf, size_t data_size)
 {
@@ -636,11 +566,10 @@ int ipc_shm_tx(int chan_id, void *buf, size_t data_size)
 	}
 
 	/* notify remote that data is available */
-	ipc_shm_hw_irq_notify(PLATFORM_DEFAULT, PLATFORM_DEFAULT);
+	ipc_hw_irq_notify(PLATFORM_DEFAULT, PLATFORM_DEFAULT);
 
 	return 0;
 }
-EXPORT_SYMBOL(ipc_shm_tx);
 
 int ipc_shm_tx_unmanaged(int chan_id)
 {
@@ -649,4 +578,3 @@ int ipc_shm_tx_unmanaged(int chan_id)
 	shm_err("Unmanaged channels not supported in current implementation\n");
 	return -EOPNOTSUPP;
 }
-EXPORT_SYMBOL(ipc_shm_tx_unmanaged);
