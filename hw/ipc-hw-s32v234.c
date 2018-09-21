@@ -122,8 +122,18 @@ struct mscm_regs {
 
 /* S32V234 Platform Specific Implementation  */
 
-/* pointer to memory-mapped hardware peripheral MSCM */
-static struct mscm_regs *mscm;
+/**
+ * struct ipc_hw_priv - ipc shm private interrupt and core data
+ *
+ * @inter_cpu_irq:    inter-core interrupt reserved for shm driver
+ * @remote_cpu:       remote cpu to trigger the interrupt on
+ * @mscm:	      pointer to memory-mapped hardware peripheral MSCM
+ */
+static struct ipc_hw_priv {
+	int inter_cpu_irq;
+	int remote_cpu;
+	struct mscm_regs *mscm;
+} priv;
 
 /**
  * ipc_shm_hw_get_dt_comp() - device tree compatible getter
@@ -138,39 +148,46 @@ char *ipc_hw_get_dt_comp(void)
 /**
  * ipc_shm_hw_get_dt_irq() - device tree compatible getter
  *
- * @shm_irq_id:     MSCM inter-core interrupt ID reserved for shm driver
- *
- * If the value PLAFORM_DEFAULT is passed as parameter, the default
- * value defined for the selected platform will be used instead.
- *
- * Return: device tree index of the MSCM interrupt used, -1 for invalid irq
+ * Return: device tree index of the MSCM interrupt used
  */
-int ipc_hw_get_dt_irq(int shm_irq_id)
+int ipc_hw_get_dt_irq(void)
 {
-	/* assign default value to interrupt ID if so indicated */
-	if (shm_irq_id == PLATFORM_DEFAULT) {
-		shm_irq_id = DEFAULT_SHM_IRQ_ID;
-	}
-
-	if (shm_irq_id < 0 || shm_irq_id > 3) {
-		shm_irq_id = -1;
-	}
-
-	return shm_irq_id;
+	return priv.inter_cpu_irq;
 }
 
 /**
  * ipc_shm_hw_init() - map MSCM IP block to proper address
  *
- * Return: 0 for success, -ENOMEM for invalid interrupt ID
+ * If the value -1 is passed for either inter_cpu_irq or remote-cpu
+ * the default value defined for the selected platform will be used instead
+ *
+ * Return: 0 for success, -ENOMEM for invalid interrupt ID or
+ * -EINVAL for invalid inter core interrupt or invalid remote cpu
  */
-int ipc_hw_init(void)
+int ipc_hw_init(const struct ipc_shm_cfg *cfg)
 {
+	if (cfg->inter_cpu_irq < -1 || cfg->inter_cpu_irq > 3
+		|| cfg->remote_cpu != M4) {
+		return -EINVAL;
+	}
+
+	if (cfg->inter_cpu_irq == PLATFORM_DEFAULT) {
+		priv.inter_cpu_irq = DEFAULT_SHM_IRQ_ID;
+	} else {
+		priv.inter_cpu_irq = cfg->inter_cpu_irq;
+	}
+
+	if (cfg->remote_cpu == PLATFORM_DEFAULT) {
+		priv.remote_cpu = DEFAULT_REMOTE_CPU;
+	} else {
+		priv.remote_cpu = cfg->remote_cpu;
+	}
+
 	/* map MSCM hardware peripheral block */
-	mscm = (struct mscm_regs *) ioremap_nocache(
+	priv.mscm = (struct mscm_regs *) ioremap_nocache(
 		(phys_addr_t)MSCM_BASE, sizeof(struct mscm_regs));
 
-	if (!mscm) {
+	if (!priv.mscm) {
 		return -ENOMEM;
 	}
 
@@ -183,36 +200,22 @@ int ipc_hw_init(void)
 void ipc_hw_free(void)
 {
 	/* unmap MSCM hardware peripheral block */
-	iounmap(mscm);
+	iounmap(priv.mscm);
 }
 
 /**
  * ipc_shm_hw_irq_enable() - enable notifications from remote
  *
- * @shm_irq_id:     MSCM inter-core interrupt ID reserved for shm driver
- *
- * If the value PLAFORM_DEFAULT is passed as parameter, the default
- * value defined for the selected platform will be used instead.
- *
- * Return: 0 for success, -EINVAL for invalid interrupt ID
+ * Return: 0 for success
  */
-int ipc_hw_irq_enable(int shm_irq_id)
+int ipc_hw_irq_enable(void)
 {
 	uint16_t irsprc_mask;
 
-	/* assign default value to interrupt ID if so indicated */
-	if (shm_irq_id == PLATFORM_DEFAULT) {
-		shm_irq_id = DEFAULT_SHM_IRQ_ID;
-	}
-
-	if (shm_irq_id < 0 || shm_irq_id > 3) {
-		return -EINVAL;
-	}
-
 	/* enable MSCM core-to-core interrupt routing */
-	irsprc_mask = readw_relaxed(&mscm->irsprc[shm_irq_id]);
+	irsprc_mask = readw_relaxed(&priv.mscm->irsprc[priv.inter_cpu_irq]);
 	writew_relaxed(irsprc_mask | MSCM_IRSPRCn_CPxE(A53),
-			&mscm->irsprc[shm_irq_id]);
+			&priv.mscm->irsprc[priv.inter_cpu_irq]);
 
 	return 0;
 }
@@ -220,30 +223,16 @@ int ipc_hw_irq_enable(int shm_irq_id)
 /**
  * ipc_shm_hw_irq_disable() - disable notifications from remote
  *
- * @shm_irq_id:     MSCM inter-core interrupt ID reserved for shm driver
- *
- * If the value PLAFORM_DEFAULT is passed as parameter, the default
- * value defined for the selected platform will be used instead.
- *
- * Return: 0 for success, -EINVAL for invalid interrupt ID
+ * Return: 0 for success
  */
-int ipc_hw_irq_disable(int shm_irq_id)
+int ipc_hw_irq_disable(void)
 {
 	uint16_t irsprc_mask;
 
-	/* assign default value to interrupt ID if so indicated */
-	if (shm_irq_id == PLATFORM_DEFAULT) {
-		shm_irq_id = DEFAULT_SHM_IRQ_ID;
-	}
-
-	if (shm_irq_id < 0 || shm_irq_id > 3) {
-		return -EINVAL;
-	}
-
 	/* disable MSCM core-to-core interrupt routing */
-	irsprc_mask = readw_relaxed(&mscm->irsprc[shm_irq_id]);
+	irsprc_mask = readw_relaxed(&priv.mscm->irsprc[priv.inter_cpu_irq]);
 	writew_relaxed(irsprc_mask & ~MSCM_IRSPRCn_CPxE(A53),
-			&mscm->irsprc[shm_irq_id]);
+			&priv.mscm->irsprc[priv.inter_cpu_irq]);
 
 	return 0;
 }
@@ -251,32 +240,15 @@ int ipc_hw_irq_disable(int shm_irq_id)
 /**
  * ipc_shm_hw_irq_notify() - notify remote that data is available
  *
- * @shm_irq_id:     MSCM inter-core interrupt ID reserved for shm driver
- * @remote_cpu:     ID of the remote core to trigger the interrupt on
- *
- * If the value PLAFORM_DEFAULT is passed as either parameter, the default
- * value defined for the selected platform will be used instead.
- *
- * Return: 0 for success, -EINVAL for invalid interrupt or remote processor ID
+ * Return: 0 for success
  */
-int ipc_hw_irq_notify(int shm_irq_id, int remote_cpu)
+int ipc_hw_irq_notify(void)
 {
-	/* assign default value to interrupt and processor ID if so indicated */
-	if (shm_irq_id == PLATFORM_DEFAULT) {
-		shm_irq_id = DEFAULT_SHM_IRQ_ID;
-	}
-	if (remote_cpu == PLATFORM_DEFAULT) {
-		remote_cpu = DEFAULT_REMOTE_CPU;
-	}
-
 	/* trigger MSCM core-to-core interrupt */
-	if (shm_irq_id < 0 || shm_irq_id > 3 || remote_cpu != M4) {
-		return -EINVAL;
-	}
-
 	writel_relaxed(MSCM_IRCPGIR_TLF(MSCM_IRCPGIR_TLF_CPUTL) |
-			MSCM_IRCPGIR_CPUTL(remote_cpu) |
-			MSCM_IRCPGIR_INTID(shm_irq_id), &mscm->ircpgir);
+			MSCM_IRCPGIR_CPUTL(priv.remote_cpu) |
+			MSCM_IRCPGIR_INTID(priv.inter_cpu_irq),
+			&priv.mscm->ircpgir);
 
 	return 0;
 }
@@ -284,26 +256,13 @@ int ipc_hw_irq_notify(int shm_irq_id, int remote_cpu)
 /**
  * ipc_shm_hw_irq_clear() - clear available data notification
  *
- * @shm_irq_id:     MSCM inter-core interrupt ID reserved for shm driver
- *
- * If the value PLAFORM_DEFAULT is passed as parameter, the default
- * value defined for the selected platform will be used instead.
- *
- * Return: 0 for success, -EINVAL for invalid interrupt ID
+ * Return: 0 for success
  */
-int ipc_hw_irq_clear(int shm_irq_id)
+int ipc_hw_irq_clear(void)
 {
-	/* assign default value to interrupt ID if so indicated */
-	if (shm_irq_id == PLATFORM_DEFAULT) {
-		shm_irq_id = DEFAULT_SHM_IRQ_ID;
-	}
-
 	/* clear MSCM core-to-core interrupt */
-	if (shm_irq_id < 0 || shm_irq_id > 3) {
-		return -EINVAL;
-	}
-
-	writel_relaxed(MSCM_IRCPxIR_INT(shm_irq_id), &mscm->ircp1ir);
+	writel_relaxed(MSCM_IRCPxIR_INT(priv.inter_cpu_irq),
+		       &priv.mscm->ircp1ir);
 
 	return 0;
 }

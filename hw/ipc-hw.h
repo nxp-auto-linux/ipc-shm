@@ -5,22 +5,24 @@
 #ifndef IPC_HW_H
 #define IPC_HW_H
 
+#include "ipc-shm.h"
+
 #define PLATFORM_DEFAULT    (-1) /* use platform default instead of parameter */
 
-int ipc_hw_init(void);
+int ipc_hw_init(const struct ipc_shm_cfg *cfg);
 
 void ipc_hw_free(void);
 
 char *ipc_hw_get_dt_comp(void);
 
-int ipc_hw_get_dt_irq(int shm_irq_id);
+int ipc_hw_get_dt_irq(void);
 
-int ipc_hw_irq_enable(int shm_irq_id);
+int ipc_hw_irq_enable(void);
 
-int ipc_hw_irq_disable(int shm_irq_id);
+int ipc_hw_irq_disable(void);
 
-int ipc_hw_irq_notify(int shm_irq_id, int remote_cpu);
+int ipc_hw_irq_notify(void);
 
-int ipc_hw_irq_clear(int shm_irq_id);
+int ipc_hw_irq_clear(void);
 
 #endif /* IPC_HW_H */

@@ -2,6 +2,7 @@
 /*
  * Copyright 2018 NXP
  */
+
 #ifndef IPC_SHM_H
 #define IPC_SHM_H
 
@@ -19,6 +20,12 @@
  * Maximum number of buffers per pool
  */
 #define IPC_SHM_MAX_BUFS_PER_POOL 4096
+
+/**
+ * Default values for inter core interrupts and remote cpu
+ */
+#define DEFAULT_PLATFORM_IRQ (-1)
+#define DEFAULT_PLATFORM_REMOTE (-1)
 
 /**
  * enum ipc_shm_channel_type - channel type
@@ -84,12 +91,17 @@ struct ipc_shm_channel_cfg {
  * struct ipc_shm_cfg - IPC shm parameters
  * @local_shm_addr:	local shared memory physical address
  * @remote_shm_addr:	remote shared memory physical address
+ * @inter_cpu_irq:	inter-core interrupt reserved for shm driver
+ * @remote_cpu:		remote core to trigger the interrupt on
  * @shm_size:		local/remote shared memory size
+ * @num_channels:	number of shared memory channels
  * @channels:		IPC channels' parameters array
  */
 struct ipc_shm_cfg {
 	uintptr_t local_shm_addr;
 	uintptr_t remote_shm_addr;
+	int inter_cpu_irq;
+	int remote_cpu;
 	int shm_size;
 	int num_channels;
 	struct ipc_shm_channel_cfg *channels;

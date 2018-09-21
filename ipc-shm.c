@@ -2,6 +2,7 @@
 /*
  * Copyright 2018 NXP
  */
+
 #include "ipc-os.h"
 #include "ipc-hw.h"
 #include "ipc-fifo.h"
@@ -82,7 +83,7 @@ struct ipc_shm_channel {
 /**
  * struct ipc_shm_priv - ipc shm private data
  * @shm_size:		local/remote shared memory size
- * num_channels:	number of shared memory channels
+ * @num_channels:	number of shared memory channels
  * @channels:		ipc channels private data
  */
 struct ipc_shm_priv {
@@ -400,7 +401,7 @@ int ipc_shm_init(const struct ipc_shm_cfg *cfg)
 		err = ipc_shm_channel_init(i, local_chan_shm, remote_chan_shm,
 					   &cfg->channels[i]);
 		if (err)
-			goto err_free_os;
+			return err;
 
 		/* compute next channel local/remote shm base address */
 		chan_size = get_chan_mem_size(i);
@@ -408,26 +409,27 @@ int ipc_shm_init(const struct ipc_shm_cfg *cfg)
 		remote_chan_shm += chan_size;
 	}
 
-	/* enable interrupt notifications */
-	err = ipc_hw_irq_enable(PLATFORM_DEFAULT);
+	/* pass interrupt and core data to hw */
+	err = ipc_hw_init(cfg);
 	if (err)
-		goto err_free_os;
+		return err;
+
+	/* enable interrupt notifications */
+	err = ipc_hw_irq_enable();
+	if (err)
+		return err;
 
 	shm_dbg("ipc shm initialized\n");
 	return 0;
-
-err_free_os:
-	ipc_os_free();
-
-	return err;
 }
 
 void ipc_shm_free(void)
 {
 	/* disable hardirq */
-	ipc_hw_irq_disable(PLATFORM_DEFAULT);
+	ipc_hw_irq_disable();
 
 	ipc_os_free();
+	ipc_hw_free();
 
 	shm_dbg("ipc shm released\n");
 }
@@ -566,7 +568,7 @@ int ipc_shm_tx(int chan_id, void *buf, size_t data_size)
 	}
 
 	/* notify remote that data is available */
-	ipc_hw_irq_notify(PLATFORM_DEFAULT, PLATFORM_DEFAULT);
+	ipc_hw_irq_notify();
 
 	return 0;
 }

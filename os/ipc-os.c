@@ -46,7 +46,7 @@ static void ipc_shm_softirq(unsigned long budget)
 
 	if (work < budget) {
 		/* work done, re-enable irq */
-		ipc_hw_irq_enable(PLATFORM_DEFAULT);
+		ipc_hw_irq_enable();
 	} else {
 		/* work not done, reschedule softirq */
 		tasklet_schedule(&ipc_shm_rx_tasklet);
@@ -56,8 +56,8 @@ static void ipc_shm_softirq(unsigned long budget)
 /* driver interrupt service routine */
 static irqreturn_t ipc_shm_hardirq(int irq, void *dev)
 {
-	ipc_hw_irq_disable(PLATFORM_DEFAULT);
-	ipc_hw_irq_clear(PLATFORM_DEFAULT);
+	ipc_hw_irq_disable();
+	ipc_hw_irq_clear();
 
 	tasklet_schedule(&ipc_shm_rx_tasklet);
 
@@ -126,7 +126,7 @@ int ipc_os_init(const struct ipc_shm_cfg *cfg, int (*rx_cb)(int))
 		goto err_unmap_remote_shm;
 	}
 
-	priv.irq_num = of_irq_get(mscm, ipc_hw_get_dt_irq(PLATFORM_DEFAULT));
+	priv.irq_num = of_irq_get(mscm, ipc_hw_get_dt_irq());
 	of_node_put(mscm); /* release refcount to mscm DT node */
 
 	/* init rx interrupt */
@@ -136,17 +136,8 @@ int ipc_os_init(const struct ipc_shm_cfg *cfg, int (*rx_cb)(int))
 		goto err_unmap_remote_shm;
 	}
 
-	/* init MSCM */
-	err = ipc_hw_init();
-	if (err) {
-		shm_err("Core-to-core interrupt initialization failed\n");
-		goto err_free_irq;
-	}
-
 	return 0;
 
-err_free_irq:
-	free_irq(priv.irq_num, &priv);
 err_unmap_remote_shm:
 	iounmap((void *)cfg->remote_shm_addr);
 err_release_remote_region:
@@ -165,7 +156,7 @@ err_release_local_region:
 void ipc_os_free(void)
 {
 	/* disable hardirq */
-	ipc_hw_irq_disable(PLATFORM_DEFAULT);
+	ipc_hw_irq_disable();
 
 	/* kill softirq task */
 	tasklet_kill(&ipc_shm_rx_tasklet);
