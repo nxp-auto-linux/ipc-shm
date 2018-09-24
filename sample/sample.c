@@ -10,7 +10,7 @@
 #include <linux/stat.h>
 #include <linux/completion.h>
 
-#include "../ipc-shm-dev/ipc-shm.h"
+#include "../ipc-shm.h"
 
 #define MODULE_NAME "ipc-shm-sample"
 #define MODULE_VER "0.1"

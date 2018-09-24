@@ -651,13 +651,16 @@ int ipc_hw_irq_clear(int shm_irq_id)
 	case A53_0:
 		switch (shm_irq_id) {
 		case 0:
-			writel_relaxed(MSCM_IRCPnISRn_CPx_INT, &mscm->ircp0isr0);
+			writel_relaxed(MSCM_IRCPnISRn_CPx_INT,
+				       &mscm->ircp0isr0);
 			break;
 		case 1:
-			writel_relaxed(MSCM_IRCPnISRn_CPx_INT, &mscm->ircp0isr1);
+			writel_relaxed(MSCM_IRCPnISRn_CPx_INT,
+				       &mscm->ircp0isr1);
 			break;
 		case 2:
-			writel_relaxed(MSCM_IRCPnISRn_CPx_INT, &mscm->ircp0isr2);
+			writel_relaxed(MSCM_IRCPnISRn_CPx_INT,
+				       &mscm->ircp0isr2);
 			break;
 		default:
 			return -EINVAL;
@@ -666,13 +669,16 @@ int ipc_hw_irq_clear(int shm_irq_id)
 	case A53_1:
 		switch (shm_irq_id) {
 		case 0:
-			writel_relaxed(MSCM_IRCPnISRn_CPx_INT, &mscm->ircp1isr0);
+			writel_relaxed(MSCM_IRCPnISRn_CPx_INT,
+				       &mscm->ircp1isr0);
 			break;
 		case 1:
-			writel_relaxed(MSCM_IRCPnISRn_CPx_INT, &mscm->ircp1isr1);
+			writel_relaxed(MSCM_IRCPnISRn_CPx_INT,
+				       &mscm->ircp1isr1);
 			break;
 		case 2:
-			writel_relaxed(MSCM_IRCPnISRn_CPx_INT, &mscm->ircp1isr2);
+			writel_relaxed(MSCM_IRCPnISRn_CPx_INT,
+				       &mscm->ircp1isr2);
 			break;
 		default:
 			return -EINVAL;
@@ -681,13 +687,16 @@ int ipc_hw_irq_clear(int shm_irq_id)
 	case A53_2:
 		switch (shm_irq_id) {
 		case 0:
-			writel_relaxed(MSCM_IRCPnISRn_CPx_INT, &mscm->ircp2isr0);
+			writel_relaxed(MSCM_IRCPnISRn_CPx_INT,
+				       &mscm->ircp2isr0);
 			break;
 		case 1:
-			writel_relaxed(MSCM_IRCPnISRn_CPx_INT, &mscm->ircp2isr1);
+			writel_relaxed(MSCM_IRCPnISRn_CPx_INT,
+				       &mscm->ircp2isr1);
 			break;
 		case 2:
-			writel_relaxed(MSCM_IRCPnISRn_CPx_INT, &mscm->ircp2isr2);
+			writel_relaxed(MSCM_IRCPnISRn_CPx_INT,
+				       &mscm->ircp2isr2);
 			break;
 		default:
 			return -EINVAL;
@@ -696,13 +705,16 @@ int ipc_hw_irq_clear(int shm_irq_id)
 	case A53_3:
 		switch (shm_irq_id) {
 		case 0:
-			writel_relaxed(MSCM_IRCPnISRn_CPx_INT, &mscm->ircp3isr0);
+			writel_relaxed(MSCM_IRCPnISRn_CPx_INT,
+				       &mscm->ircp3isr0);
 			break;
 		case 1:
-			writel_relaxed(MSCM_IRCPnISRn_CPx_INT, &mscm->ircp3isr1);
+			writel_relaxed(MSCM_IRCPnISRn_CPx_INT,
+				       &mscm->ircp3isr1);
 			break;
 		case 2:
-			writel_relaxed(MSCM_IRCPnISRn_CPx_INT, &mscm->ircp3isr2);
+			writel_relaxed(MSCM_IRCPnISRn_CPx_INT,
+				       &mscm->ircp3isr2);
 			break;
 		default:
 			return -EINVAL;

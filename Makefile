@@ -1,28 +1,32 @@
 # SPDX-License-Identifier:	BSD-3-Clause
 #
-# Copyright (C) 2018 NXP Semiconductors
+# Copyright 2018 NXP Semiconductors
 #
 
-PWD := $(shell pwd)
+MODULE_NAME := ipc-shm-dev
 
 ifneq ($(KERNELRELEASE),)
 # kbuild part of makefile
-obj-m := ipc-shm-dev.o
-ipc-shm-dev-y := ipc-os.o ipc-shm.o ipc-fifo.o
+
+obj-m := $(MODULE_NAME).o
+$(MODULE_NAME)-y := ipc-shm.o ipc-fifo.o os/ipc-os.o
 
 ifeq ($(CONFIG_SOC_S32GEN1),y)
-ipc-shm-dev-y += ipc-hw-s32gen1.o
+$(MODULE_NAME)-y += hw/ipc-hw-s32gen1.o
 endif
 
 ifeq ($(CONFIG_SOC_S32V234),y)
-ipc-shm-dev-y += ipc-hw-s32v234.o
+$(MODULE_NAME)-y += hw/ipc-hw-s32v234.o
 endif
 
 # Add here cc flags (e.g. header lookup paths, defines, etc)
-ccflags-y +=
+ccflags-y += -I$(src) -I$(src)/hw -I$(src)/os
 
 else
+# normal part of makefile
+
 ARCH ?= arm64
+PWD := $(shell pwd)
 
 # The following parameters must be passed from the caller,
 # e.g. build system (Yocto), command line:

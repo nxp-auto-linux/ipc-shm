@@ -1,21 +1,17 @@
-/*******************************************************************************
+********************************************************************************
 *                                                                              *
 *  Shared Memory Inter-Process(or) Communication sample application for Linux  *
 *                                                                              *
-*   (c) Copyright 2018 NXP. All rights reserved.                               *
+*  Copyright 2018 NXP                                                          *
 *                                                                              *
-*******************************************************************************/
+********************************************************************************
 
-This package contains the IPCF share memory Linux kernel module.
-This driver is integrated in NXP Auto Linux BSP18 and can be used to
-communicate over shared memory with another driver running on another OS.
+This package contains the IPCF shared memory Linux kernel driver and a sample 
+application kernel module.
+The driver is integrated in NXP Auto Linux BSP and can be used to
+communicate over shared memory with another IPCF driver running on another OS.
 
-Disclaimer: This is a Demo implementation of a shared memory driver. Demo
-drivers/applications are not fully qualified and are not intended for
-production. The purpose of this demo implementation is to provide basic driver
-functionality having minimal quality in terms of testing and documentation.
-
-This sample application demonstrates a ping-pong communication between 2 apps,
+The sample application demonstrates a ping-pong communication between 2 apps,
 one in Linux, one in RTOS (Autosar/FreeRTOS), using the shared memory driver.
 The Linux app initializes the shared memory driver, sends messages to the
 remote app as long as there are available transmit buffers and sleeps when
