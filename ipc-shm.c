@@ -2,7 +2,6 @@
 /*
  * Copyright 2018 NXP
  */
-
 #include "ipc-os.h"
 #include "ipc-hw.h"
 #include "ipc-fifo.h"
@@ -388,6 +387,11 @@ int ipc_shm_init(const struct ipc_shm_cfg *cfg)
 	priv->shm_size = cfg->shm_size;
 	priv->num_channels = cfg->num_channels;
 
+	/* pass interrupt and core data to hw */
+	err = ipc_hw_init(cfg);
+	if (err)
+		return err;
+
 	/* init OS specific resources */
 	err = ipc_os_init(cfg, ipc_shm_rx);
 	if (err)
@@ -401,7 +405,7 @@ int ipc_shm_init(const struct ipc_shm_cfg *cfg)
 		err = ipc_shm_channel_init(i, local_chan_shm, remote_chan_shm,
 					   &cfg->channels[i]);
 		if (err)
-			return err;
+			goto err_free_os;
 
 		/* compute next channel local/remote shm base address */
 		chan_size = get_chan_mem_size(i);
@@ -409,18 +413,15 @@ int ipc_shm_init(const struct ipc_shm_cfg *cfg)
 		remote_chan_shm += chan_size;
 	}
 
-	/* pass interrupt and core data to hw */
-	err = ipc_hw_init(cfg);
-	if (err)
-		return err;
-
 	/* enable interrupt notifications */
-	err = ipc_hw_irq_enable();
-	if (err)
-		return err;
+	ipc_hw_irq_enable();
 
 	shm_dbg("ipc shm initialized\n");
 	return 0;
+
+err_free_os:
+	ipc_os_free();
+	return err;
 }
 
 void ipc_shm_free(void)

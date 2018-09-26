@@ -6,6 +6,7 @@
 #include <linux/module.h>
 #include <linux/io.h>
 
+#include "ipc-shm.h"
 #include "ipc-hw.h"
 
 /* Hardware IP Block Base Addresses - TODO: get them from device tree */
@@ -13,7 +14,7 @@
 
 /* S32gen1 Specific Definitions */
 #define DEFAULT_SHM_IRQ_ID    2u /* MSCM irq 2 = GIC irq 35 */
-#define DEFAULT_REMOTE_CPU    4u /* M7 core 0 */
+#define DEFAULT_REMOTE_CORE    4u /* M7 core 0 */
 
 /* Device tree MSCM node: compatible property (search key) */
 #define DT_MSCM_NODE_COMP "fsl,s32gen1-mscm"
@@ -349,13 +350,13 @@ struct mscm_regs {
 /**
  * struct ipc_hw_priv - ipc shm private interrupt and core data
  *
- * @inter_cpu_irq:    inter-core interrupt reserved for shm driver
- * @remote_cpu:       remote cpu to trigger the interrupt on
+ * @inter_core_irq:    inter-core interrupt reserved for shm driver
+ * @remote_core:       remote core to trigger the interrupt on
  * @mscm:	      pointer to memory-mapped hardware peripheral MSCM
  */
 static struct ipc_hw_priv {
-	int inter_cpu_irq;
-	int remote_cpu;
+	int inter_core_irq;
+	int remote_core;
 	struct mscm_regs *mscm;
 } priv;
 
@@ -376,45 +377,80 @@ char *ipc_hw_get_dt_comp(void)
  */
 int ipc_hw_get_dt_irq(void)
 {
-	return priv.inter_cpu_irq;
+	return priv.inter_core_irq;
 }
 
 /**
  * ipc_hw_init() - map MSCM IP block to proper address
  *
- * If the value -1 is passed for either inter_cpu_irq or remote_cpu
+ * If the value -1 is passed for either inter_core_irq or remote_core
  * the default value defined for the selected platform will be used instead
  *
  * @cfg:    configuration parameters
  *
- * Return: 0 for success, -ENOMEM for invalid interrupt ID or -EINVAL for
- * invalid inter core interrupt or invalid remote cpu
+ * Return: 0 for success, -ENOMEM for failing to map MSCM address space
+ * or -EINVAL for invalid inter core interrupt or invalid remote core
  */
 int ipc_hw_init(const struct ipc_shm_cfg *cfg)
 {
-	if (cfg->inter_cpu_irq < -1 || cfg->inter_cpu_irq > 2
-		|| cfg->remote_cpu == readl_relaxed(&priv.mscm->cpxnum)) {
-		return -EINVAL;
-	}
-
-	if (cfg->inter_cpu_irq == PLATFORM_DEFAULT) {
-		priv.inter_cpu_irq = DEFAULT_SHM_IRQ_ID;
-	} else {
-		priv.inter_cpu_irq = cfg->inter_cpu_irq;
-	}
-
-	if (cfg->remote_cpu == PLATFORM_DEFAULT) {
-		priv.remote_cpu = DEFAULT_REMOTE_CPU;
-	} else {
-		priv.remote_cpu = cfg->remote_cpu;
-	}
-
 	/* map MSCM hardware peripheral block */
 	priv.mscm = (struct mscm_regs *) ioremap_nocache(
 		(phys_addr_t)MSCM_BASE, sizeof(struct mscm_regs));
 
 	if (!priv.mscm) {
 		return -ENOMEM;
+	}
+
+	switch (cfg->remote_core.type) {
+	case IPC_CORE_DEFAULT:
+		priv.remote_core = DEFAULT_REMOTE_CORE;
+		break;
+	case IPC_CORE_A53:
+		switch (cfg->remote_core.index) {
+		case 0:
+			priv.remote_core = A53_0;
+			break;
+		case 1:
+			priv.remote_core = A53_1;
+			break;
+		case 2:
+			priv.remote_core = A53_2;
+			break;
+		case 3:
+			priv.remote_core = A53_3;
+			break;
+		default:
+			return -EINVAL;
+		}
+		break;
+	case IPC_CORE_M7:
+		switch (cfg->remote_core.index) {
+		case 0:
+			priv.remote_core = M7_0;
+			break;
+		case 1:
+			priv.remote_core = M7_1;
+			break;
+		case 2:
+			priv.remote_core = M7_2;
+			break;
+		default:
+			return -EINVAL;
+		}
+		break;
+	default:
+		return -EINVAL;
+	}
+
+	if (cfg->inter_core_irq != IPC_DEFAULT_INTER_CORE_IRQ) {
+		priv.inter_core_irq = cfg->inter_core_irq;
+	} else {
+		priv.inter_core_irq = DEFAULT_SHM_IRQ_ID;
+	}
+
+	if (priv.inter_core_irq < 0 || priv.inter_core_irq > 2
+		|| priv.remote_core == readl_relaxed(&priv.mscm->cpxnum)) {
+		return -EINVAL;
 	}
 
 	return 0;
@@ -438,16 +474,14 @@ void ipc_hw_free(void)
  *
  * Return: 0 for success
  */
-int ipc_hw_irq_enable(void)
+void ipc_hw_irq_enable(void)
 {
 	uint16_t irsprc_mask;
 
 	/* enable MSCM core-to-core interrupt routing */
-	irsprc_mask = readw_relaxed(&priv.mscm->irsprc[priv.inter_cpu_irq + 1]);
+	irsprc_mask = readw_relaxed(&priv.mscm->irsprc[priv.inter_core_irq+1]);
 	writew_relaxed(irsprc_mask | MSCM_IRSPRCn_GIC500,
-			&priv.mscm->irsprc[priv.inter_cpu_irq + 1]);
-
-	return 0;
+			&priv.mscm->irsprc[priv.inter_core_irq + 1]);
 }
 
 /**
@@ -459,28 +493,26 @@ int ipc_hw_irq_enable(void)
  *
  * Return: 0 for success
  */
-int ipc_hw_irq_disable(void)
+void ipc_hw_irq_disable(void)
 {
 	uint16_t irsprc_mask;
 
 	/* disable MSCM core-to-core interrupt routing */
-	irsprc_mask = readw_relaxed(&priv.mscm->irsprc[priv.inter_cpu_irq + 1]);
+	irsprc_mask = readw_relaxed(&priv.mscm->irsprc[priv.inter_core_irq+1]);
 	writew_relaxed(irsprc_mask & ~MSCM_IRSPRCn_GIC500,
-			&priv.mscm->irsprc[priv.inter_cpu_irq + 1]);
-
-	return 0;
+			&priv.mscm->irsprc[priv.inter_core_irq + 1]);
 }
 
 /**
  * ipc_hw_irq_notify() - notify remote that data is available
  *
- * Return: 0 for success, or -EINVAL for invalid remote_cpu
+ * Return: 0 for success, or -EINVAL for invalid remote_core
  */
-int ipc_hw_irq_notify(void)
+void ipc_hw_irq_notify(void)
 {
-	switch (priv.remote_cpu) {
+	switch (priv.remote_core) {
 	case A53_0:
-		switch (priv.inter_cpu_irq) {
+		switch (priv.inter_core_irq) {
 		case 0:
 			writel_relaxed(MSCM_IRCPnIGRn_INT_EN,
 					&priv.mscm->ircp0igr0);
@@ -494,11 +526,11 @@ int ipc_hw_irq_notify(void)
 					&priv.mscm->ircp0igr2);
 			break;
 		default:
-			return -EINVAL;
+			return;
 		}
 		break;
 	case A53_1:
-		switch (priv.inter_cpu_irq) {
+		switch (priv.inter_core_irq) {
 		case 0:
 			writel_relaxed(MSCM_IRCPnIGRn_INT_EN,
 					&priv.mscm->ircp1igr0);
@@ -512,11 +544,11 @@ int ipc_hw_irq_notify(void)
 					&priv.mscm->ircp1igr2);
 			break;
 		default:
-			return -EINVAL;
+			return;
 		}
 		break;
 	case A53_2:
-		switch (priv.inter_cpu_irq) {
+		switch (priv.inter_core_irq) {
 		case 0:
 			writel_relaxed(MSCM_IRCPnIGRn_INT_EN,
 					&priv.mscm->ircp2igr0);
@@ -530,11 +562,11 @@ int ipc_hw_irq_notify(void)
 					&priv.mscm->ircp2igr2);
 			break;
 		default:
-			return -EINVAL;
+			return;
 		}
 		break;
 	case A53_3:
-		switch (priv.inter_cpu_irq) {
+		switch (priv.inter_core_irq) {
 		case 0:
 			writel_relaxed(MSCM_IRCPnIGRn_INT_EN,
 					&priv.mscm->ircp3igr0);
@@ -548,11 +580,11 @@ int ipc_hw_irq_notify(void)
 					&priv.mscm->ircp3igr2);
 			break;
 		default:
-			return -EINVAL;
+			return;
 		}
 		break;
 	case M7_0:
-		switch (priv.inter_cpu_irq) {
+		switch (priv.inter_core_irq) {
 		case 0:
 			writel_relaxed(MSCM_IRCPnIGRn_INT_EN,
 					&priv.mscm->ircp4igr0);
@@ -566,11 +598,11 @@ int ipc_hw_irq_notify(void)
 					&priv.mscm->ircp4igr2);
 			break;
 		default:
-			return -EINVAL;
+			return;
 		}
 		break;
 	case M7_1:
-		switch (priv.inter_cpu_irq) {
+		switch (priv.inter_core_irq) {
 		case 0:
 			writel_relaxed(MSCM_IRCPnIGRn_INT_EN,
 					&priv.mscm->ircp5igr0);
@@ -584,11 +616,11 @@ int ipc_hw_irq_notify(void)
 					&priv.mscm->ircp5igr2);
 			break;
 		default:
-			return -EINVAL;
+			return;
 		}
 		break;
 	case M7_2:
-		switch (priv.inter_cpu_irq) {
+		switch (priv.inter_core_irq) {
 		case 0:
 			writel_relaxed(MSCM_IRCPnIGRn_INT_EN,
 					&priv.mscm->ircp6igr0);
@@ -602,14 +634,12 @@ int ipc_hw_irq_notify(void)
 					&priv.mscm->ircp6igr2);
 			break;
 		default:
-			return -EINVAL;
+			return;
 		}
 		break;
 	default:
-		return -EINVAL;
+		return;
 	}
-
-	return 0;
 }
 
 /**
@@ -617,7 +647,7 @@ int ipc_hw_irq_notify(void)
  *
  * Return: 0 for success
  */
-int ipc_hw_irq_clear(void)
+void ipc_hw_irq_clear(void)
 {
 	int current_cpu;
 
@@ -627,7 +657,7 @@ int ipc_hw_irq_clear(void)
 	/* clear MSCM core-to-core interrupt */
 	switch (current_cpu) {
 	case A53_0:
-		switch (priv.inter_cpu_irq) {
+		switch (priv.inter_core_irq) {
 		case 0:
 			writel_relaxed(MSCM_IRCPnISRn_CPx_INT,
 					&priv.mscm->ircp0isr0);
@@ -641,11 +671,11 @@ int ipc_hw_irq_clear(void)
 					&priv.mscm->ircp0isr2);
 			break;
 		default:
-			return -EINVAL;
+			return;
 		}
 		break;
 	case A53_1:
-		switch (priv.inter_cpu_irq) {
+		switch (priv.inter_core_irq) {
 		case 0:
 			writel_relaxed(MSCM_IRCPnISRn_CPx_INT,
 					&priv.mscm->ircp1isr0);
@@ -659,11 +689,11 @@ int ipc_hw_irq_clear(void)
 					&priv.mscm->ircp1isr2);
 			break;
 		default:
-			return -EINVAL;
+			return;
 		}
 		break;
 	case A53_2:
-		switch (priv.inter_cpu_irq) {
+		switch (priv.inter_core_irq) {
 		case 0:
 			writel_relaxed(MSCM_IRCPnISRn_CPx_INT,
 					&priv.mscm->ircp2isr0);
@@ -677,11 +707,11 @@ int ipc_hw_irq_clear(void)
 					&priv.mscm->ircp2isr2);
 			break;
 		default:
-			return -EINVAL;
+			return;
 		}
 		break;
 	case A53_3:
-		switch (priv.inter_cpu_irq) {
+		switch (priv.inter_core_irq) {
 		case 0:
 			writel_relaxed(MSCM_IRCPnISRn_CPx_INT,
 					&priv.mscm->ircp3isr0);
@@ -695,12 +725,10 @@ int ipc_hw_irq_clear(void)
 					&priv.mscm->ircp3isr2);
 			break;
 		default:
-			return -EINVAL;
+			return;
 		}
 		break;
 	default:
-		return -EINVAL;
+		return;
 	}
-
-	return 0;
 }

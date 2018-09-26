@@ -6,6 +6,7 @@
 #include <linux/module.h>
 #include <linux/io.h>
 
+#include "ipc-shm.h"
 #include "ipc-hw.h"
 
 /* Hardware IP Block Base Addresses - TODO: get them from device tree */
@@ -13,7 +14,7 @@
 
 /* S32V234 Specific Definitions */
 #define DEFAULT_SHM_IRQ_ID    3u /* MSCM interrupt 3 - GIC irq 35 */
-#define DEFAULT_REMOTE_CPU    0u /* M4 core */
+#define DEFAULT_REMOTE_CORE    0u /* M4 core */
 
 /* Device tree MSCM node: compatible property (search key) */
 #define DT_MSCM_NODE_COMP "fsl,s32v234-mscm"
@@ -125,13 +126,13 @@ struct mscm_regs {
 /**
  * struct ipc_hw_priv - ipc shm private interrupt and core data
  *
- * @inter_cpu_irq:    inter-core interrupt reserved for shm driver
- * @remote_cpu:       remote cpu to trigger the interrupt on
+ * @inter_core_irq:    inter-core interrupt reserved for shm driver
+ * @remote_core:       remote core to trigger the interrupt on
  * @mscm:	      pointer to memory-mapped hardware peripheral MSCM
  */
 static struct ipc_hw_priv {
-	int inter_cpu_irq;
-	int remote_cpu;
+	int inter_core_irq;
+	int remote_core;
 	struct mscm_regs *mscm;
 } priv;
 
@@ -152,43 +153,42 @@ char *ipc_hw_get_dt_comp(void)
  */
 int ipc_hw_get_dt_irq(void)
 {
-	return priv.inter_cpu_irq;
+	return priv.inter_core_irq;
 }
 
 /**
  * ipc_shm_hw_init() - map MSCM IP block to proper address
  *
- * If the value -1 is passed for either inter_cpu_irq or remote-cpu
+ * If the value -1 is passed for either inter_core_irq or remote-core
  * the default value defined for the selected platform will be used instead
  *
- * Return: 0 for success, -ENOMEM for invalid interrupt ID or
- * -EINVAL for invalid inter core interrupt or invalid remote cpu
+ * Return: 0 for success, -ENOMEM for failing to map MSCM address space or
+ * -EINVAL for invalid inter core interrupt or invalid remote core
  */
 int ipc_hw_init(const struct ipc_shm_cfg *cfg)
 {
-	if (cfg->inter_cpu_irq < -1 || cfg->inter_cpu_irq > 3
-		|| cfg->remote_cpu != M4) {
-		return -EINVAL;
-	}
-
-	if (cfg->inter_cpu_irq == PLATFORM_DEFAULT) {
-		priv.inter_cpu_irq = DEFAULT_SHM_IRQ_ID;
-	} else {
-		priv.inter_cpu_irq = cfg->inter_cpu_irq;
-	}
-
-	if (cfg->remote_cpu == PLATFORM_DEFAULT) {
-		priv.remote_cpu = DEFAULT_REMOTE_CPU;
-	} else {
-		priv.remote_cpu = cfg->remote_cpu;
-	}
-
 	/* map MSCM hardware peripheral block */
 	priv.mscm = (struct mscm_regs *) ioremap_nocache(
 		(phys_addr_t)MSCM_BASE, sizeof(struct mscm_regs));
 
 	if (!priv.mscm) {
 		return -ENOMEM;
+	}
+
+	if (cfg->remote_core.type != IPC_CORE_M4) {
+		return -EINVAL;
+	}
+
+	priv.remote_core = M4;
+
+	if (cfg->inter_core_irq == IPC_DEFAULT_INTER_CORE_IRQ) {
+		priv.inter_core_irq = DEFAULT_SHM_IRQ_ID;
+	} else {
+		priv.inter_core_irq = cfg->inter_core_irq;
+	}
+
+	if (priv.inter_core_irq < 0 || priv.inter_core_irq > 3) {
+		return -EINVAL;
 	}
 
 	return 0;
@@ -208,16 +208,14 @@ void ipc_hw_free(void)
  *
  * Return: 0 for success
  */
-int ipc_hw_irq_enable(void)
+void ipc_hw_irq_enable(void)
 {
 	uint16_t irsprc_mask;
 
 	/* enable MSCM core-to-core interrupt routing */
-	irsprc_mask = readw_relaxed(&priv.mscm->irsprc[priv.inter_cpu_irq]);
+	irsprc_mask = readw_relaxed(&priv.mscm->irsprc[priv.inter_core_irq]);
 	writew_relaxed(irsprc_mask | MSCM_IRSPRCn_CPxE(A53),
-			&priv.mscm->irsprc[priv.inter_cpu_irq]);
-
-	return 0;
+			&priv.mscm->irsprc[priv.inter_core_irq]);
 }
 
 /**
@@ -225,16 +223,14 @@ int ipc_hw_irq_enable(void)
  *
  * Return: 0 for success
  */
-int ipc_hw_irq_disable(void)
+void ipc_hw_irq_disable(void)
 {
 	uint16_t irsprc_mask;
 
 	/* disable MSCM core-to-core interrupt routing */
-	irsprc_mask = readw_relaxed(&priv.mscm->irsprc[priv.inter_cpu_irq]);
+	irsprc_mask = readw_relaxed(&priv.mscm->irsprc[priv.inter_core_irq]);
 	writew_relaxed(irsprc_mask & ~MSCM_IRSPRCn_CPxE(A53),
-			&priv.mscm->irsprc[priv.inter_cpu_irq]);
-
-	return 0;
+			&priv.mscm->irsprc[priv.inter_core_irq]);
 }
 
 /**
@@ -242,15 +238,13 @@ int ipc_hw_irq_disable(void)
  *
  * Return: 0 for success
  */
-int ipc_hw_irq_notify(void)
+void ipc_hw_irq_notify(void)
 {
 	/* trigger MSCM core-to-core interrupt */
 	writel_relaxed(MSCM_IRCPGIR_TLF(MSCM_IRCPGIR_TLF_CPUTL) |
-			MSCM_IRCPGIR_CPUTL(priv.remote_cpu) |
-			MSCM_IRCPGIR_INTID(priv.inter_cpu_irq),
+			MSCM_IRCPGIR_CPUTL(priv.remote_core) |
+			MSCM_IRCPGIR_INTID(priv.inter_core_irq),
 			&priv.mscm->ircpgir);
-
-	return 0;
 }
 
 /**
@@ -258,11 +252,9 @@ int ipc_hw_irq_notify(void)
  *
  * Return: 0 for success
  */
-int ipc_hw_irq_clear(void)
+void ipc_hw_irq_clear(void)
 {
 	/* clear MSCM core-to-core interrupt */
-	writel_relaxed(MSCM_IRCPxIR_INT(priv.inter_cpu_irq),
+	writel_relaxed(MSCM_IRCPxIR_INT(priv.inter_core_irq),
 		       &priv.mscm->ircp1ir);
-
-	return 0;
 }

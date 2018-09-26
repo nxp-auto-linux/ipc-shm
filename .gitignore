@@ -8,3 +8,5 @@ Module.symvers
 .cproject
 .project
 .settings
+patch/
+err.log

@@ -2,7 +2,6 @@
 /*
  * Copyright 2018 NXP
  */
-
 #ifndef IPC_SHM_H
 #define IPC_SHM_H
 
@@ -22,10 +21,9 @@
 #define IPC_SHM_MAX_BUFS_PER_POOL 4096
 
 /**
- * Default values for inter core interrupts and remote cpu
+ * Default value for inter core interrupt
  */
-#define DEFAULT_PLATFORM_IRQ (-1)
-#define DEFAULT_PLATFORM_REMOTE (-1)
+#define IPC_DEFAULT_INTER_CORE_IRQ (-1)
 
 /**
  * enum ipc_shm_channel_type - channel type
@@ -35,6 +33,19 @@
 enum ipc_shm_channel_type {
 	SHM_CHANNEL_MANAGED,
 	SHM_CHANNEL_UNMANAGED
+};
+
+/**
+ * enum ipc_shm_core_type - core type
+ */
+enum ipc_shm_core_type {
+	IPC_CORE_A53,
+	IPC_CORE_M7,
+	IPC_CORE_M4,
+	IPC_CORE_Z7,
+	IPC_CORE_Z4,
+	IPC_CORE_Z2,
+	IPC_CORE_DEFAULT,
 };
 
 /**
@@ -88,11 +99,21 @@ struct ipc_shm_channel_cfg {
 };
 
 /**
+ * struct ipc_shm_remote_core - remote core type and index
+ * @remote_core_type:	enum of core types
+ * @index:		core number
+ */
+struct ipc_shm_remote_core {
+	enum ipc_shm_core_type type;
+	int index;
+};
+
+/**
  * struct ipc_shm_cfg - IPC shm parameters
  * @local_shm_addr:	local shared memory physical address
  * @remote_shm_addr:	remote shared memory physical address
- * @inter_cpu_irq:	inter-core interrupt reserved for shm driver
- * @remote_cpu:		remote core to trigger the interrupt on
+ * @inter_core_irq:	inter-core interrupt reserved for shm driver
+ * @remote_core:	remote core to trigger the interrupt on
  * @shm_size:		local/remote shared memory size
  * @num_channels:	number of shared memory channels
  * @channels:		IPC channels' parameters array
@@ -100,9 +121,9 @@ struct ipc_shm_channel_cfg {
 struct ipc_shm_cfg {
 	uintptr_t local_shm_addr;
 	uintptr_t remote_shm_addr;
-	int inter_cpu_irq;
-	int remote_cpu;
 	int shm_size;
+	int inter_core_irq;
+	struct ipc_shm_remote_core remote_core;
 	int num_channels;
 	struct ipc_shm_channel_cfg *channels;
 };

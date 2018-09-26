@@ -116,12 +116,18 @@ static int init_ipc_shm(void)
 	/* use same configuration for all channels in this sample */
 	struct ipc_shm_channel_cfg channels[] = {chan_cfg, chan_cfg};
 
+	/* ipc shm core type */
+	struct ipc_shm_remote_core remote = {
+		.type = IPC_CORE_DEFAULT,
+		.index = 0,
+	};
+
 	/* ipc shm configuration */
 	struct ipc_shm_cfg shm_cfg = {
 		.local_shm_addr = LOCAL_SHM_ADDR,
 		.remote_shm_addr = REMOTE_SHM_ADDR,
-		.inter_cpu_irq = DEFAULT_PLATFORM_IRQ,
-		.remote_cpu = DEFAULT_PLATFORM_REMOTE,
+		.inter_core_irq = IPC_DEFAULT_INTER_CORE_IRQ,
+		.remote_core = remote,
 		.shm_size = IPC_SHM_SIZE,
 		.num_channels = ARRAY_SIZE(channels),
 		.channels = channels
