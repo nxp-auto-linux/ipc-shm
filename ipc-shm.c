@@ -395,7 +395,7 @@ int ipc_shm_init(const struct ipc_shm_cfg *cfg)
 	/* init OS specific resources */
 	err = ipc_os_init(cfg, ipc_shm_rx);
 	if (err)
-		return err;
+		goto err_free_hw;
 
 	/* init channels */
 	local_chan_shm = ipc_os_get_local_shm();
@@ -421,6 +421,8 @@ int ipc_shm_init(const struct ipc_shm_cfg *cfg)
 
 err_free_os:
 	ipc_os_free();
+err_free_hw:
+	ipc_hw_free();
 	return err;
 }
 

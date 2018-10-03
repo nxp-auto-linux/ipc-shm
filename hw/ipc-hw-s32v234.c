@@ -12,18 +12,18 @@
 /* Hardware IP Block Base Addresses - TODO: get them from device tree */
 #define MSCM_BASE    0x40081000ul /* Miscellaneous System Control Module */
 
-/* S32V234 Specific Definitions */
-#define DEFAULT_SHM_IRQ_ID    3u /* MSCM interrupt 3 - GIC irq 35 */
-#define DEFAULT_REMOTE_CORE    0u /* M4 core */
-
-/* Device tree MSCM node: compatible property (search key) */
-#define DT_MSCM_NODE_COMP "fsl,s32v234-mscm"
-
 /* S32V234 Processor IDs */
 enum s32v234_processor_idx {
 	M4 = 0, /* ARM Cortex-M4 core */
 	A53 = 1, /* ARM Cortex-A53 cluster */
 };
+
+/* S32V234 Specific Definitions */
+#define DEFAULT_MSCM_IRQ_ID    3u /* MSCM irq 3 = GIC irq 35 */
+#define DEFAULT_REMOTE_CORE    M4
+
+/* Device tree MSCM node: compatible property (search key) */
+#define DT_MSCM_NODE_COMP "fsl,s32v234-mscm"
 
 /**
  * struct mscm_regs - MSCM Peripheral Register Structure
@@ -124,20 +124,22 @@ struct mscm_regs {
 /* S32V234 Platform Specific Implementation  */
 
 /**
- * struct ipc_hw_priv - ipc shm private interrupt and core data
+ * struct ipc_hw_priv - platform specific private data
  *
- * @inter_core_irq:    inter-core interrupt reserved for shm driver
- * @remote_core:       remote core to trigger the interrupt on
- * @mscm:	      pointer to memory-mapped hardware peripheral MSCM
+ * @mscm_tx_irq:    MSCM inter-core interrupt reserved for shm driver tx
+ * @mscm_rx_irq:    MSCM inter-core interrupt reserved for shm driver rx
+ * @remote_core:    remote core to trigger the interrupt on
+ * @mscm:	        pointer to memory-mapped hardware peripheral MSCM
  */
 static struct ipc_hw_priv {
-	int inter_core_irq;
+	int mscm_tx_irq;
+	int mscm_rx_irq;
 	int remote_core;
 	struct mscm_regs *mscm;
 } priv;
 
 /**
- * ipc_shm_hw_get_dt_comp() - device tree compatible getter
+ * ipc_hw_get_dt_comp() - device tree compatible getter
  *
  * Return: MSCM compatible value string for current platform
  */
@@ -147,23 +149,29 @@ char *ipc_hw_get_dt_comp(void)
 }
 
 /**
- * ipc_shm_hw_get_dt_irq() - device tree compatible getter
+ * ipc_hw_get_dt_irq() - device tree compatible getter
  *
  * Return: device tree index of the MSCM interrupt used
  */
 int ipc_hw_get_dt_irq(void)
 {
-	return priv.inter_core_irq;
+	return priv.mscm_rx_irq;
 }
 
 /**
- * ipc_shm_hw_init() - map MSCM IP block to proper address
+ * ipc_hw_init() - platform specific initialization
  *
- * If the value -1 is passed for either inter_core_irq or remote-core
- * the default value defined for the selected platform will be used instead
+ * @cfg:    configuration parameters
  *
- * Return: 0 for success, -ENOMEM for failing to map MSCM address space or
- * -EINVAL for invalid inter core interrupt or invalid remote core
+ * If the value IPC_DEFAULT_INTER_CORE_IRQ is passed as either inter_core_tx_irq
+ * or inter_core_rx_irq or both, the default irq value defined for the selected
+ * platform will be used instead; inter_core_tx_irq and inter_core_rx_irq are
+ * allowed to have the same value since they are configured by the driver as
+ * directed interrupts. If the value IPC_CORE_DEFAULT is passed as remote_core,
+ * the default value defined for the selected platform will be used instead.
+ *
+ * Return: 0 for success, -EINVAL for either inter core interrupt invalid or
+ *         invalid remote core, -ENOMEM for failing to map MSCM address space
  */
 int ipc_hw_init(const struct ipc_shm_cfg *cfg)
 {
@@ -175,19 +183,27 @@ int ipc_hw_init(const struct ipc_shm_cfg *cfg)
 		return -ENOMEM;
 	}
 
-	if (cfg->remote_core.type != IPC_CORE_M4) {
+	if (cfg->remote_core.type != IPC_CORE_DEFAULT
+		&& cfg->remote_core.type != IPC_CORE_M4) {
 		return -EINVAL;
 	}
 
 	priv.remote_core = M4;
 
-	if (cfg->inter_core_irq == IPC_DEFAULT_INTER_CORE_IRQ) {
-		priv.inter_core_irq = DEFAULT_SHM_IRQ_ID;
+	if (cfg->inter_core_tx_irq == IPC_DEFAULT_INTER_CORE_IRQ) {
+		priv.mscm_tx_irq = DEFAULT_MSCM_IRQ_ID;
 	} else {
-		priv.inter_core_irq = cfg->inter_core_irq;
+		priv.mscm_tx_irq = cfg->inter_core_tx_irq;
 	}
 
-	if (priv.inter_core_irq < 0 || priv.inter_core_irq > 3) {
+	if (cfg->inter_core_rx_irq == IPC_DEFAULT_INTER_CORE_IRQ) {
+		priv.mscm_rx_irq = DEFAULT_MSCM_IRQ_ID;
+	} else {
+		priv.mscm_rx_irq = cfg->inter_core_rx_irq;
+	}
+
+	if (priv.mscm_tx_irq < 0 || priv.mscm_tx_irq > 3
+		|| priv.mscm_rx_irq < 0 || priv.mscm_rx_irq > 3) {
 		return -EINVAL;
 	}
 
@@ -195,66 +211,60 @@ int ipc_hw_init(const struct ipc_shm_cfg *cfg)
 }
 
 /**
- * ipc_shm_hw_free() - unmap MSCM IP block
+ * ipc_hw_free() - unmap MSCM IP block and clear irq
  */
 void ipc_hw_free(void)
 {
+	ipc_hw_irq_clear();
+
 	/* unmap MSCM hardware peripheral block */
 	iounmap(priv.mscm);
 }
 
 /**
- * ipc_shm_hw_irq_enable() - enable notifications from remote
- *
- * Return: 0 for success
+ * ipc_hw_irq_enable() - enable notifications from remote
  */
 void ipc_hw_irq_enable(void)
 {
 	uint16_t irsprc_mask;
 
 	/* enable MSCM core-to-core interrupt routing */
-	irsprc_mask = readw_relaxed(&priv.mscm->irsprc[priv.inter_core_irq]);
+	irsprc_mask = readw_relaxed(&priv.mscm->irsprc[priv.mscm_rx_irq]);
 	writew_relaxed(irsprc_mask | MSCM_IRSPRCn_CPxE(A53),
-			&priv.mscm->irsprc[priv.inter_core_irq]);
+			&priv.mscm->irsprc[priv.mscm_rx_irq]);
 }
 
 /**
- * ipc_shm_hw_irq_disable() - disable notifications from remote
- *
- * Return: 0 for success
+ * ipc_hw_irq_disable() - disable notifications from remote
  */
 void ipc_hw_irq_disable(void)
 {
 	uint16_t irsprc_mask;
 
 	/* disable MSCM core-to-core interrupt routing */
-	irsprc_mask = readw_relaxed(&priv.mscm->irsprc[priv.inter_core_irq]);
+	irsprc_mask = readw_relaxed(&priv.mscm->irsprc[priv.mscm_rx_irq]);
 	writew_relaxed(irsprc_mask & ~MSCM_IRSPRCn_CPxE(A53),
-			&priv.mscm->irsprc[priv.inter_core_irq]);
+			&priv.mscm->irsprc[priv.mscm_rx_irq]);
 }
 
 /**
- * ipc_shm_hw_irq_notify() - notify remote that data is available
- *
- * Return: 0 for success
+ * ipc_hw_irq_notify() - notify remote that data is available
  */
 void ipc_hw_irq_notify(void)
 {
-	/* trigger MSCM core-to-core interrupt */
+	/* trigger MSCM core-to-core directed interrupt */
 	writel_relaxed(MSCM_IRCPGIR_TLF(MSCM_IRCPGIR_TLF_CPUTL) |
 			MSCM_IRCPGIR_CPUTL(priv.remote_core) |
-			MSCM_IRCPGIR_INTID(priv.inter_core_irq),
+			MSCM_IRCPGIR_INTID(priv.mscm_tx_irq),
 			&priv.mscm->ircpgir);
 }
 
 /**
- * ipc_shm_hw_irq_clear() - clear available data notification
- *
- * Return: 0 for success
+ * ipc_hw_irq_clear() - clear available data notification
  */
 void ipc_hw_irq_clear(void)
 {
-	/* clear MSCM core-to-core interrupt */
-	writel_relaxed(MSCM_IRCPxIR_INT(priv.inter_core_irq),
+	/* clear MSCM core-to-core directed interrupt */
+	writel_relaxed(MSCM_IRCPxIR_INT(priv.mscm_rx_irq),
 		       &priv.mscm->ircp1ir);
 }

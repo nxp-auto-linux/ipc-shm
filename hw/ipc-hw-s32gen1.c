@@ -12,15 +12,8 @@
 /* Hardware IP Block Base Addresses - TODO: get them from device tree */
 #define MSCM_BASE    0x40198000ul /* Miscellaneous System Control Module */
 
-/* S32gen1 Specific Definitions */
-#define DEFAULT_SHM_IRQ_ID    2u /* MSCM irq 2 = GIC irq 35 */
-#define DEFAULT_REMOTE_CORE    4u /* M7 core 0 */
-
-/* Device tree MSCM node: compatible property (search key) */
-#define DT_MSCM_NODE_COMP "fsl,s32gen1-mscm"
-
-/* S32 Processor IDs */
-enum processor_idx {
+/* S32gen1 Processor IDs */
+enum s32gen1_processor_idx {
 	A53_0 = 0, /* ARM Cortex-A53 core 0 */
 	A53_1 = 1, /* ARM Cortex-A53 core 1 */
 	A53_2 = 2, /* ARM Cortex-A53 core 2 */
@@ -30,158 +23,165 @@ enum processor_idx {
 	M7_2 = 6, /* ARM Cortex-M7 core 2 */
 };
 
+/* S32gen1 Specific Definitions */
+#define DEFAULT_MSCM_IRQ_ID    2u /* MSCM irq 2 = GIC irq 35 */
+#define DEFAULT_REMOTE_CORE    M7_0
+
+/* Device tree MSCM node: compatible property (search key) */
+#define DT_MSCM_NODE_COMP "fsl,s32gen1-mscm"
+
 /**
  * struct mscm_regs - MSCM Peripheral Register Structure
  *
- * @CPXTYPE:        Processor x Type Register, offset 0x0
- * @CPXNUM:         Processor x Number Register, offset 0x4
- * @CPXREV:         Processor x Revision Register, offset 0x8
- * @CPXCFG[n]:      Processor x Configuration n Register, offset 0xC + 4*n
- * @CP0TYPE:        Processor 0 Type Register, offset 0x20
- * @CP0NUM:         Processor 0 Number Register, offset 0x24
- * @CP0REV:         Processor 0 Revision Register, offset 0x28
- * @CP0CFG[n]:      Processor 0 Configuration n Register, offset 0x2C + 4*n
- * @CP1TYPE:        Processor 1 Type Register, offset 0x40
- * @CP1NUM:         Processor 1 Number Register, offset 0x44
- * @CP1REV:         Processor 1 Revision Register, offset 0x48
- * @CP1CFG[n]:      Processor 1 Configuration n Register, offset 0x4C + 4*n
- * @CP2TYPE:        Processor 2 Type Register, offset 0x60
- * @CP2NUM:         Processor 2 Number Register, offset 0x64
- * @CP2REV:         Processor 2 Revision Register, offset 0x68
- * @CP2CFG[n]:      Processor 2 Configuration n Register, offset 0x6C + 4*n
- * @CP3TYPE:        Processor 3 Type Register, offset 0x80
- * @CP3NUM:         Processor 3 Number Register, offset 0x84
- * @CP3REV:         Processor 3 Revision Register, offset 0x88
- * @CP3CFG[n]:      Processor 3 Configuration n Register, offset 0x8C + 4*n
- * @CP4TYPE:        Processor 4 Type Register, offset 0xA0
- * @CP4NUM:         Processor 4 Number Register, offset 0xA4
- * @CP4REV:         Processor 4 Revision Register, offset 0xA8
- * @CP4CFG[n]:      Processor 4 Configuration n Register, offset 0xAC + 4*n
- * @CP5TYPE:        Processor 5 Type Register, offset 0xC0
- * @CP5NUM:         Processor 5 Number Register, offset 0xC4
- * @CP5REV:         Processor 5 Revision Register, offset 0xC8
- * @CP5CFG[n]:      Processor 5 Configuration n Register, offset 0xCC + 4*n
- * @CP6TYPE:        Processor 6 Type Register, offset 0xE0
- * @CP6NUM:         Processor 6 Number Register, offset 0xE4
- * @CP6REV:         Processor 6 Revision Register, offset 0xE8
- * @CP6CFG[n]:      Processor 6 Configuration n Register, offset 0xEC + 4*n
- * @IRCP0ISR0:      Interrupt Router CP0 Interrupt0 Status Register,
+ * @cpxtype:        Processor x Type Register, offset 0x0
+ * @cpxnum:         Processor x Number Register, offset 0x4
+ * @cpxrev:         Processor x Revision Register, offset 0x8
+ * @cpxcfg[n]:      Processor x Configuration n Register, offset 0xC + 4*n
+ * @cp0type:        Processor 0 Type Register, offset 0x20
+ * @cp0num:         Processor 0 Number Register, offset 0x24
+ * @cp0rev:         Processor 0 Revision Register, offset 0x28
+ * @cp0cfg[n]:      Processor 0 Configuration n Register, offset 0x2C + 4*n
+ * @cp1type:        Processor 1 Type Register, offset 0x40
+ * @cp1num:         Processor 1 Number Register, offset 0x44
+ * @cp1rev:         Processor 1 Revision Register, offset 0x48
+ * @cp1cfg[n]:      Processor 1 Configuration n Register, offset 0x4C + 4*n
+ * @cp2type:        Processor 2 Type Register, offset 0x60
+ * @cp2num:         Processor 2 Number Register, offset 0x64
+ * @cp2rev:         Processor 2 Revision Register, offset 0x68
+ * @cp2cfg[n]:      Processor 2 Configuration n Register, offset 0x6C + 4*n
+ * @cp3type:        Processor 3 Type Register, offset 0x80
+ * @cp3num:         Processor 3 Number Register, offset 0x84
+ * @cp3rev:         Processor 3 Revision Register, offset 0x88
+ * @cp3cfg[n]:      Processor 3 Configuration n Register, offset 0x8C + 4*n
+ * @cp4type:        Processor 4 Type Register, offset 0xA0
+ * @cp4num:         Processor 4 Number Register, offset 0xA4
+ * @cp4rev:         Processor 4 Revision Register, offset 0xA8
+ * @cp4cfg[n]:      Processor 4 Configuration n Register, offset 0xAC + 4*n
+ * @cp5type:        Processor 5 Type Register, offset 0xC0
+ * @cp5num:         Processor 5 Number Register, offset 0xC4
+ * @cp5rev:         Processor 5 Revision Register, offset 0xC8
+ * @cp5cfg[n]:      Processor 5 Configuration n Register, offset 0xCC + 4*n
+ * @cp6type:        Processor 6 Type Register, offset 0xE0
+ * @cp6num:         Processor 6 Number Register, offset 0xE4
+ * @cp6rev:         Processor 6 Revision Register, offset 0xE8
+ * @cp6cfg[n]:      Processor 6 Configuration n Register, offset 0xEC + 4*n
+ * @ircp0isr0:      Interrupt Router CP0 Interrupt0 Status Register,
  *                  offset 0x200
- * @IRCP0IGR0:      Interrupt Router CP0 Interrupt0 Generation Register,
+ * @ircp0igr0:      Interrupt Router CP0 Interrupt0 Generation Register,
  *                  offset 0x204
- * @IRCP0ISR1:      Interrupt Router CP0 Interrupt1 Status Register,
+ * @ircp0isr1:      Interrupt Router CP0 Interrupt1 Status Register,
  *                  offset 0x208
- * @IRCP0IGR1:      Interrupt Router CP0 Interrupt1 Generation Register,
+ * @ircp0igr1:      Interrupt Router CP0 Interrupt1 Generation Register,
  *                  offset 0x20C
- * @IRCP0ISR2:      Interrupt Router CP0 Interrupt2 Status Register,
+ * @ircp0isr2:      Interrupt Router CP0 Interrupt2 Status Register,
  *                  offset 0x210
- * @IRCP0IGR2:      Interrupt Router CP0 Interrupt2 Generation Register,
+ * @ircp0igr2:      Interrupt Router CP0 Interrupt2 Generation Register,
  *                  offset 0x214
- * @IRCP0ISR3:      Interrupt Router CP0 InterruptX Status Register,
+ * @ircp0isr3:      Interrupt Router CP0 InterruptX Status Register,
  *                  offset 0x218
- * @IRCP0IGR3:      Interrupt Router CP0 InterruptX Generation Register,
+ * @ircp0igr3:      Interrupt Router CP0 InterruptX Generation Register,
  *                  offset 0x21C
- * @IRCP1ISR0:      Interrupt Router CP1 Interrupt0 Status Register,
+ * @ircp1isr0:      Interrupt Router CP1 Interrupt0 Status Register,
  *                  offset 0x220
- * @IRCP1IGR0:      Interrupt Router CP1 Interrupt0 Generation Register,
+ * @ircp1igr0:      Interrupt Router CP1 Interrupt0 Generation Register,
  *                  offset 0x224
- * @IRCP1ISR1:      Interrupt Router CP1 Interrupt1 Status Register,
+ * @ircp1isr1:      Interrupt Router CP1 Interrupt1 Status Register,
  *                  offset 0x228
- * @IRCP1IGR1:      Interrupt Router CP1 Interrupt1 Generation Register,
+ * @ircp1igr1:      Interrupt Router CP1 Interrupt1 Generation Register,
  *                  offset 0x22C
- * @IRCP1ISR2:      Interrupt Router CP1 Interrupt2 Status Register,
+ * @ircp1isr2:      Interrupt Router CP1 Interrupt2 Status Register,
  *                  offset 0x230
- * @IRCP1IGR2:      Interrupt Router CP1 Interrupt2 Generation Register,
+ * @ircp1igr2:      Interrupt Router CP1 Interrupt2 Generation Register,
  *                  offset 0x234
- * @IRCP1ISR3:      Interrupt Router CP1 InterruptX Status Register,
+ * @ircp1isr3:      Interrupt Router CP1 InterruptX Status Register,
  *                  offset 0x238
- * @IRCP1IGR3:      Interrupt Router CP1 InterruptX Generation Register,
+ * @ircp1igr3:      Interrupt Router CP1 InterruptX Generation Register,
  *                  offset 0x23C
- * @IRCP2ISR0:      Interrupt Router CP2 Interrupt0 Status Register,
+ * @ircp2isr0:      Interrupt Router CP2 Interrupt0 Status Register,
  *                  offset 0x240
- * @IRCP2IGR0:      Interrupt Router CP2 Interrupt0 Generation Register,
+ * @ircp2igr0:      Interrupt Router CP2 Interrupt0 Generation Register,
  *                  offset 0x244
- * @IRCP2ISR1:      Interrupt Router CP2 Interrupt1 Status Register,
+ * @ircp2isr1:      Interrupt Router CP2 Interrupt1 Status Register,
  *                  offset 0x248
- * @IRCP2IGR1:      Interrupt Router CP2 Interrupt1 Generation Register,
+ * @ircp2igr1:      Interrupt Router CP2 Interrupt1 Generation Register,
  *                  offset 0x24C
- * @IRCP2ISR2:      Interrupt Router CP2 Interrupt2 Status Register,
+ * @ircp2isr2:      Interrupt Router CP2 Interrupt2 Status Register,
  *                  offset 0x250
- * @IRCP2IGR2:      Interrupt Router CP2 Interrupt2 Generation Register,
+ * @ircp2igr2:      Interrupt Router CP2 Interrupt2 Generation Register,
  *                  offset 0x254
- * @IRCP2ISR3:      Interrupt Router CP2 InterruptX Status Register,
+ * @ircp2isr3:      Interrupt Router CP2 InterruptX Status Register,
  *                  offset 0x258
- * @IRCP2IGR3:      Interrupt Router CP2 InterruptX Generation Register,
+ * @ircp2igr3:      Interrupt Router CP2 InterruptX Generation Register,
  *                  offset 0x25C
- * @IRCP3ISR0:      Interrupt Router CP3 Interrupt0 Status Register,
+ * @ircp3isr0:      Interrupt Router CP3 Interrupt0 Status Register,
  *                  offset 0x260
- * @IRCP3IGR0:      Interrupt Router CP3 Interrupt0 Generation Register,
+ * @ircp3igr0:      Interrupt Router CP3 Interrupt0 Generation Register,
  *                  offset 0x264
- * @IRCP3ISR1:      Interrupt Router CP3 Interrupt1 Status Register,
+ * @ircp3isr1:      Interrupt Router CP3 Interrupt1 Status Register,
  *                  offset 0x268
- * @IRCP3IGR1:      Interrupt Router CP3 Interrupt1 Generation Register,
+ * @ircp3igr1:      Interrupt Router CP3 Interrupt1 Generation Register,
  *                  offset 0x26C
- * @IRCP3ISR2:      Interrupt Router CP3 Interrupt2 Status Register,
+ * @ircp3isr2:      Interrupt Router CP3 Interrupt2 Status Register,
  *                  offset 0x270
- * @IRCP3IGR2:      Interrupt Router CP3 Interrupt2 Generation Register,
+ * @ircp3igr2:      Interrupt Router CP3 Interrupt2 Generation Register,
  *                  offset 0x274
- * @IRCP3ISR3:      Interrupt Router CP3 InterruptX Status Register,
+ * @ircp3isr3:      Interrupt Router CP3 InterruptX Status Register,
  *                  offset 0x278
- * @IRCP3IGR3:      Interrupt Router CP3 InterruptX Generation Register,
+ * @ircp3igr3:      Interrupt Router CP3 InterruptX Generation Register,
  *                  offset 0x27C
- * @IRCP4ISR0:      Interrupt Router CP4 Interrupt0 Status Register,
+ * @ircp4isr0:      Interrupt Router CP4 Interrupt0 Status Register,
  *                  offset 0x280
- * @IRCP4IGR0:      Interrupt Router CP4 Interrupt0 Generation Register,
+ * @ircp4igr0:      Interrupt Router CP4 Interrupt0 Generation Register,
  *                  offset 0x284
- * @IRCP4ISR1:      Interrupt Router CP4 Interrupt1 Status Register,
+ * @ircp4isr1:      Interrupt Router CP4 Interrupt1 Status Register,
  *                  offset 0x288
- * @IRCP4IGR1:      Interrupt Router CP4 Interrupt1 Generation Register,
+ * @ircp4igr1:      Interrupt Router CP4 Interrupt1 Generation Register,
  *                  offset 0x28C
- * @IRCP4ISR2:      Interrupt Router CP4 Interrupt2 Status Register,
+ * @ircp4isr2:      Interrupt Router CP4 Interrupt2 Status Register,
  *                  offset 0x290
- * @IRCP4IGR2:      Interrupt Router CP4 Interrupt2 Generation Register,
+ * @ircp4igr2:      Interrupt Router CP4 Interrupt2 Generation Register,
  *                  offset 0x294
- * @IRCP4ISR3:      Interrupt Router CP4 InterruptX Status Register,
+ * @ircp4isr3:      Interrupt Router CP4 InterruptX Status Register,
  *                  offset 0x298
- * @IRCP4IGR3:      Interrupt Router CP4 InterruptX Generation Register,
+ * @ircp4igr3:      Interrupt Router CP4 InterruptX Generation Register,
  *                  offset 0x29C
- * @IRCP5ISR0:      Interrupt Router CP5 Interrupt0 Status Register,
+ * @ircp5isr0:      Interrupt Router CP5 Interrupt0 Status Register,
  *                  offset 0x2A0
- * @IRCP5IGR0:      Interrupt Router CP5 Interrupt0 Generation Register,
+ * @ircp5igr0:      Interrupt Router CP5 Interrupt0 Generation Register,
  *                  offset 0x2A4
- * @IRCP5ISR1:      Interrupt Router CP5 Interrupt1 Status Register,
+ * @ircp5isr1:      Interrupt Router CP5 Interrupt1 Status Register,
  *                  offset 0x2A8
- * @IRCP5IGR1:      Interrupt Router CP5 Interrupt1 Generation Register,
+ * @ircp5igr1:      Interrupt Router CP5 Interrupt1 Generation Register,
  *                  offset 0x2AC
- * @IRCP5ISR2:      Interrupt Router CP5 Interrupt2 Status Register,
+ * @ircp5isr2:      Interrupt Router CP5 Interrupt2 Status Register,
  *                  offset 0x2B0
- * @IRCP5IGR2:      Interrupt Router CP5 Interrupt2 Generation Register,
+ * @ircp5igr2:      Interrupt Router CP5 Interrupt2 Generation Register,
  *                  offset 0x2B4
- * @IRCP5ISR3:      Interrupt Router CP5 InterruptX Status Register,
+ * @ircp5isr3:      Interrupt Router CP5 InterruptX Status Register,
  *                  offset 0x2B8
- * @IRCP5IGR3:      Interrupt Router CP5 InterruptX Generation Register,
+ * @ircp5igr3:      Interrupt Router CP5 InterruptX Generation Register,
  *                  offset 0x2BC
- * @IRCP6ISR0:      Interrupt Router CP6 Interrupt0 Status Register,
+ * @ircp6isr0:      Interrupt Router CP6 Interrupt0 Status Register,
  *                  offset 0x2C0
- * @IRCP6IGR0:      Interrupt Router CP6 Interrupt0 Generation Register,
+ * @ircp6igr0:      Interrupt Router CP6 Interrupt0 Generation Register,
  *                  offset 0x2C4
- * @IRCP6ISR1:      Interrupt Router CP6 Interrupt1 Status Register,
+ * @ircp6isr1:      Interrupt Router CP6 Interrupt1 Status Register,
  *                  offset 0x2C8
- * @IRCP6IGR1:      Interrupt Router CP6 Interrupt1 Generation Register,
+ * @ircp6igr1:      Interrupt Router CP6 Interrupt1 Generation Register,
  *                  offset 0x2CC
- * @IRCP6ISR2:      Interrupt Router CP6 Interrupt2 Status Register,
+ * @ircp6isr2:      Interrupt Router CP6 Interrupt2 Status Register,
  *                  offset 0x2D0
- * @IRCP6IGR2:      Interrupt Router CP6 Interrupt2 Generation Register,
+ * @ircp6igr2:      Interrupt Router CP6 Interrupt2 Generation Register,
  *                  offset 0x2D4
- * @IRCP6ISR3:      Interrupt Router CP6 InterruptX Status Register,
+ * @ircp6isr3:      Interrupt Router CP6 InterruptX Status Register,
  *                  offset 0x2D8
- * @IRCP6IGR3:      Interrupt Router CP6 InterruptX Generation Register,
+ * @ircp6igr3:      Interrupt Router CP6 InterruptX Generation Register,
  *                  offset 0x2DC
- * @IRCPCFG:        Interrupt Router Configuration Register,
+ * @ircpcfg:        Interrupt Router Configuration Register,
  *                  offset 0x400
- * @IRNMIC:         Interrupt Router Non-Maskable Interrupt Control Register,
+ * @irnmic:         Interrupt Router Non-Maskable Interrupt Control Register,
  *                  offset 0x800
- * @IRSPRC[n]:      Interrupt Router Shared Peripheral Routing Control
+ * @irsprc[n]:      Interrupt Router Shared Peripheral Routing Control
  *                  Register n, offset 0x880 + 2*n
  */
 struct mscm_regs {
@@ -348,14 +348,16 @@ struct mscm_regs {
 /* S32 Platform Specific Implementation  */
 
 /**
- * struct ipc_hw_priv - ipc shm private interrupt and core data
+ * struct ipc_hw_priv - platform specific private data
  *
- * @inter_core_irq:    inter-core interrupt reserved for shm driver
- * @remote_core:       remote core to trigger the interrupt on
- * @mscm:	      pointer to memory-mapped hardware peripheral MSCM
+ * @mscm_tx_irq:    MSCM inter-core interrupt reserved for shm driver tx
+ * @mscm_rx_irq:    MSCM inter-core interrupt reserved for shm driver rx
+ * @remote_core:    remote core to trigger the interrupt on
+ * @mscm:	        pointer to memory-mapped hardware peripheral MSCM
  */
 static struct ipc_hw_priv {
-	int inter_core_irq;
+	int mscm_tx_irq;
+	int mscm_rx_irq;
 	int remote_core;
 	struct mscm_regs *mscm;
 } priv;
@@ -377,19 +379,23 @@ char *ipc_hw_get_dt_comp(void)
  */
 int ipc_hw_get_dt_irq(void)
 {
-	return priv.inter_core_irq;
+	return priv.mscm_rx_irq;
 }
 
 /**
- * ipc_hw_init() - map MSCM IP block to proper address
- *
- * If the value -1 is passed for either inter_core_irq or remote_core
- * the default value defined for the selected platform will be used instead
+ * ipc_hw_init() - platform specific initialization
  *
  * @cfg:    configuration parameters
  *
- * Return: 0 for success, -ENOMEM for failing to map MSCM address space
- * or -EINVAL for invalid inter core interrupt or invalid remote core
+ * If the value IPC_DEFAULT_INTER_CORE_IRQ is passed as either inter_core_tx_irq
+ * or inter_core_rx_irq or both, the default irq value defined for the selected
+ * platform will be used instead; inter_core_tx_irq and inter_core_rx_irq are
+ * allowed to have the same value since they are configured by the driver as
+ * directed interrupts. If the value IPC_CORE_DEFAULT is passed as remote_core,
+ * the default value defined for the selected platform will be used instead.
+ *
+ * Return: 0 for success, -EINVAL for either inter core interrupt invalid or
+ *         invalid remote core, -ENOMEM for failing to map MSCM address space
  */
 int ipc_hw_init(const struct ipc_shm_cfg *cfg)
 {
@@ -402,9 +408,6 @@ int ipc_hw_init(const struct ipc_shm_cfg *cfg)
 	}
 
 	switch (cfg->remote_core.type) {
-	case IPC_CORE_DEFAULT:
-		priv.remote_core = DEFAULT_REMOTE_CORE;
-		break;
 	case IPC_CORE_A53:
 		switch (cfg->remote_core.index) {
 		case 0:
@@ -438,17 +441,27 @@ int ipc_hw_init(const struct ipc_shm_cfg *cfg)
 			return -EINVAL;
 		}
 		break;
+	case IPC_CORE_DEFAULT:
+		priv.remote_core = DEFAULT_REMOTE_CORE;
+		break;
 	default:
 		return -EINVAL;
 	}
 
-	if (cfg->inter_core_irq != IPC_DEFAULT_INTER_CORE_IRQ) {
-		priv.inter_core_irq = cfg->inter_core_irq;
+	if (cfg->inter_core_tx_irq != IPC_DEFAULT_INTER_CORE_IRQ) {
+		priv.mscm_tx_irq = cfg->inter_core_tx_irq;
 	} else {
-		priv.inter_core_irq = DEFAULT_SHM_IRQ_ID;
+		priv.mscm_tx_irq = DEFAULT_MSCM_IRQ_ID;
 	}
 
-	if (priv.inter_core_irq < 0 || priv.inter_core_irq > 2
+	if (cfg->inter_core_rx_irq != IPC_DEFAULT_INTER_CORE_IRQ) {
+		priv.mscm_rx_irq = cfg->inter_core_rx_irq;
+	} else {
+		priv.mscm_rx_irq = DEFAULT_MSCM_IRQ_ID;
+	}
+
+	if (priv.mscm_tx_irq < 0 || priv.mscm_tx_irq > 2
+		|| priv.mscm_rx_irq < 0 || priv.mscm_rx_irq > 2
 		|| priv.remote_core == readl_relaxed(&priv.mscm->cpxnum)) {
 		return -EINVAL;
 	}
@@ -457,10 +470,12 @@ int ipc_hw_init(const struct ipc_shm_cfg *cfg)
 }
 
 /**
- * ipc_hw_free() - unmap MSCM IP block
+ * ipc_hw_free() - unmap MSCM IP block and clear irq
  */
 void ipc_hw_free(void)
 {
+	ipc_hw_irq_clear();
+
 	/* unmap MSCM hardware peripheral block */
 	iounmap(priv.mscm);
 }
@@ -470,18 +485,16 @@ void ipc_hw_free(void)
  *
  * The MSCM_IRSPRCn register works with the NVIC interrupt IDs, and the NVIC ID
  * of the first MSCM inter-core interrupt is 1. In order to obtain the correct
- * index for the interrupt routing register, this value is added to shm_irq_id.
- *
- * Return: 0 for success
+ * index for the interrupt routing register, this value is added to mscm_rx_irq.
  */
 void ipc_hw_irq_enable(void)
 {
 	uint16_t irsprc_mask;
 
 	/* enable MSCM core-to-core interrupt routing */
-	irsprc_mask = readw_relaxed(&priv.mscm->irsprc[priv.inter_core_irq+1]);
+	irsprc_mask = readw_relaxed(&priv.mscm->irsprc[priv.mscm_rx_irq + 1]);
 	writew_relaxed(irsprc_mask | MSCM_IRSPRCn_GIC500,
-			&priv.mscm->irsprc[priv.inter_core_irq + 1]);
+			&priv.mscm->irsprc[priv.mscm_rx_irq + 1]);
 }
 
 /**
@@ -489,30 +502,27 @@ void ipc_hw_irq_enable(void)
  *
  * The MSCM_IRSPRCn register works with the NVIC interrupt IDs, and the NVIC ID
  * of the first MSCM inter-core interrupt is 1. In order to obtain the correct
- * index for the interrupt routing register, this value is added to shm_irq_id.
- *
- * Return: 0 for success
+ * index for the interrupt routing register, this value is added to mscm_rx_irq.
  */
 void ipc_hw_irq_disable(void)
 {
 	uint16_t irsprc_mask;
 
 	/* disable MSCM core-to-core interrupt routing */
-	irsprc_mask = readw_relaxed(&priv.mscm->irsprc[priv.inter_core_irq+1]);
+	irsprc_mask = readw_relaxed(&priv.mscm->irsprc[priv.mscm_rx_irq + 1]);
 	writew_relaxed(irsprc_mask & ~MSCM_IRSPRCn_GIC500,
-			&priv.mscm->irsprc[priv.inter_core_irq + 1]);
+			&priv.mscm->irsprc[priv.mscm_rx_irq + 1]);
 }
 
 /**
  * ipc_hw_irq_notify() - notify remote that data is available
- *
- * Return: 0 for success, or -EINVAL for invalid remote_core
  */
 void ipc_hw_irq_notify(void)
 {
+	/* trigger MSCM core-to-core directed interrupt */
 	switch (priv.remote_core) {
 	case A53_0:
-		switch (priv.inter_core_irq) {
+		switch (priv.mscm_tx_irq) {
 		case 0:
 			writel_relaxed(MSCM_IRCPnIGRn_INT_EN,
 					&priv.mscm->ircp0igr0);
@@ -530,7 +540,7 @@ void ipc_hw_irq_notify(void)
 		}
 		break;
 	case A53_1:
-		switch (priv.inter_core_irq) {
+		switch (priv.mscm_tx_irq) {
 		case 0:
 			writel_relaxed(MSCM_IRCPnIGRn_INT_EN,
 					&priv.mscm->ircp1igr0);
@@ -548,7 +558,7 @@ void ipc_hw_irq_notify(void)
 		}
 		break;
 	case A53_2:
-		switch (priv.inter_core_irq) {
+		switch (priv.mscm_tx_irq) {
 		case 0:
 			writel_relaxed(MSCM_IRCPnIGRn_INT_EN,
 					&priv.mscm->ircp2igr0);
@@ -566,7 +576,7 @@ void ipc_hw_irq_notify(void)
 		}
 		break;
 	case A53_3:
-		switch (priv.inter_core_irq) {
+		switch (priv.mscm_tx_irq) {
 		case 0:
 			writel_relaxed(MSCM_IRCPnIGRn_INT_EN,
 					&priv.mscm->ircp3igr0);
@@ -584,7 +594,7 @@ void ipc_hw_irq_notify(void)
 		}
 		break;
 	case M7_0:
-		switch (priv.inter_core_irq) {
+		switch (priv.mscm_tx_irq) {
 		case 0:
 			writel_relaxed(MSCM_IRCPnIGRn_INT_EN,
 					&priv.mscm->ircp4igr0);
@@ -602,7 +612,7 @@ void ipc_hw_irq_notify(void)
 		}
 		break;
 	case M7_1:
-		switch (priv.inter_core_irq) {
+		switch (priv.mscm_tx_irq) {
 		case 0:
 			writel_relaxed(MSCM_IRCPnIGRn_INT_EN,
 					&priv.mscm->ircp5igr0);
@@ -620,7 +630,7 @@ void ipc_hw_irq_notify(void)
 		}
 		break;
 	case M7_2:
-		switch (priv.inter_core_irq) {
+		switch (priv.mscm_tx_irq) {
 		case 0:
 			writel_relaxed(MSCM_IRCPnIGRn_INT_EN,
 					&priv.mscm->ircp6igr0);
@@ -644,8 +654,6 @@ void ipc_hw_irq_notify(void)
 
 /**
  * ipc_hw_irq_clear() - clear available data notification
- *
- * Return: 0 for success
  */
 void ipc_hw_irq_clear(void)
 {
@@ -654,10 +662,10 @@ void ipc_hw_irq_clear(void)
 	/* get current processor id */
 	current_cpu = readl_relaxed(&priv.mscm->cpxnum);
 
-	/* clear MSCM core-to-core interrupt */
+	/* clear MSCM core-to-core directed interrupt */
 	switch (current_cpu) {
 	case A53_0:
-		switch (priv.inter_core_irq) {
+		switch (priv.mscm_rx_irq) {
 		case 0:
 			writel_relaxed(MSCM_IRCPnISRn_CPx_INT,
 					&priv.mscm->ircp0isr0);
@@ -675,7 +683,7 @@ void ipc_hw_irq_clear(void)
 		}
 		break;
 	case A53_1:
-		switch (priv.inter_core_irq) {
+		switch (priv.mscm_rx_irq) {
 		case 0:
 			writel_relaxed(MSCM_IRCPnISRn_CPx_INT,
 					&priv.mscm->ircp1isr0);
@@ -693,7 +701,7 @@ void ipc_hw_irq_clear(void)
 		}
 		break;
 	case A53_2:
-		switch (priv.inter_core_irq) {
+		switch (priv.mscm_rx_irq) {
 		case 0:
 			writel_relaxed(MSCM_IRCPnISRn_CPx_INT,
 					&priv.mscm->ircp2isr0);
@@ -711,7 +719,7 @@ void ipc_hw_irq_clear(void)
 		}
 		break;
 	case A53_3:
-		switch (priv.inter_core_irq) {
+		switch (priv.mscm_rx_irq) {
 		case 0:
 			writel_relaxed(MSCM_IRCPnISRn_CPx_INT,
 					&priv.mscm->ircp3isr0);

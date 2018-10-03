@@ -126,7 +126,8 @@ static int init_ipc_shm(void)
 	struct ipc_shm_cfg shm_cfg = {
 		.local_shm_addr = LOCAL_SHM_ADDR,
 		.remote_shm_addr = REMOTE_SHM_ADDR,
-		.inter_core_irq = IPC_DEFAULT_INTER_CORE_IRQ,
+		.inter_core_tx_irq = IPC_DEFAULT_INTER_CORE_IRQ,
+		.inter_core_rx_irq = IPC_DEFAULT_INTER_CORE_IRQ,
 		.remote_core = remote,
 		.shm_size = IPC_SHM_SIZE,
 		.num_channels = ARRAY_SIZE(channels),

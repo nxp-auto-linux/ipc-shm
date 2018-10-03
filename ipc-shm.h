@@ -112,17 +112,25 @@ struct ipc_shm_remote_core {
  * struct ipc_shm_cfg - IPC shm parameters
  * @local_shm_addr:	local shared memory physical address
  * @remote_shm_addr:	remote shared memory physical address
- * @inter_core_irq:	inter-core interrupt reserved for shm driver
+ * @inter_core_tx_irq:	inter-core interrupt reserved for shm driver tx
+ * @inter_core_rx_irq:	inter-core interrupt reserved for shm driver rx
  * @remote_core:	remote core to trigger the interrupt on
  * @shm_size:		local/remote shared memory size
  * @num_channels:	number of shared memory channels
  * @channels:		IPC channels' parameters array
+ *
+ * In the case of ARM platforms, the same interrupt can be used for both TX and
+ * RX. Moreover, default values can be assigned using IPC_DEFAULT_INTER_CORE_IRQ
+ * for interrupts and IPC_CORE_DEFAULT for the remote core. In the case of
+ * PowerPC platforms, the TX and RX interrupts used must be different and no
+ * default values can be assigned to them or the remote core.
  */
 struct ipc_shm_cfg {
 	uintptr_t local_shm_addr;
 	uintptr_t remote_shm_addr;
 	int shm_size;
-	int inter_core_irq;
+	int inter_core_tx_irq;
+	int inter_core_rx_irq;
 	struct ipc_shm_remote_core remote_core;
 	int num_channels;
 	struct ipc_shm_channel_cfg *channels;

@@ -161,7 +161,6 @@ void ipc_os_free(void)
 	/* kill softirq task */
 	tasklet_kill(&ipc_shm_rx_tasklet);
 
-	ipc_hw_free();
 	free_irq(priv.irq_num, &priv);
 	iounmap((void *)priv.remote_virt_shm);
 	release_mem_region((phys_addr_t)priv.remote_phys_shm, priv.shm_size);
