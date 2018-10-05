@@ -74,10 +74,11 @@ struct ipc_shm_channel_ops {
  * struct ipc_shm_channel_cfg - channel parameters
  * @type:			channel type (see ipc_shm_channel_type)
  * @memory:			channel managed/unmanaged memory parameters
- * @memory.managed		managed channel parameters
- * @memory.managed.pools	memory buffer pools parameters
- * @memory.unmanaged		unmanaged channel parameters
- * @memory.unmanaged.size	unmanaged memory size
+ * @memory.managed:		managed channel parameters
+ * @memory.managed.num_pools:	number of buffer pools
+ * @memory.managed.pools:	memory buffer pools parameters
+ * @memory.unmanaged:		unmanaged channel parameters
+ * @memory.unmanaged.size:	unmanaged memory size
  * @ops:			channel rx API callbacks
  */
 struct ipc_shm_channel_cfg {
@@ -124,6 +125,8 @@ struct ipc_shm_remote_core {
  * for interrupts and IPC_CORE_DEFAULT for the remote core. In the case of
  * PowerPC platforms, the TX and RX interrupts used must be different and no
  * default values can be assigned to them or the remote core.
+ *
+ * Local and remote channel and buffer pool configurations must be symmetric.
  */
 struct ipc_shm_cfg {
 	uintptr_t local_shm_addr;

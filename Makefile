@@ -9,7 +9,7 @@ ifneq ($(KERNELRELEASE),)
 # kbuild part of makefile
 
 obj-m := $(MODULE_NAME).o
-$(MODULE_NAME)-y := ipc-shm.o ipc-fifo.o os/ipc-os.o
+$(MODULE_NAME)-y := ipc-shm.o ipc-queue.o os/ipc-os.o
 
 ifeq ($(CONFIG_SOC_S32GEN1),y)
 $(MODULE_NAME)-y += hw/ipc-hw-s32gen1.o
