@@ -202,7 +202,8 @@ EXPORT_SYMBOL(ipc_shm_free);
 EXPORT_SYMBOL(ipc_shm_acquire_buf);
 EXPORT_SYMBOL(ipc_shm_release_buf);
 EXPORT_SYMBOL(ipc_shm_tx);
-EXPORT_SYMBOL(ipc_shm_tx_unmanaged);
+EXPORT_SYMBOL(ipc_shm_unmanaged_acquire);
+EXPORT_SYMBOL(ipc_shm_unmanaged_tx);
 
 module_init(shm_mod_init);
 module_exit(shm_mod_exit);
