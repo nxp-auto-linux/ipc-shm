@@ -27,8 +27,8 @@
 
 /**
  * enum ipc_shm_channel_type - channel type
- * @SHM_CHANNEL_MANAGED:   buffer management enabled
- * @SHM_CHANNEL_UNMANAGED: buf mgmt disabled, app owns entire channel memory
+ * @IPC_SHM_MANAGED:	channel with buffer management enabled
+ * @IPC_SHM_UNMANAGED:	buf mgmt disabled, app owns entire channel memory
  *
  * For unmanaged channels the application has full control over channel memory
  * and no buffer management is done by ipc-shm device.

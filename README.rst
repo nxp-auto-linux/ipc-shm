@@ -1,0 +1,42 @@
+.. SPDX-License-Identifier: BSD-3-Clause
+
+===================================
+IPCF Shared Memory Driver for Linux
+===================================
+
+:Copyright: 2018 NXP
+
+Overview
+========
+Linux IPCF Shared Memory kernel driver enables communication over shared memory
+with an RTOS running on different cores of the same processor.
+
+The driver is accompanied by a sample application that is also an out-of-tree
+kernel module which demonstrates a ping-pong message communication with an RTOS
+application (for more details see the readme from sample directory).
+
+The driver and sample application are integrated as out-of-tree kernel modules
+in NXP Auto Linux BSP.
+
+HW platforms
+============
+The driver includes support of the following processors:
+ - S32V234 silicon, cut 2.1, maskset #1N81U
+ - S32xx presilicon (S32G275, S32R45x, S32V344) - Synopsis VDK 6.0.0
+
+Configuration notes
+===================
+There are three hardware-related parameters that can be configured at the driver
+API level: TX and RX inter-core interrupt IDs and remote core ID.
+
+The interrupt IDs are MSCM core-to-core directed interrupt IDs. Please note
+that the interrupt ID expected in the driver configuration is different from
+the corresponding processor exception number (used to register the interrupt
+handler); see the Reference Manual of each platform for specific information.
+
+In case of ARM platforms, the same interrupt can be used for both TX and RX.
+Moreover, default values can be assigned using IPC_DEFAULT_INTER_CORE_IRQ for
+interrupts and IPC_CORE_DEFAULT for the remote core.
+
+For technical support please go to:
+    https://www.nxp.com/support
