@@ -1,12 +1,11 @@
 /* SPDX-License-Identifier: BSD-3-Clause */
 /*
- * Copyright (C) 2018 NXP Semiconductors
+ * Copyright 2018 NXP
  */
-#include <linux/types.h>
-#include <linux/module.h>
 #include <linux/io.h>
 
 #include "ipc-shm.h"
+#include "ipc-os.h"
 #include "ipc-hw.h"
 
 /* Hardware IP Block Base Addresses - TODO: get them from device tree */
@@ -21,9 +20,6 @@ enum s32v234_processor_idx {
 /* S32V234 Specific Definitions */
 #define DEFAULT_MSCM_IRQ_ID    3u /* MSCM irq 3 = GIC irq 35 */
 #define DEFAULT_REMOTE_CORE    M4
-
-/* Device tree MSCM node: compatible property (search key) */
-#define DT_MSCM_NODE_COMP "fsl,s32v234-mscm"
 
 /**
  * struct mscm_regs - MSCM Peripheral Register Structure
@@ -129,7 +125,7 @@ struct mscm_regs {
  * @mscm_tx_irq:    MSCM inter-core interrupt reserved for shm driver tx
  * @mscm_rx_irq:    MSCM inter-core interrupt reserved for shm driver rx
  * @remote_core:    remote core to trigger the interrupt on
- * @mscm:	        pointer to memory-mapped hardware peripheral MSCM
+ * @mscm:           pointer to memory-mapped hardware peripheral MSCM
  */
 static struct ipc_hw_priv {
 	int mscm_tx_irq;
@@ -139,21 +135,11 @@ static struct ipc_hw_priv {
 } priv;
 
 /**
- * ipc_hw_get_dt_comp() - device tree compatible getter
+ * ipc_hw_get_rx_irq() - get MSCM inter-core interrupt index [0..3] used for Rx
  *
- * Return: MSCM compatible value string for current platform
+ * Return: MSCM inter-core interrupt index used for Rx
  */
-char *ipc_hw_get_dt_comp(void)
-{
-	return DT_MSCM_NODE_COMP;
-}
-
-/**
- * ipc_hw_get_dt_irq() - device tree compatible getter
- *
- * Return: device tree index of the MSCM interrupt used
- */
-int ipc_hw_get_dt_irq(void)
+int ipc_hw_get_rx_irq(void)
 {
 	return priv.mscm_rx_irq;
 }
@@ -176,9 +162,7 @@ int ipc_hw_get_dt_irq(void)
 int ipc_hw_init(const struct ipc_shm_cfg *cfg)
 {
 	/* map MSCM hardware peripheral block */
-	priv.mscm = (struct mscm_regs *) ioremap_nocache(
-		(phys_addr_t)MSCM_BASE, sizeof(struct mscm_regs));
-
+	priv.mscm = (struct mscm_regs *)ipc_os_map_intc();
 	if (!priv.mscm) {
 		return -ENOMEM;
 	}
@@ -218,7 +202,7 @@ void ipc_hw_free(void)
 	ipc_hw_irq_clear();
 
 	/* unmap MSCM hardware peripheral block */
-	iounmap(priv.mscm);
+	ipc_os_unmap_intc(priv.mscm);
 }
 
 /**

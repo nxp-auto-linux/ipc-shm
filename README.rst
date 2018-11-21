@@ -29,10 +29,12 @@ Configuration notes
 There are three hardware-related parameters that can be configured at the driver
 API level: TX and RX inter-core interrupt IDs and remote core ID.
 
-The interrupt IDs are MSCM core-to-core directed interrupt IDs. Please note
-that the interrupt ID expected in the driver configuration is different from
+The interrupt IDs are MSCM core-to-core directed interrupt IDs. Valid values are
+in range [0..2] for S32xx and [0..3] for S32V234.
+
+Note: the interrupt ID expected in the driver configuration is different from
 the corresponding processor exception number (used to register the interrupt
-handler); see the Reference Manual of each platform for specific information.
+handler); see Reference Manual of each platform for specific information.
 
 In case of ARM platforms, the same interrupt can be used for both TX and RX.
 Moreover, default values can be assigned using IPC_DEFAULT_INTER_CORE_IRQ for

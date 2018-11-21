@@ -104,7 +104,7 @@ int ipc_queue_init(struct ipc_queue *queue,
 		   uint16_t elem_num, uint16_t elem_size,
 		   uintptr_t push_ring_addr, uintptr_t pop_ring_addr)
 {
-	if (!queue || !push_ring_addr || !pop_ring_addr ||
+	if (!queue || !push_ring_addr || !pop_ring_addr || elem_num == 0 ||
 	    elem_size == 0 || elem_size % 8) {
 		return -EINVAL;
 	}

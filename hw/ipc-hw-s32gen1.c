@@ -1,12 +1,11 @@
 /* SPDX-License-Identifier: BSD-3-Clause */
 /*
- * Copyright (C) 2018 NXP Semiconductors
+ * Copyright 2018 NXP
  */
-#include <linux/types.h>
-#include <linux/module.h>
 #include <linux/io.h>
 
 #include "ipc-shm.h"
+#include "ipc-os.h"
 #include "ipc-hw.h"
 
 /* Hardware IP Block Base Addresses - TODO: get them from device tree */
@@ -26,9 +25,6 @@ enum s32gen1_processor_idx {
 /* S32gen1 Specific Definitions */
 #define DEFAULT_MSCM_IRQ_ID    2u /* MSCM irq 2 = GIC irq 35 */
 #define DEFAULT_REMOTE_CORE    M7_0
-
-/* Device tree MSCM node: compatible property (search key) */
-#define DT_MSCM_NODE_COMP "fsl,s32gen1-mscm"
 
 /**
  * struct mscm_regs - MSCM Peripheral Register Structure
@@ -302,40 +298,7 @@ struct mscm_regs {
 
 #define MSCM_IRCPnIGRn_INT_EN    0x1ul /* Interrupt Enable */
 
-#define MSCM_IRCPnISR3_PCIE_INT0    0x0001ul /* PCIe-to-CPn Interrupt 0 Mask */
-#define MSCM_IRCPnISR3_PCIE_INT1    0x0002ul /* PCIe-to-CPn Interrupt 1 Mask */
-#define MSCM_IRCPnISR3_PCIE_INT2    0x0004ul /* PCIe-to-CPn Interrupt 2 Mask */
-#define MSCM_IRCPnISR3_PCIE_INT3    0x0008ul /* PCIe-to-CPn Interrupt 3 Mask */
-#define MSCM_IRCPnISR3_PCIE_INT4    0x0010ul /* PCIe-to-CPn Interrupt 4 Mask */
-#define MSCM_IRCPnISR3_PCIE_INT5    0x0020ul /* PCIe-to-CPn Interrupt 5 Mask */
-#define MSCM_IRCPnISR3_PCIE_INT6    0x0040ul /* PCIe-to-CPn Interrupt 6 Mask */
-#define MSCM_IRCPnISR3_PCIE_INT7    0x0080ul /* PCIe-to-CPn Interrupt 7 Mask */
-#define MSCM_IRCPnISR3_PCIE_INT8    0x0100ul /* PCIe-to-CPn Interrupt 8 Mask */
-#define MSCM_IRCPnISR3_PCIE_INT9    0x0200ul /* PCIe-to-CPn Interrupt 9 Mask */
-#define MSCM_IRCPnISR3_PCIE_INT10   0x0400ul /* PCIe-to-CPn Interrupt 10 Mask */
-#define MSCM_IRCPnISR3_PCIE_INT11   0x0800ul /* PCIe-to-CPn Interrupt 11 Mask */
-#define MSCM_IRCPnISR3_PCIE_INT12   0x1000ul /* PCIe-to-CPn Interrupt 12 Mask */
-#define MSCM_IRCPnISR3_PCIE_INT13   0x2000ul /* PCIe-to-CPn Interrupt 13 Mask */
-#define MSCM_IRCPnISR3_PCIE_INT14   0x4000ul /* PCIe-to-CPn Interrupt 14 Mask */
-#define MSCM_IRCPnISR3_PCIE_INT15   0x8000ul /* PCIe-to-CPn Interrupt 15 Mask */
-
 #define MSCM_IRCPCFG_LOCK    0x80000000ul /* Interrupt Router Config Lock Bit */
-
-#define MSCM_IRCPCFG_CP0_TR    0x01ul /* CP0 Trusted Core Mask */
-#define MSCM_IRCPCFG_CP1_TR    0x02ul /* CP1 Trusted Core Mask */
-#define MSCM_IRCPCFG_CP2_TR    0x04ul /* CP2 Trusted Core Mask */
-#define MSCM_IRCPCFG_CP3_TR    0x08ul /* CP3 Trusted Core Mask */
-#define MSCM_IRCPCFG_CP4_TR    0x10ul /* CP4 Trusted Core Mask */
-#define MSCM_IRCPCFG_CP5_TR    0x20ul /* CP5 Trusted Core Mask */
-#define MSCM_IRCPCFG_CP6_TR    0x40ul /* CP6 Trusted Core Mask */
-
-#define MSCM_IRNMIC_CP0_NMI_EN    0x01ul /* CP0 NMI Interrupt Steering Enable */
-#define MSCM_IRNMIC_CP1_NMI_EN    0x02ul /* CP1 NMI Interrupt Steering Enable */
-#define MSCM_IRNMIC_CP2_NMI_EN    0x04ul /* CP2 NMI Interrupt Steering Enable */
-#define MSCM_IRNMIC_CP3_NMI_EN    0x08ul /* CP3 NMI Interrupt Steering Enable */
-#define MSCM_IRNMIC_CP4_NMI_EN    0x10ul /* CP4 NMI Interrupt Steering Enable */
-#define MSCM_IRNMIC_CP5_NMI_EN    0x20ul /* CP5 NMI Interrupt Steering Enable */
-#define MSCM_IRNMIC_CP6_NMI_EN    0x40ul /* CP6 NMI Interrupt Steering Enable */
 
 #define MSCM_IRSPRCn_LOCK    0x8000u /* Interrupt Routing Control Lock Bit */
 
@@ -353,7 +316,7 @@ struct mscm_regs {
  * @mscm_tx_irq:    MSCM inter-core interrupt reserved for shm driver tx
  * @mscm_rx_irq:    MSCM inter-core interrupt reserved for shm driver rx
  * @remote_core:    remote core to trigger the interrupt on
- * @mscm:	        pointer to memory-mapped hardware peripheral MSCM
+ * @mscm:           pointer to memory-mapped hardware peripheral MSCM
  */
 static struct ipc_hw_priv {
 	int mscm_tx_irq;
@@ -363,21 +326,11 @@ static struct ipc_hw_priv {
 } priv;
 
 /**
- * ipc_hw_get_dt_comp() - device tree compatible getter
+ * ipc_hw_get_rx_irq() - get MSCM inter-core interrupt index [0..2] used for Rx
  *
- * Return: MSCM compatible value string for current platform
+ * Return: MSCM inter-core interrupt index used for Rx
  */
-char *ipc_hw_get_dt_comp(void)
-{
-	return DT_MSCM_NODE_COMP;
-}
-
-/**
- * ipc_hw_get_dt_irq() - device tree compatible getter
- *
- * Return: device tree index of the MSCM interrupt used
- */
-int ipc_hw_get_dt_irq(void)
+int ipc_hw_get_rx_irq(void)
 {
 	return priv.mscm_rx_irq;
 }
@@ -399,10 +352,8 @@ int ipc_hw_get_dt_irq(void)
  */
 int ipc_hw_init(const struct ipc_shm_cfg *cfg)
 {
-	/* map MSCM hardware peripheral block */
-	priv.mscm = (struct mscm_regs *) ioremap_nocache(
-		(phys_addr_t)MSCM_BASE, sizeof(struct mscm_regs));
-
+	/* map MSCM hardware peripheral block registers */
+	priv.mscm = (struct mscm_regs *)ipc_os_map_intc();
 	if (!priv.mscm) {
 		return -ENOMEM;
 	}
@@ -477,7 +428,7 @@ void ipc_hw_free(void)
 	ipc_hw_irq_clear();
 
 	/* unmap MSCM hardware peripheral block */
-	iounmap(priv.mscm);
+	ipc_os_unmap_intc(priv.mscm);
 }
 
 /**

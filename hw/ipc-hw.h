@@ -9,9 +9,7 @@ int ipc_hw_init(const struct ipc_shm_cfg *cfg);
 
 void ipc_hw_free(void);
 
-char *ipc_hw_get_dt_comp(void);
-
-int ipc_hw_get_dt_irq(void);
+int ipc_hw_get_rx_irq(void);
 
 void ipc_hw_irq_enable(void);
 

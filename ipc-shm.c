@@ -5,6 +5,7 @@
 #include "ipc-os.h"
 #include "ipc-hw.h"
 #include "ipc-queue.h"
+#include "ipc-shm.h"
 
 #ifndef max
 #define max(x, y) ((x) > (y) ? (x) : (y))

@@ -6,10 +6,23 @@
 #include <linux/io.h>
 #include <linux/interrupt.h>
 #include <linux/of_irq.h>
+#include <linux/of_address.h>
+
 #include "ipc-os.h"
 #include "ipc-hw.h"
+#include "ipc-shm.h"
 
 #define DRIVER_VERSION	"0.1"
+
+/* Device tree MSCM node compatible property (search key) */
+#if defined(CONFIG_SOC_S32GEN1)
+	#define DT_INTC_NODE_COMP "fsl,s32gen1-mscm"
+#elif defined(CONFIG_SOC_S32V234)
+	#define DT_INTC_NODE_COMP "fsl,s32v234-mscm"
+#else
+	#error "Platform not supported"
+#endif
+
 
 /**
  * struct ipc_os_priv - OS specific private data
@@ -117,16 +130,15 @@ int ipc_os_init(const struct ipc_shm_cfg *cfg, int (*rx_cb)(int))
 		goto err_release_remote_region;
 	}
 
-
 	/* get interrupt number from device tree */
-	mscm = of_find_compatible_node(NULL, NULL, ipc_hw_get_dt_comp());
+	mscm = of_find_compatible_node(NULL, NULL, DT_INTC_NODE_COMP);
 	if (!mscm) {
 		shm_err("Unable to find MSCM node in device tree\n");
 		err = -ENXIO;
 		goto err_unmap_remote_shm;
 	}
 
-	priv.irq_num = of_irq_get(mscm, ipc_hw_get_dt_irq());
+	priv.irq_num = of_irq_get(mscm, ipc_hw_get_rx_irq());
 	of_node_put(mscm); /* release refcount to mscm DT node */
 
 	/* init rx interrupt */
@@ -182,6 +194,44 @@ uintptr_t ipc_os_get_local_shm(void)
 uintptr_t ipc_os_get_remote_shm(void)
 {
 	return priv.remote_virt_shm;
+}
+
+/**
+ * ipc_os_map_intc() - I/O memory map interrupt controller register space
+ *
+ * I/O memory map the inter-core interrupts HW block (MSCM for ARM processors)
+ */
+void *ipc_os_map_intc(void)
+{
+	struct device_node *node = NULL;
+	struct resource res;
+	int err;
+
+	/* get DT node */
+	node = of_find_compatible_node(NULL, NULL, DT_INTC_NODE_COMP);
+	if (!node) {
+		shm_err("Unable to find MSCM node in device tree\n");
+		return NULL;
+	}
+
+	/* get base address from DT node */
+	err = of_address_to_resource(node, 0, &res);
+	of_node_put(node);
+	if (err) {
+		shm_err("Unable to read regs address from DT MSCM node\n");
+		return NULL;
+	}
+
+	/* map configuration register space */
+	return ioremap_nocache(res.start, resource_size(&res));
+}
+
+/**
+ * ipc_os_map_intc() - I/O memory unmap interrupt controller register space
+ */
+void ipc_os_unmap_intc(void *addr)
+{
+	iounmap(addr);
 }
 
 /* module init function */
