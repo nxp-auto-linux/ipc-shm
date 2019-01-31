@@ -4,7 +4,7 @@
 IPCF Shared Memory Sample Application for Linux
 ===============================================
 
-:Copyright: 2018 NXP
+:Copyright: 2018-2019 NXP
 
 Overview
 ========
@@ -23,19 +23,16 @@ Prerequisites
 
 Building the application
 ========================
-This module is build with Yocto from NXP Auto Linux BSP, but can also be build
+This module is built with Yocto from NXP Auto Linux BSP, but can also be built
 manually, if needed.
 
 Note: modules are also included in NXP Auto Linux BSP pre-built binaries that
-can be downloaded from Flexera:
- - https://nxp.flexnetoperations.com/control/frse/product?child_plneID=738347&ver=CURRENT
-
+can be downloaded from `Flexera <https://nxp.flexnetoperations.com/control/frse/product?child_plneID=738347&ver=CURRENT>`_
 
 Building with Yocto
 -------------------
 Follow the steps for building NXP Auto Linux BSP with Yocto:
  - https://source.codeaurora.org/external/autobsps32/auto_yocto_bsp/tree/README?h=alb/master
-
 
 Notes:
  - Only the following machines are supported for IPCF: s32g275sim, s32r45xsim,
@@ -56,6 +53,8 @@ Building manually
    export CROSS_COMPILE=~/toolchain/gcc-linaro-6.3.1-2017.02-x86_64_aarch64-linux-gnu/bin/\
    aarch64-linux-gnu-
    make -C ./ipc-shm/ipc-shm-sample KERNELDIR=./linux modules
+
+.. _run-shm-linux:
 
 Running the application
 =======================
@@ -84,5 +83,3 @@ Running the application
 7. Unload the modules::
 
     rmmod ipc-shm-sample ipc-shm-dev
-
-See IPCF quick start guide for more details.
