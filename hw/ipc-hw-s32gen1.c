@@ -1,6 +1,6 @@
 /* SPDX-License-Identifier: BSD-3-Clause */
 /*
- * Copyright 2018 NXP
+ * Copyright 2018-2019 NXP
  */
 #include <linux/io.h>
 
@@ -416,6 +416,12 @@ int ipc_hw_init(const struct ipc_shm_cfg *cfg)
 		|| priv.remote_core == readl_relaxed(&priv.mscm->cpxnum)) {
 		return -EINVAL;
 	}
+
+	/*
+	 * disable rx irq source to avoid receiving an interrupt from remote
+	 * before any of the buffer rings are initialized
+	 */
+	ipc_hw_irq_disable();
 
 	return 0;
 }
