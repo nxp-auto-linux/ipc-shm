@@ -25,7 +25,8 @@ HW platforms
 ============
 The driver includes support of the following processors:
  - S32V234 silicon, cut 2.1, maskset #1N81U
- - S32xx presilicon (S32G275, S32R45x, S32V344) - Synopsis VDK 6.0.0
+ - S32G275 presilicon - Synopsis VDK 7.0.1
+ - S32R45x presilicon - Synopsis VDK 7.0.0
 
 Configuration notes
 ===================

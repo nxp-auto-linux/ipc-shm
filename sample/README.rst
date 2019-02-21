@@ -19,7 +19,7 @@ is controlled from console via a sysfs file (see Running the Application).
 Prerequisites
 =============
  - EVB board for S32V234 silicon, cut 2.0, maskset 1N81U or
- - Synopsis VDK for S32xx presilicon (S32G275, S32R45x, S32V344)
+ - Synopsis VDK for S32xx presilicon (S32G275, S32R45x)
 
 Building the application
 ========================
@@ -36,7 +36,7 @@ Follow the steps for building NXP Auto Linux BSP with Yocto:
 
 Notes:
  - Only the following machines are supported for IPCF: s32g275sim, s32r45xsim,
-   s32v344sim, s32v234evb.
+   s32v234evb.
  - Use image fsl-image-sim for S32xx pre-silicon and fsl-image-auto for
    S32V234 silicon.
 
