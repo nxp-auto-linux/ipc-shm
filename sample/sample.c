@@ -1,6 +1,6 @@
 /* SPDX-License-Identifier: BSD-3-Clause */
 /*
- * Copyright 2018 NXP
+ * Copyright 2018-2019 NXP
  */
 #include <linux/module.h>
 #include <linux/kernel.h>
@@ -25,7 +25,7 @@ MODULE_VERSION(MODULE_VER);
 #if defined(CONFIG_SOC_S32GEN1)
 	#define LOCAL_SHM_ADDR 0x34400000
 #elif defined(CONFIG_SOC_S32V234)
-	#define LOCAL_SHM_ADDR 0x3E800000
+	#define LOCAL_SHM_ADDR 0x3E900000
 #else
 	#error "Platform not supported"
 #endif
