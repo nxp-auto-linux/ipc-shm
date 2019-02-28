@@ -18,7 +18,6 @@ enum s32v234_processor_idx {
 };
 
 /* S32V234 Specific Definitions */
-#define DEFAULT_MSCM_IRQ_ID    3u /* MSCM irq 3 = GIC irq 35 */
 #define DEFAULT_REMOTE_CORE    M4
 
 /**
@@ -149,11 +148,9 @@ int ipc_hw_get_rx_irq(void)
  *
  * @cfg:    configuration parameters
  *
- * If the value IPC_DEFAULT_INTER_CORE_IRQ is passed as either inter_core_tx_irq
- * or inter_core_rx_irq or both, the default irq value defined for the selected
- * platform will be used instead; inter_core_tx_irq and inter_core_rx_irq are
- * allowed to have the same value since they are configured by the driver as
- * directed interrupts. If the value IPC_CORE_DEFAULT is passed as remote_core,
+ * inter_core_tx_irq and inter_core_rx_irq are not allowed to have the same
+ * value to avoid possible race conditions when updating the value of the
+ * IRSPRCn register. If the value IPC_CORE_DEFAULT is passed as remote_core,
  * the default value defined for the selected platform will be used instead.
  *
  * Return: 0 for success, -EINVAL for either inter core interrupt invalid or
@@ -174,20 +171,12 @@ int ipc_hw_init(const struct ipc_shm_cfg *cfg)
 
 	priv.remote_core = M4;
 
-	if (cfg->inter_core_tx_irq == IPC_DEFAULT_INTER_CORE_IRQ) {
-		priv.mscm_tx_irq = DEFAULT_MSCM_IRQ_ID;
-	} else {
-		priv.mscm_tx_irq = cfg->inter_core_tx_irq;
-	}
-
-	if (cfg->inter_core_rx_irq == IPC_DEFAULT_INTER_CORE_IRQ) {
-		priv.mscm_rx_irq = DEFAULT_MSCM_IRQ_ID;
-	} else {
-		priv.mscm_rx_irq = cfg->inter_core_rx_irq;
-	}
+	priv.mscm_tx_irq = cfg->inter_core_tx_irq;
+	priv.mscm_rx_irq = cfg->inter_core_rx_irq;
 
 	if (priv.mscm_tx_irq < 0 || priv.mscm_tx_irq > 3
-		|| priv.mscm_rx_irq < 0 || priv.mscm_rx_irq > 3) {
+		|| priv.mscm_rx_irq < 0 || priv.mscm_rx_irq > 3
+		|| priv.mscm_rx_irq == priv.mscm_tx_irq) {
 		return -EINVAL;
 	}
 

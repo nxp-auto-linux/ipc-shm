@@ -40,9 +40,8 @@ Note: the interrupt ID expected in the driver configuration is different from
 the corresponding processor exception number (used to register the interrupt
 handler); see Reference Manual of each platform for specific information.
 
-In case of ARM platforms, the same interrupt can be used for both TX and RX.
-Moreover, default values can be assigned using IPC_DEFAULT_INTER_CORE_IRQ for
-interrupts and IPC_CORE_DEFAULT for the remote core.
+For any platform, the TX and RX interrupts must be different. For ARM platforms,
+a default value can be assigned to the remote core using IPC_CORE_DEFAULT.
 
 For technical support please go to:
     https://www.nxp.com/support

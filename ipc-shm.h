@@ -1,6 +1,6 @@
 /* SPDX-License-Identifier: BSD-3-Clause */
 /*
- * Copyright 2018 NXP
+ * Copyright 2018-2019 NXP
  */
 #ifndef IPC_SHM_H
 #define IPC_SHM_H
@@ -19,11 +19,6 @@
  * Maximum number of buffers per pool
  */
 #define IPC_SHM_MAX_BUFS_PER_POOL 4096
-
-/*
- * Default value for inter core interrupt
- */
-#define IPC_DEFAULT_INTER_CORE_IRQ (-1)
 
 /**
  * enum ipc_shm_channel_type - channel type
@@ -131,11 +126,8 @@ struct ipc_shm_remote_core {
  * @num_channels:	number of shared memory channels
  * @channels:		IPC channels' parameters array
  *
- * In the case of ARM platforms, the same interrupt can be used for both TX and
- * RX. Moreover, default values can be assigned using IPC_DEFAULT_INTER_CORE_IRQ
- * for interrupts and IPC_CORE_DEFAULT for the remote core. In the case of
- * PowerPC platforms, the TX and RX interrupts used must be different and no
- * default values can be assigned to them or the remote core.
+ * The TX and RX interrupts used must be different. For ARM platforms, a default
+ * value can be assigned to the remote core using IPC_CORE_DEFAULT.
  *
  * Local and remote channel and buffer pool configurations must be symmetric.
  */
