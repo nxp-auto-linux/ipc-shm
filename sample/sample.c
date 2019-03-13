@@ -31,6 +31,8 @@ MODULE_VERSION(MODULE_VER);
 #endif
 #define IPC_SHM_SIZE 0x100000 /* 1M local shm, 1M remote shm */
 #define REMOTE_SHM_ADDR (LOCAL_SHM_ADDR + IPC_SHM_SIZE)
+#define INTER_CORE_TX_IRQ 2u
+#define INTER_CORE_RX_IRQ 1u
 #define S_BUF_LEN 16
 #define M_BUF_LEN 256
 #define L_BUF_LEN 4096
@@ -130,8 +132,8 @@ static int init_ipc_shm(void)
 		.local_shm_addr = LOCAL_SHM_ADDR,
 		.remote_shm_addr = REMOTE_SHM_ADDR,
 		.shm_size = IPC_SHM_SIZE,
-		.inter_core_tx_irq = IPC_DEFAULT_INTER_CORE_IRQ,
-		.inter_core_rx_irq = IPC_DEFAULT_INTER_CORE_IRQ,
+		.inter_core_tx_irq = INTER_CORE_TX_IRQ,
+		.inter_core_rx_irq = INTER_CORE_RX_IRQ,
 		.remote_core = {
 			.type = IPC_CORE_DEFAULT,
 			.index = 0,
