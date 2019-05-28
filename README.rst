@@ -25,8 +25,8 @@ HW platforms
 ============
 The driver includes support of the following processors:
  - S32V234 silicon, cut 2.1, maskset #1N81U
- - S32xx presilicon (S32G275, S32R45x) - Synopsis VDK (same version used by
-   Auto Linux BSP)
+ - S32xx presilicon (S32G275, S32R45x) - Synopsis VDK (see version in the
+   release notes)
 
 Configuration notes
 ===================
