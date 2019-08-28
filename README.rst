@@ -23,10 +23,7 @@ The source code of this Linux driver is published on `source.codeaurora.org
 
 HW platforms
 ============
-The driver includes support of the following processors:
- - S32V234 silicon, cut 2.1, maskset #1N81U
- - S32xx presilicon (S32G275, S32R45x) - Synopsis VDK (see version in the
-   release notes)
+The supported processors are listed in the sample application documentation.
 
 Configuration notes
 ===================
