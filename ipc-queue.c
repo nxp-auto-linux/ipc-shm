@@ -1,6 +1,6 @@
 /* SPDX-License-Identifier: BSD-3-Clause */
 /*
- * Copyright 2018 NXP
+ * Copyright 2018-2019 NXP
  */
 #include "ipc-os.h"
 #include "ipc-queue.h"
@@ -40,7 +40,7 @@ int ipc_queue_pop(struct ipc_queue *queue, void *buf)
 	memcpy(buf, src, queue->elem_size);
 
 	/* increment read index with wrap around */
-	queue->push_ring->read = (read + 1) % queue->elem_num;
+	queue->push_ring->read = (read + 1u) % queue->elem_num;
 
 	return 0;
 }
@@ -71,7 +71,7 @@ int ipc_queue_push(struct ipc_queue *queue, const void *buf)
 	read = queue->pop_ring->read;
 
 	/* check if queue is full ([write + 1 == read] because of sentinel) */
-	if ((write + 1) % queue->elem_num == read) {
+	if (((write + 1u) % queue->elem_num) == read) {
 		return -ENOMEM;
 	}
 
@@ -80,7 +80,7 @@ int ipc_queue_push(struct ipc_queue *queue, const void *buf)
 	memcpy(dst, buf, queue->elem_size);
 
 	/* increment write index with wrap around */
-	queue->push_ring->write = (write + 1) % queue->elem_num;
+	queue->push_ring->write = (write + 1u) % queue->elem_num;
 
 	return 0;
 }
@@ -104,8 +104,8 @@ int ipc_queue_init(struct ipc_queue *queue,
 		   uint16_t elem_num, uint16_t elem_size,
 		   uintptr_t push_ring_addr, uintptr_t pop_ring_addr)
 {
-	if (!queue || !push_ring_addr || !pop_ring_addr || elem_num == 0 ||
-	    elem_size == 0 || elem_size % 8) {
+	if (!queue || !push_ring_addr || !pop_ring_addr || (elem_num == 0) ||
+	    (elem_size == 0) || (elem_size % 8)) {
 		return -EINVAL;
 	}
 
@@ -134,8 +134,9 @@ int ipc_queue_init(struct ipc_queue *queue,
  *
  * Return:	size of local mapped memory occupied by queue
  */
-int ipc_queue_mem_size(struct ipc_queue *queue)
+uint32_t ipc_queue_mem_size(struct ipc_queue *queue)
 {
 	/* local ring control room + ring size */
-	return sizeof(struct ipc_ring) + queue->elem_num * queue->elem_size;
+	return (uint32_t)sizeof(struct ipc_ring) + queue->elem_num *
+			queue->elem_size;
 }

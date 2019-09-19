@@ -1,6 +1,6 @@
 /* SPDX-License-Identifier: BSD-3-Clause */
 /*
- * Copyright 2018 NXP
+ * Copyright 2018-2019 NXP
  */
 #ifndef IPC_QUEUE_H
 #define IPC_QUEUE_H
@@ -47,10 +47,10 @@ struct ipc_queue {
 	struct ipc_ring *pop_ring;
 };
 
-int ipc_queue_init(struct ipc_queue *queue, uint16_t size, uint16_t elem_size,
-		   uintptr_t push_ring_addr, uintptr_t pop_ring_addr);
+int ipc_queue_init(struct ipc_queue *queue, uint16_t elem_num, uint16_t elem_size,
+			uintptr_t push_ring_addr, uintptr_t pop_ring_addr);
 int ipc_queue_push(struct ipc_queue *queue, const void *buf);
 int ipc_queue_pop(struct ipc_queue *queue, void *buf);
-int ipc_queue_mem_size(struct ipc_queue *queue);
+uint32_t ipc_queue_mem_size(struct ipc_queue *queue);
 
 #endif /* IPC_QUEUE_H */
