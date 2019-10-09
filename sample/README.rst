@@ -18,15 +18,16 @@ is controlled from console via a sysfs file (see Running the Application).
 
 Prerequisites
 =============
- - EVB board for S32V234 silicon, cut 2.0, maskset 1N81U or
- - Synopsis VDK for S32xx presilicon (same version as for NXP Auto Linux BSP)
+ - hardare platform listed in "IPCF Shared Memory Kernel Driver for Linux"
+ - NXP Automotive Linux BSP
 
 Building the application
 ========================
-This module is built with Yocto from NXP Auto Linux BSP.
+This module is built with Yocto from NXP Auto Linux BSP, but can also be built
+manually, if needed.
 
-Note: modules are also included in NXP Auto Linux BSP pre-built image (fsl-image-sim)
-that can be downloaded from NXP Auto Linux BSP Flexera catalog.
+Note: modules are also included in NXP Auto Linux BSP pre-built images that can
+      be downloaded from NXP Auto Linux BSP Flexera catalog.
 
 Building with Yocto
 -------------------
@@ -38,6 +39,20 @@ Notes:
    s32v234evb.
  - Use image fsl-image-sim for S32xx pre-silicon and fsl-image-auto for
    S32V234 silicon.
+
+Building manually
+-----------------
+- Get NXP Auto Linux kernel and IPCF driver from Code Aurora::
+
+   git clone https://source.codeaurora.org/external/autobsps32/linux/
+   git clone https://source.codeaurora.org/external/autobsps32/ipcf/ipc-shm/
+
+- Export CROSS_COMPILE variable and build modules providing kernel source
+  location, e.g.::
+
+   export CROSS_COMPILE=/<toolchain-path>/aarch64-linux-gnu-
+   make -C ./linux
+   make -C ./ipc-shm/sample KERNELDIR=./linux modules
 
 .. _run-shm-linux:
 

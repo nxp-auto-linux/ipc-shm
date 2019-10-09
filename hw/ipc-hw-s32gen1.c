@@ -350,14 +350,29 @@ int ipc_hw_get_rx_irq(void)
 int ipc_hw_init(const struct ipc_shm_cfg *cfg)
 {
 	/* map MSCM hardware peripheral block registers */
-	priv.mscm = (struct mscm_regs *)ipc_os_map_intc();
-	if (!priv.mscm) {
-		return -ENOMEM;
-	}
+	void *addr = ipc_os_map_intc();
 
-	switch (cfg->remote_core.type) {
+	return _ipc_hw_init(cfg->inter_core_tx_irq, cfg->inter_core_rx_irq,
+			    &cfg->remote_core, addr);
+}
+
+/**
+ * _ipc_hw_init() - platform specific initialization
+ *
+ * Low level variant of ipc_hw_init() used by UIO device implementation.
+ */
+int _ipc_hw_init(int inter_core_tx_irq, int inter_core_rx_irq,
+		 const struct ipc_shm_remote_core *remote_core,
+		 void *mscm_addr)
+{
+	if (!mscm_addr)
+		return -EINVAL;
+
+	priv.mscm = (struct mscm_regs *)mscm_addr;
+
+	switch (remote_core->type) {
 	case IPC_CORE_A53:
-		switch (cfg->remote_core.index) {
+		switch (remote_core->index) {
 		case 0:
 			priv.remote_core = A53_0;
 			break;
@@ -375,7 +390,7 @@ int ipc_hw_init(const struct ipc_shm_cfg *cfg)
 		}
 		break;
 	case IPC_CORE_M7:
-		switch (cfg->remote_core.index) {
+		switch (remote_core->index) {
 		case 0:
 			priv.remote_core = M7_0;
 			break;
@@ -396,8 +411,8 @@ int ipc_hw_init(const struct ipc_shm_cfg *cfg)
 		return -EINVAL;
 	}
 
-	priv.mscm_tx_irq = cfg->inter_core_tx_irq;
-	priv.mscm_rx_irq = cfg->inter_core_rx_irq;
+	priv.mscm_tx_irq = inter_core_tx_irq;
+	priv.mscm_rx_irq = inter_core_rx_irq;
 
 	if (priv.mscm_tx_irq < 0 || priv.mscm_tx_irq > 2
 		|| priv.mscm_rx_irq < 0 || priv.mscm_rx_irq > 2

@@ -1,8 +1,8 @@
 .. SPDX-License-Identifier: BSD-3-Clause
 
-===================================
-IPCF Shared Memory Driver for Linux
-===================================
+==========================================
+IPCF Shared Memory Kernel Driver for Linux
+==========================================
 
 :Copyright: 2018-2019 NXP
 
@@ -23,6 +23,10 @@ The source code of this Linux driver is published on `source.codeaurora.org
 
 HW platforms
 ============
+The driver includes support of the following processors:
+ - S32V234 EVB board with silicon cut 2.1, maskset #1N81U
+ - Synopsis VDK for S32xx presilicon (same version as for NXP Auto Linux BSP)
+
 The supported processors are listed in the sample application documentation.
 
 Configuration notes
@@ -40,6 +44,13 @@ handler); see Reference Manual of each platform for specific information.
 For any platform, the TX and RX interrupts must be different.
 For ARM platforms, a default value can be assigned to the remote core using
 IPC_CORE_DEFAULT.
+
+Cautions
+========
+This driver provides direct access to physical memory that is mapped as
+non-cachable. Therefore, applications should make only aligned accesses in the
+shared memory buffers. Caution should be used when working with functions that
+may do unaligned accesses (e.g., string processing functions).
 
 For technical support please go to:
     https://www.nxp.com/support

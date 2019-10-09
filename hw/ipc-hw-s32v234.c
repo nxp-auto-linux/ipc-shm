@@ -159,26 +159,42 @@ int ipc_hw_get_rx_irq(void)
 int ipc_hw_init(const struct ipc_shm_cfg *cfg)
 {
 	/* map MSCM hardware peripheral block */
-	priv.mscm = (struct mscm_regs *)ipc_os_map_intc();
-	if (!priv.mscm) {
-		return -ENOMEM;
-	}
+	void *addr = ipc_os_map_intc();
 
-	if (cfg->remote_core.type != IPC_CORE_DEFAULT
-		&& cfg->remote_core.type != IPC_CORE_M4) {
+	return _ipc_hw_init(cfg->inter_core_tx_irq, cfg->inter_core_rx_irq,
+			    &cfg->remote_core, addr);
+}
+
+/**
+ * _ipc_hw_init() - platform specific initialization
+ *
+ * Low level variant of ipc_hw_init() used by UIO device implementation.
+ */
+int _ipc_hw_init(int tx_irq, int rx_irq,
+		 const struct ipc_shm_remote_core *remote_core,
+		 void *mscm_addr)
+{
+	if (!mscm_addr)
+		return -EINVAL;
+
+	priv.mscm = (struct mscm_regs *)mscm_addr;
+
+	/* only M4 core is supported */
+	if (remote_core->type != IPC_CORE_DEFAULT
+		&& remote_core->type != IPC_CORE_M4) {
 		return -EINVAL;
 	}
 
-	priv.remote_core = M4;
+	priv.remote_core = DEFAULT_REMOTE_CORE;
 
-	priv.mscm_tx_irq = cfg->inter_core_tx_irq;
-	priv.mscm_rx_irq = cfg->inter_core_rx_irq;
-
-	if (priv.mscm_tx_irq < 0 || priv.mscm_tx_irq > 3
-		|| priv.mscm_rx_irq < 0 || priv.mscm_rx_irq > 3
-		|| priv.mscm_rx_irq == priv.mscm_tx_irq) {
+	if (tx_irq < 0 || tx_irq > 3
+		|| rx_irq < 0 || rx_irq > 3
+		|| rx_irq == tx_irq) {
 		return -EINVAL;
 	}
+
+	priv.mscm_tx_irq = tx_irq;
+	priv.mscm_rx_irq = rx_irq;
 
 	/*
 	 * disable rx irq source to avoid receiving an interrupt from remote

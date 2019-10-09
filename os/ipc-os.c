@@ -1,6 +1,6 @@
 /* SPDX-License-Identifier: BSD-3-Clause */
 /*
- * Copyright 2018 NXP
+ * Copyright 2018-2019 NXP
  */
 #include <linux/ioport.h>
 #include <linux/io.h>
@@ -48,7 +48,7 @@ struct ipc_os_priv {
 static struct ipc_os_priv priv;
 
 static void ipc_shm_softirq(unsigned long arg);
-DECLARE_TASKLET(ipc_shm_rx_tasklet, ipc_shm_softirq, IPC_SOFTIRQ_BUDGET);
+static DECLARE_TASKLET(ipc_shm_rx_tasklet, ipc_shm_softirq, IPC_SOFTIRQ_BUDGET);
 
 /* sotfirq routine for deferred interrupt handling */
 static void ipc_shm_softirq(unsigned long budget)
@@ -139,6 +139,7 @@ int ipc_os_init(const struct ipc_shm_cfg *cfg, int (*rx_cb)(int))
 	}
 
 	priv.irq_num = of_irq_get(mscm, ipc_hw_get_rx_irq());
+	shm_dbg("Rx IRQ = %d\n", priv.irq_num);
 	of_node_put(mscm); /* release refcount to mscm DT node */
 
 	/* init rx interrupt */
