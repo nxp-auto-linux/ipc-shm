@@ -47,10 +47,23 @@ struct ipc_queue {
 	struct ipc_ring *pop_ring;
 };
 
-int ipc_queue_init(struct ipc_queue *queue, uint16_t elem_num, uint16_t elem_size,
-			uintptr_t push_ring_addr, uintptr_t pop_ring_addr);
+int ipc_queue_init(struct ipc_queue *queue, uint16_t elem_num,
+	uint16_t elem_size, uintptr_t push_ring_addr, uintptr_t pop_ring_addr);
 int ipc_queue_push(struct ipc_queue *queue, const void *buf);
 int ipc_queue_pop(struct ipc_queue *queue, void *buf);
-uint32_t ipc_queue_mem_size(struct ipc_queue *queue);
+
+/**
+ * ipc_queue_mem_size() - return queue footprint in local mapped memory
+ * @queue:	[IN] queue pointer
+ *
+ * Return local mapped memory footprint: local ring control data + ring buffer.
+ *
+ * Return:	size of local mapped memory occupied by queue
+ */
+static inline int ipc_queue_mem_size(struct ipc_queue *queue)
+{
+	/* local ring control room + ring size */
+	return sizeof(struct ipc_ring) + queue->elem_num * queue->elem_size;
+}
 
 #endif /* IPC_QUEUE_H */

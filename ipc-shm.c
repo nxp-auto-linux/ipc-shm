@@ -310,11 +310,6 @@ static int ipc_buf_pool_init(int chan_id, int pool_id,
 	uint32_t queue_mem_size;
 	int i, err;
 
-	if (!cfg) {
-		shm_err("NULL buffer pool configuration argument\n");
-		return -EINVAL;
-	}
-
 	if (cfg->num_bufs > IPC_SHM_MAX_BUFS_PER_POOL) {
 		shm_err("Too many buffers configured in pool. "
 			"Increase IPC_SHM_MAX_BUFS_PER_POOL if needed\n");
@@ -385,6 +380,11 @@ static int managed_channel_init(int chan_id,
 
 	if (!cfg->rx_cb) {
 		shm_err("Receive callback not specified\n");
+		return -EINVAL;
+	}
+
+	if (!cfg->pools) {
+		shm_err("NULL buffer pool configuration argument\n");
 		return -EINVAL;
 	}
 
@@ -546,6 +546,11 @@ int ipc_shm_init(const struct ipc_shm_cfg *cfg)
 		return -EINVAL;
 	}
 
+	if (!cfg->local_shm_addr || !cfg->remote_shm_addr) {
+		shm_err("NULL local or remote address\n");
+		return -EINVAL;
+	}
+
 	if ((cfg->num_channels < 1) ||
 		(cfg->num_channels > IPC_SHM_MAX_CHANNELS)) {
 		shm_err("Number of channels must be between 1 and %d\n",
@@ -616,7 +621,7 @@ void *ipc_shm_acquire_buf(int chan_id, size_t size)
 	int pool_id;
 
 	chan = get_managed_chan(chan_id);
-	if (!chan)
+	if (!chan || !size)
 		return NULL;
 
 	/* find first non-empty pool that accommodates the requested size */
@@ -681,7 +686,7 @@ int ipc_shm_release_buf(int chan_id, const void *buf)
 	int err;
 
 	chan = get_managed_chan(chan_id);
-	if (!chan)
+	if (!chan || !buf)
 		return -EINVAL;
 
 	/* Find the pool that owns the buffer */
@@ -716,7 +721,7 @@ int ipc_shm_tx(int chan_id, void *buf, size_t size)
 	int err;
 
 	chan = get_managed_chan(chan_id);
-	if (!chan)
+	if (!chan || !buf || !size)
 		return -EINVAL;
 
 	/* Find the pool that owns the buffer */

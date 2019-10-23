@@ -125,18 +125,3 @@ int ipc_queue_init(struct ipc_queue *queue,
 
 	return 0;
 }
-
-/**
- * ipc_queue_mem_size() - return queue footprint in local mapped memory
- * @queue:	[IN] queue pointer
- *
- * Return local mapped memory footprint: local ring control data + ring buffer.
- *
- * Return:	size of local mapped memory occupied by queue
- */
-uint32_t ipc_queue_mem_size(struct ipc_queue *queue)
-{
-	/* local ring control room + ring size */
-	return (uint32_t)sizeof(struct ipc_ring) + queue->elem_num *
-			queue->elem_size;
-}

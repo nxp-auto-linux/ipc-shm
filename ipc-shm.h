@@ -92,7 +92,8 @@ struct ipc_shm_unmanaged_cfg {
 /**
  * struct ipc_shm_channel_cfg - channel parameters
  * @type:	channel type from &enum ipc_shm_channel_type
- * @ch:		managed/unmanaged channel parameters
+ * @ch.managed:     managed channel parameters
+ * @ch.unmanaged:   unmanaged channel parameters
  */
 struct ipc_shm_channel_cfg {
 	enum ipc_shm_channel_type type;
@@ -209,7 +210,7 @@ int ipc_shm_tx(int chan_id, void *buf, size_t size);
 void *ipc_shm_unmanaged_acquire(int chan_id);
 
 /**
- * ipc_shm_tx_unmanaged() - notify remote that data has been written in channel
+ * ipc_shm_unmanaged_tx() - notify remote that data has been written in channel
  * @chan_id:        channel index
  *
  * Function used only for unmanaged channels. It can be used after the channel
