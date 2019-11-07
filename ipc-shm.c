@@ -132,35 +132,30 @@ struct ipc_shm_channel {
  * @channels:		ipc channels private data
  */
 struct ipc_shm_priv {
-	int shm_size;
+	uint32_t shm_size;
 	int num_channels;
 	struct ipc_shm_channel channels[IPC_SHM_MAX_CHANNELS];
 };
 
 /* ipc shm private data */
-static struct ipc_shm_priv ipc_shm_priv;
-
-static inline struct ipc_shm_priv *get_ipc_priv(void)
-{
-	return &ipc_shm_priv;
-}
+static struct ipc_shm_priv ipc_shm_priv_data;
 
 /* get channel without validation (used in internal functions only) */
-static inline struct ipc_shm_channel *_get_channel(int chan_id)
+static inline struct ipc_shm_channel *get_channel_priv(int chan_id)
 {
-	return &ipc_shm_priv.channels[chan_id];
+	return &ipc_shm_priv_data.channels[chan_id];
 }
 
 /* get channel with validation (can be used in API functions) */
 static inline struct ipc_shm_channel *get_channel(int chan_id)
 {
-	if ((chan_id < 0) || (chan_id >= ipc_shm_priv.num_channels)) {
+	if ((chan_id < 0) || (chan_id >= ipc_shm_priv_data.num_channels)) {
 		shm_err("Channel id outside valid range: 0 - %d\n",
-			ipc_shm_priv.num_channels);
+			ipc_shm_priv_data.num_channels);
 		return NULL;
 	}
 
-	return _get_channel(chan_id);
+	return get_channel_priv(chan_id);
 }
 
 /* get managed channel with validation */
@@ -168,10 +163,10 @@ static inline struct ipc_managed_channel *get_managed_chan(int chan_id)
 {
 	struct ipc_shm_channel *chan = get_channel(chan_id);
 
-	if (!chan)
+	if (chan == NULL)
 		return NULL;
 
-	chan = &ipc_shm_priv.channels[chan_id];
+	chan = &ipc_shm_priv_data.channels[chan_id];
 	if (chan->type != IPC_SHM_MANAGED) {
 		shm_err("Invalid channel type for this operation\n");
 		return NULL;
@@ -185,10 +180,10 @@ static inline struct ipc_unmanaged_channel *get_unmanaged_chan(int chan_id)
 {
 	struct ipc_shm_channel *chan = get_channel(chan_id);
 
-	if (!chan)
+	if (chan == NULL)
 		return NULL;
 
-	chan = &ipc_shm_priv.channels[chan_id];
+	chan = &ipc_shm_priv_data.channels[chan_id];
 	if (chan->type != IPC_SHM_UNMANAGED) {
 		shm_err("Invalid channel type for this operation\n");
 		return NULL;
@@ -206,7 +201,7 @@ static inline struct ipc_unmanaged_channel *get_unmanaged_chan(int chan_id)
  */
 static int ipc_channel_rx(int chan_id, int budget)
 {
-	struct ipc_shm_channel *chan = _get_channel(chan_id);
+	struct ipc_shm_channel *chan = get_channel_priv(chan_id);
 	struct ipc_managed_channel *mchan = &chan->ch.mng;
 	struct ipc_unmanaged_channel *uchan = &chan->ch.umng;
 	struct ipc_shm_pool *pool;
@@ -234,11 +229,12 @@ static int ipc_channel_rx(int chan_id, int budget)
 	}
 
 	/* managed channels: process incoming BDs in the limit of budget */
-	while (work < budget &&
+	while ((work < budget) &&
 			(ipc_queue_pop(&mchan->bd_queue, &bd) == 0)) {
 
 		pool = &mchan->pools[bd.pool_id];
-		buf_addr = pool->remote_pool_addr + bd.buf_id * pool->buf_size;
+		buf_addr = pool->remote_pool_addr +
+			(bd.buf_id * pool->buf_size);
 
 		mchan->rx_cb(mchan->cb_arg, chan->id,
 			     (void *)buf_addr, bd.data_size);
@@ -259,15 +255,15 @@ static int ipc_channel_rx(int chan_id, int budget)
  */
 static int ipc_shm_rx(int budget)
 {
-	int num_chans = get_ipc_priv()->num_channels;
+	int num_chans = ipc_shm_priv_data.num_channels;
 	int chan_budget, chan_work;
 	int more_work = 1;
 	int work = 0;
 	int i;
 
 	/* fair channel handling algorithm */
-	while ((work < budget) && more_work) {
-		chan_budget = max((budget - work) / num_chans, 1);
+	while ((work < budget) && (more_work > 0)) {
+		chan_budget = max(((budget - work) / num_chans), 1);
 		more_work = 0;
 
 		for (i = 0; i < num_chans; i++) {
@@ -303,12 +299,12 @@ static int ipc_buf_pool_init(int chan_id, int pool_id,
 			     uintptr_t local_shm, uintptr_t remote_shm,
 			     const struct ipc_shm_pool_cfg *cfg)
 {
-	struct ipc_shm_priv *priv = get_ipc_priv();
 	struct ipc_managed_channel *chan = get_managed_chan(chan_id);
 	struct ipc_shm_pool *pool = &chan->pools[pool_id];
 	struct ipc_shm_bd bd;
 	uint32_t queue_mem_size;
-	int i, err;
+	uint16_t i;
+	int err;
 
 	if (cfg->num_bufs > IPC_SHM_MAX_BUFS_PER_POOL) {
 		shm_err("Too many buffers configured in pool. "
@@ -323,7 +319,7 @@ static int ipc_buf_pool_init(int chan_id, int pool_id,
 	 * pool shm and pop ring mapped at start of remote pool shm
 	 */
 	err = ipc_queue_init(&pool->bd_queue, pool->num_bufs,
-			     sizeof(struct ipc_shm_bd), local_shm, remote_shm);
+		(uint16_t)sizeof(struct ipc_shm_bd), local_shm, remote_shm);
 	if (err)
 		return err;
 
@@ -339,8 +335,8 @@ static int ipc_buf_pool_init(int chan_id, int pool_id,
 	pool->shm_size = queue_mem_size + (cfg->buf_size * cfg->num_bufs);
 
 	/* check if pool fits into shared memory */
-	if (local_shm + pool->shm_size >
-		(ipc_os_get_local_shm() + priv->shm_size)) {
+	if ((local_shm + pool->shm_size) >
+		(ipc_os_get_local_shm() + ipc_shm_priv_data.shm_size)) {
 		shm_err("Not enough shared memory for pool %d from channel %d\n",
 			pool_id, chan_id);
 		return -ENOMEM;
@@ -348,7 +344,7 @@ static int ipc_buf_pool_init(int chan_id, int pool_id,
 
 	/* populate bd_queue with free BDs from remote pool */
 	for (i = 0; i < pool->num_bufs; i++) {
-		bd.pool_id = pool_id;
+		bd.pool_id = (int16_t)pool_id;
 		bd.buf_id = i;
 		bd.data_size = 0;
 
@@ -378,12 +374,12 @@ static int managed_channel_init(int chan_id,
 	uint16_t total_bufs = 0;
 	int err, i;
 
-	if (!cfg->rx_cb) {
+	if (cfg->rx_cb == NULL) {
 		shm_err("Receive callback not specified\n");
 		return -EINVAL;
 	}
 
-	if (!cfg->pools) {
+	if (cfg->pools == NULL) {
 		shm_err("NULL buffer pool configuration argument\n");
 		return -EINVAL;
 	}
@@ -419,7 +415,8 @@ static int managed_channel_init(int chan_id,
 	 * channel shm and pop ring mapped at start of remote channel shm
 	 */
 	err = ipc_queue_init(&chan->bd_queue, total_bufs,
-			     sizeof(struct ipc_shm_bd), local_shm, remote_shm);
+			     (uint16_t)sizeof(struct ipc_shm_bd),
+			     local_shm, remote_shm);
 	if (err)
 		return err;
 
@@ -449,7 +446,7 @@ static int unmanaged_channel_init(int chan_id,
 {
 	struct ipc_unmanaged_channel *chan = get_unmanaged_chan(chan_id);
 
-	if (!cfg->rx_cb) {
+	if (cfg->rx_cb == NULL) {
 		shm_err("Receive callback not specified\n");
 		return -EINVAL;
 	}
@@ -481,10 +478,10 @@ static int ipc_shm_channel_init(int chan_id,
 				uintptr_t local_shm, uintptr_t remote_shm,
 				const struct ipc_shm_channel_cfg *cfg)
 {
-	struct ipc_shm_channel *chan = _get_channel(chan_id);
+	struct ipc_shm_channel *chan = get_channel_priv(chan_id);
 	int err;
 
-	if (!cfg) {
+	if (cfg == NULL) {
 		shm_err("NULL channel configuration argument\n");
 		return -EINVAL;
 	}
@@ -511,16 +508,17 @@ static int ipc_shm_channel_init(int chan_id,
 }
 
 /* Get channel local mapped memory size */
-static int get_chan_memmap_size(int chan_id)
+static uint32_t get_chan_memmap_size(int chan_id)
 {
-	struct ipc_shm_channel *chan = _get_channel(chan_id);
+	struct ipc_shm_channel *chan = get_channel_priv(chan_id);
 	struct ipc_managed_channel *mchan;
 	uint32_t size = 0;
 	int i;
 
 	/* unmanaged channels: control structure size + channel memory size */
 	if (chan->type == IPC_SHM_UNMANAGED) {
-		return sizeof(struct ipc_channel_umem) + chan->ch.umng.size;
+		return (uint32_t)(sizeof(struct ipc_channel_umem) +
+			chan->ch.umng.size);
 	}
 
 	/* managed channels: size of BD queue + size of buf pools */
@@ -535,18 +533,18 @@ static int get_chan_memmap_size(int chan_id)
 
 int ipc_shm_init(const struct ipc_shm_cfg *cfg)
 {
-	struct ipc_shm_priv *priv = get_ipc_priv();
 	uintptr_t local_chan_shm;
 	uintptr_t remote_chan_shm;
-	int chan_size;
+	uint32_t chan_size;
 	int err, i;
 
-	if (!cfg) {
+	if (cfg == NULL) {
 		shm_err("NULL argument\n");
 		return -EINVAL;
 	}
 
-	if (!cfg->local_shm_addr || !cfg->remote_shm_addr) {
+	if ((cfg->local_shm_addr == (uintptr_t) NULL)
+		|| (cfg->remote_shm_addr == (uintptr_t) NULL)) {
 		shm_err("NULL local or remote address\n");
 		return -EINVAL;
 	}
@@ -559,8 +557,8 @@ int ipc_shm_init(const struct ipc_shm_cfg *cfg)
 	}
 
 	/* save api params */
-	priv->shm_size = cfg->shm_size;
-	priv->num_channels = cfg->num_channels;
+	ipc_shm_priv_data.shm_size = cfg->shm_size;
+	ipc_shm_priv_data.num_channels = cfg->num_channels;
 
 	/* pass interrupt and core data to hw */
 	err = ipc_hw_init(cfg);
@@ -576,7 +574,7 @@ int ipc_shm_init(const struct ipc_shm_cfg *cfg)
 	local_chan_shm = ipc_os_get_local_shm();
 	remote_chan_shm = ipc_os_get_remote_shm();
 	shm_dbg("initializing channels...\n");
-	for (i = 0; i < priv->num_channels; i++) {
+	for (i = 0; i < ipc_shm_priv_data.num_channels; i++) {
 		err = ipc_shm_channel_init(i, local_chan_shm, remote_chan_shm,
 					   &cfg->channels[i]);
 		if (err)
@@ -621,7 +619,7 @@ void *ipc_shm_acquire_buf(int chan_id, size_t size)
 	int pool_id;
 
 	chan = get_managed_chan(chan_id);
-	if (!chan || !size)
+	if ((chan == NULL) || (size == 0u))
 		return NULL;
 
 	/* find first non-empty pool that accommodates the requested size */
@@ -642,7 +640,8 @@ void *ipc_shm_acquire_buf(int chan_id, size_t size)
 		return NULL;
 	}
 
-	buf_addr = pool->local_pool_addr + bd.buf_id * pool->buf_size;
+	buf_addr = pool->local_pool_addr +
+		(uint32_t)(bd.buf_id * pool->buf_size);
 
 	shm_dbg("ch %d: pool %d: acquired buffer %d with address %lx\n",
 		chan_id, pool_id, bd.buf_id, buf_addr);
@@ -657,18 +656,19 @@ void *ipc_shm_acquire_buf(int chan_id, size_t size)
  *
  * Return: pool index on success, -1 otherwise
  */
-static int find_pool_for_buf(struct ipc_managed_channel *chan,
+static int16_t find_pool_for_buf(struct ipc_managed_channel *chan,
 			     uintptr_t buf, int remote)
 {
 	struct ipc_shm_pool *pool;
 	uintptr_t addr;
-	int pool_id;
-	int pool_size;
+	int16_t pool_id;
+	uint32_t pool_size;
 
 	for (pool_id = 0; pool_id < chan->num_pools; pool_id++) {
 		pool = &chan->pools[pool_id];
 
-		addr = remote ? pool->remote_pool_addr : pool->local_pool_addr;
+		addr = (remote == 1) ?
+				pool->remote_pool_addr : pool->local_pool_addr;
 		pool_size = pool->num_bufs * pool->buf_size;
 
 		if ((buf >= addr) && (buf < (addr + pool_size)))
@@ -686,7 +686,7 @@ int ipc_shm_release_buf(int chan_id, const void *buf)
 	int err;
 
 	chan = get_managed_chan(chan_id);
-	if (!chan || !buf)
+	if ((chan == NULL) || (buf == NULL))
 		return -EINVAL;
 
 	/* Find the pool that owns the buffer */
@@ -698,7 +698,8 @@ int ipc_shm_release_buf(int chan_id, const void *buf)
 	}
 
 	pool = &chan->pools[bd.pool_id];
-	bd.buf_id = ((uintptr_t)buf - pool->remote_pool_addr) / pool->buf_size;
+	bd.buf_id = (uint16_t)(((uintptr_t)buf - pool->remote_pool_addr) /
+			pool->buf_size);
 	bd.data_size = 0; /* reset size of written data in buffer */
 
 	err = ipc_queue_push(&pool->bd_queue, &bd);
@@ -721,7 +722,7 @@ int ipc_shm_tx(int chan_id, void *buf, size_t size)
 	int err;
 
 	chan = get_managed_chan(chan_id);
-	if (!chan || !buf || !size)
+	if ((chan == NULL) || (buf == NULL) || (size == 0u))
 		return -EINVAL;
 
 	/* Find the pool that owns the buffer */
@@ -733,8 +734,9 @@ int ipc_shm_tx(int chan_id, void *buf, size_t size)
 	}
 
 	pool = &chan->pools[bd.pool_id];
-	bd.buf_id = ((uintptr_t)buf - pool->local_pool_addr) / pool->buf_size;
-	bd.data_size = size;
+	bd.buf_id = (uint16_t)(((uintptr_t)buf - pool->local_pool_addr) /
+			pool->buf_size);
+	bd.data_size = (uint32_t)size;
 
 	/* push buffer descriptor in queue */
 	err = ipc_queue_push(&chan->bd_queue, &bd);
@@ -753,7 +755,7 @@ void *ipc_shm_unmanaged_acquire(int chan_id)
 {
 	struct ipc_unmanaged_channel *chan = get_unmanaged_chan(chan_id);
 
-	if (!chan)
+	if (chan == NULL)
 		return NULL;
 
 	/* for unmanaged channels return entire channel memory */
@@ -764,7 +766,7 @@ int ipc_shm_unmanaged_tx(int chan_id)
 {
 	struct ipc_unmanaged_channel *chan = get_unmanaged_chan(chan_id);
 
-	if (!chan)
+	if (chan == NULL)
 		return -EINVAL;
 
 	/* bump Tx counter */

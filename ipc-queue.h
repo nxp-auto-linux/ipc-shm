@@ -60,10 +60,11 @@ int ipc_queue_pop(struct ipc_queue *queue, void *buf);
  *
  * Return:	size of local mapped memory occupied by queue
  */
-static inline int ipc_queue_mem_size(struct ipc_queue *queue)
+static inline uint32_t ipc_queue_mem_size(struct ipc_queue *queue)
 {
 	/* local ring control room + ring size */
-	return sizeof(struct ipc_ring) + queue->elem_num * queue->elem_size;
+	return (uint32_t)sizeof(struct ipc_ring)
+		+ ((uint32_t)queue->elem_num * (uint32_t)queue->elem_size);
 }
 
 #endif /* IPC_QUEUE_H */

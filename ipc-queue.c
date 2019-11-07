@@ -21,7 +21,7 @@ int ipc_queue_pop(struct ipc_queue *queue, void *buf)
 	uint32_t read; /* cache read index for thread-safety */
 	void *src;
 
-	if (!queue || !buf) {
+	if ((queue == NULL) || (buf == NULL)) {
 		return -EINVAL;
 	}
 
@@ -61,7 +61,7 @@ int ipc_queue_push(struct ipc_queue *queue, const void *buf)
 	uint32_t read; /* cache read index for thread-safety */
 	void *dst;
 
-	if (!queue || !buf) {
+	if ((queue == NULL) || (buf == NULL)) {
 		return -EINVAL;
 	}
 
@@ -104,13 +104,14 @@ int ipc_queue_init(struct ipc_queue *queue,
 		   uint16_t elem_num, uint16_t elem_size,
 		   uintptr_t push_ring_addr, uintptr_t pop_ring_addr)
 {
-	if (!queue || !push_ring_addr || !pop_ring_addr || (elem_num == 0) ||
-	    (elem_size == 0) || (elem_size % 8)) {
+	if ((queue == NULL) || (push_ring_addr == (uintptr_t)NULL) ||
+		(pop_ring_addr == (uintptr_t)NULL) || (elem_num == 0u) ||
+		(elem_size == 0u) || ((elem_size % 8u) != 0u)) {
 		return -EINVAL;
 	}
 
 	/* add 1 sentinel element in queue for lock-free thread-safety */
-	queue->elem_num = elem_num + 1;
+	queue->elem_num = elem_num + 1u;
 
 	queue->elem_size = elem_size;
 

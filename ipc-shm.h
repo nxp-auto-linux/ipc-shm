@@ -18,7 +18,7 @@
 /*
  * Maximum number of buffers per pool
  */
-#define IPC_SHM_MAX_BUFS_PER_POOL 4096
+#define IPC_SHM_MAX_BUFS_PER_POOL 4096u
 
 /**
  * enum ipc_shm_channel_type - channel type
@@ -135,7 +135,7 @@ struct ipc_shm_remote_core {
 struct ipc_shm_cfg {
 	uintptr_t local_shm_addr;
 	uintptr_t remote_shm_addr;
-	int shm_size;
+	uint32_t shm_size;
 	int inter_core_tx_irq;
 	int inter_core_rx_irq;
 	struct ipc_shm_remote_core remote_core;
