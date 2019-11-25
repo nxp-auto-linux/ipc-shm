@@ -36,9 +36,9 @@ Follow the steps for building NXP Auto Linux BSP with Yocto:
 
 Notes:
  - Only the following machines are supported for IPCF: s32g275sim, s32r45xsim,
-   s32v234evb.
+   s32v234evb, s32g274aevb.
  - Use image fsl-image-sim for S32xx pre-silicon and fsl-image-auto for
-   S32V234 silicon.
+   S32V234 and S32G274A silicon.
 
 Building manually
 -----------------

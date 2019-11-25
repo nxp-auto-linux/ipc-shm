@@ -23,7 +23,7 @@ MODULE_VERSION(MODULE_VER);
 
 /* IPC SHM configuration defines */
 #if defined(CONFIG_SOC_S32GEN1)
-	#define LOCAL_SHM_ADDR 0x34400000
+	#define LOCAL_SHM_ADDR 0x34100000
 #elif defined(CONFIG_SOC_S32V234)
 	#define LOCAL_SHM_ADDR 0x3E900000
 #else
