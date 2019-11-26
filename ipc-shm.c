@@ -166,7 +166,6 @@ static inline struct ipc_managed_channel *get_managed_chan(int chan_id)
 	if (chan == NULL)
 		return NULL;
 
-	chan = &ipc_shm_priv_data.channels[chan_id];
 	if (chan->type != IPC_SHM_MANAGED) {
 		shm_err("Invalid channel type for this operation\n");
 		return NULL;
@@ -183,7 +182,6 @@ static inline struct ipc_unmanaged_channel *get_unmanaged_chan(int chan_id)
 	if (chan == NULL)
 		return NULL;
 
-	chan = &ipc_shm_priv_data.channels[chan_id];
 	if (chan->type != IPC_SHM_UNMANAGED) {
 		shm_err("Invalid channel type for this operation\n");
 		return NULL;
