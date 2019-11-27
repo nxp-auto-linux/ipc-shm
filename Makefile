@@ -9,19 +9,17 @@ UIO_MODULE_NAME := ipc-shm-uio
 ifneq ($(KERNELRELEASE),)
 # kbuild part of makefile
 
-obj-m := $(MODULE_NAME).o $(UIO_MODULE_NAME).o
-
 $(MODULE_NAME)-y := ipc-shm.o ipc-queue.o os/ipc-os.o
 
-$(UIO_MODULE_NAME)-y := os/ipc-uio.o
-
 ifeq ($(CONFIG_SOC_S32GEN1),y)
+obj-m := $(MODULE_NAME).o
 $(MODULE_NAME)-y += hw/ipc-hw-s32gen1.o
-$(UIO_MODULE_NAME)-y += hw/ipc-hw-s32gen1.o
 endif
 
 ifeq ($(CONFIG_SOC_S32V234),y)
+obj-m := $(MODULE_NAME).o $(UIO_MODULE_NAME).o
 $(MODULE_NAME)-y += hw/ipc-hw-s32v234.o
+$(UIO_MODULE_NAME)-y := os/ipc-uio.o
 $(UIO_MODULE_NAME)-y += hw/ipc-hw-s32v234.o
 endif
 
