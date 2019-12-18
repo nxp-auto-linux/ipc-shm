@@ -2,6 +2,8 @@
 /*
  * Copyright 2019 NXP
  */
+#ifndef IPC_UIO_H
+#define IPC_UIO_H
 
 /* IPC-UIO commands */
 
@@ -13,3 +15,5 @@
 
 /* trigger Tx inter-core interrupt */
 #define IPC_UIO_TRIGGER_TX_IRQ_CMD 2
+
+#endif /* IPC_UIO_H */
