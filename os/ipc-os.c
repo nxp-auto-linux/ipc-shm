@@ -1,6 +1,6 @@
 /* SPDX-License-Identifier: BSD-3-Clause */
 /*
- * Copyright 2018-2019 NXP
+ * Copyright 2018-2020 NXP
  */
 #include <linux/ioport.h>
 #include <linux/io.h>
@@ -107,8 +107,8 @@ int ipc_os_init(const struct ipc_shm_cfg *cfg, int (*rx_cb)(int))
 		return -EADDRINUSE;
 	}
 
-	priv.local_virt_shm = (uintptr_t)ioremap_nocache(cfg->local_shm_addr,
-						     cfg->shm_size);
+	priv.local_virt_shm = (uintptr_t)ioremap(cfg->local_shm_addr,
+						 cfg->shm_size);
 	if (!priv.local_virt_shm) {
 		err = -ENOMEM;
 		goto err_release_local_region;
@@ -123,8 +123,8 @@ int ipc_os_init(const struct ipc_shm_cfg *cfg, int (*rx_cb)(int))
 		goto err_unmap_local_shm;
 	}
 
-	priv.remote_virt_shm = (uintptr_t)ioremap_nocache(cfg->remote_shm_addr,
-						      cfg->shm_size);
+	priv.remote_virt_shm = (uintptr_t)ioremap(cfg->remote_shm_addr,
+						  cfg->shm_size);
 	if (!priv.remote_virt_shm) {
 		err = -ENOMEM;
 		goto err_release_remote_region;
@@ -224,7 +224,7 @@ void *ipc_os_map_intc(void)
 	}
 
 	/* map configuration register space */
-	return ioremap_nocache(res.start, resource_size(&res));
+	return ioremap(res.start, resource_size(&res));
 }
 
 /**
