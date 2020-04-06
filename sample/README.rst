@@ -4,7 +4,7 @@
 IPCF Shared Memory Sample Application for Linux
 ===============================================
 
-:Copyright: 2018-2019 NXP
+:Copyright: 2018-2020 NXP
 
 Overview
 ========
@@ -18,7 +18,7 @@ is controlled from console via a sysfs file (see Running the Application).
 
 Prerequisites
 =============
- - hardare platform listed in "IPCF Shared Memory Kernel Driver for Linux"
+ - EVB board for supported processors: S32V234, S32G274A and S32R45X
  - NXP Automotive Linux BSP
 
 Building the application
@@ -34,11 +34,8 @@ Building with Yocto
 Follow the steps for building NXP Auto Linux BSP with Yocto:
  - https://source.codeaurora.org/external/autobsps32/auto_yocto_bsp/tree/README?h=alb/master
 
-Notes:
- - Only the following machines are supported for IPCF: s32g275sim, s32r45xsim,
-   s32v234evb, s32g274aevb.
- - Use image fsl-image-sim for S32xx pre-silicon and fsl-image-auto for
-   S32V234 and S32G274A silicon.
+Note: use image fsl-image-auto with any of the following machines supported for IPCF:
+      s32g274aevb, s32r45xevb, s32v234evb.
 
 Building manually
 -----------------
@@ -61,8 +58,7 @@ Running the application
 1. If sample was built manually, copy ipc-shm-dev.ko and ipc-shm-sample.ko in
    rootfs
 
-2. Boot Linux: for silicon, see section "How to boot" from Auto Linux BSP user
-   manual. For pre-silicon read only the VDK related section.
+2. Boot Linux: see section "How to boot" from Auto Linux BSP user manual.
 
 3. Insert IPCF kernel modules after Linux boot::
 

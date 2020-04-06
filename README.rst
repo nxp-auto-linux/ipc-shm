@@ -4,7 +4,7 @@
 IPCF Shared Memory Kernel Driver for Linux
 ==========================================
 
-:Copyright: 2018-2019 NXP
+:Copyright: 2018-2020 NXP
 
 Overview
 ========
@@ -23,10 +23,6 @@ The source code of this Linux driver is published on `source.codeaurora.org
 
 HW platforms
 ============
-The driver includes support of the following processors:
- - S32V234 EVB board with silicon cut 2.1, maskset #1N81U
- - Synopsis VDK for S32xx presilicon (same version as for NXP Auto Linux BSP)
-
 The supported processors are listed in the sample application documentation.
 
 Configuration notes
