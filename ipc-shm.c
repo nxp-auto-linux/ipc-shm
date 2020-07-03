@@ -1,6 +1,6 @@
 /* SPDX-License-Identifier: BSD-3-Clause */
 /*
- * Copyright 2018-2019 NXP
+ * Copyright 2018-2020 NXP
  */
 #include "ipc-os.h"
 #include "ipc-hw.h"
@@ -10,6 +10,10 @@
 #ifndef max
 #define max(x, y) ((x) > (y) ? (x) : (y))
 #endif
+
+/* magic number to indicate the driver is initialized */
+#define IPC_SHM_STATE_READY 0x4950434646435049ULL
+#define IPC_SHM_STATE_CLEAR 0u
 
 /**
  * struct ipc_shm_bd - buffer descriptor (store buffer location and data size)
@@ -126,15 +130,28 @@ struct ipc_shm_channel {
 };
 
 /**
+ * struct ipc_shm_global - ipc shm global data shared with remote
+ * @state:		state to indicate whether local is initialized
+ *
+ * Global data is located at beginning of local/remote shared memory so the size
+ * of this struct should chosen so that memory alignment is preserved.
+ */
+struct ipc_shm_global {
+	uint64_t state;
+};
+
+/**
  * struct ipc_shm_priv - ipc shm private data
  * @shm_size:		local/remote shared memory size
  * @num_channels:	number of shared memory channels
  * @channels:		ipc channels private data
+ * @global:		local global data shared with remote
  */
 struct ipc_shm_priv {
 	uint32_t shm_size;
 	int num_channels;
 	struct ipc_shm_channel channels[IPC_SHM_MAX_CHANNELS];
+	struct ipc_shm_global *global;
 };
 
 /* ipc shm private data */
@@ -533,7 +550,9 @@ int ipc_shm_init(const struct ipc_shm_cfg *cfg)
 {
 	uintptr_t local_chan_shm;
 	uintptr_t remote_chan_shm;
+	uintptr_t local_shm;
 	uint32_t chan_size;
+	size_t chan_offset;
 	int err, i;
 
 	if (cfg == NULL) {
@@ -568,9 +587,14 @@ int ipc_shm_init(const struct ipc_shm_cfg *cfg)
 	if (err)
 		goto err_free_hw;
 
+	/* global data stored at beginning of local shared memory */
+	local_shm = ipc_os_get_local_shm();
+	ipc_shm_priv_data.global = (struct ipc_shm_global *)local_shm;
+
 	/* init channels */
-	local_chan_shm = ipc_os_get_local_shm();
-	remote_chan_shm = ipc_os_get_remote_shm();
+	chan_offset = sizeof(struct ipc_shm_global);
+	local_chan_shm = local_shm + (uintptr_t)chan_offset;
+	remote_chan_shm = ipc_os_get_remote_shm() + (uintptr_t)chan_offset;
 	shm_dbg("initializing channels...\n");
 	for (i = 0; i < ipc_shm_priv_data.num_channels; i++) {
 		err = ipc_shm_channel_init(i, local_chan_shm, remote_chan_shm,
@@ -587,7 +611,9 @@ int ipc_shm_init(const struct ipc_shm_cfg *cfg)
 	/* enable interrupt notifications */
 	ipc_hw_irq_enable();
 
+	ipc_shm_priv_data.global->state = IPC_SHM_STATE_READY;
 	shm_dbg("ipc shm initialized\n");
+
 	return 0;
 
 err_free_os:
@@ -599,6 +625,9 @@ err_free_hw:
 
 void ipc_shm_free(void)
 {
+	/* reset state */
+	ipc_shm_priv_data.global->state = IPC_SHM_STATE_CLEAR;
+
 	/* disable hardirq */
 	ipc_hw_irq_disable();
 
@@ -772,6 +801,19 @@ int ipc_shm_unmanaged_tx(int chan_id)
 
 	/* notify remote that data is available */
 	ipc_hw_irq_notify();
+
+	return 0;
+}
+
+int ipc_shm_is_remote_ready(void)
+{
+	struct ipc_shm_global *remote_global;
+
+	/* global data of remote at beginning of remote shared memory */
+	remote_global = (struct ipc_shm_global *)ipc_os_get_remote_shm();
+
+	if (remote_global->state != IPC_SHM_STATE_READY)
+		return -EAGAIN;
 
 	return 0;
 }

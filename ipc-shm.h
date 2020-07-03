@@ -1,6 +1,6 @@
 /* SPDX-License-Identifier: BSD-3-Clause */
 /*
- * Copyright 2018-2019 NXP
+ * Copyright 2018-2020 NXP
  */
 #ifndef IPC_SHM_H
 #define IPC_SHM_H
@@ -221,5 +221,15 @@ void *ipc_shm_unmanaged_acquire(int chan_id);
  * Return: 0 on success, error code otherwise
  */
 int ipc_shm_unmanaged_tx(int chan_id);
+
+/**
+ * ipc_shm_is_remote_ready() - check whether remote is initialized
+ *
+ * Function used to check if the remote is initialized and ready to receive
+ * messages. It should be invoked at least before the first transmit operation.
+ *
+ * Return: 0 if remote is initialized, error code otherwise
+ */
+int ipc_shm_is_remote_ready(void);
 
 #endif /* IPC_SHM_H */

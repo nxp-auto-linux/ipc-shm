@@ -255,6 +255,7 @@ EXPORT_SYMBOL(ipc_shm_release_buf);
 EXPORT_SYMBOL(ipc_shm_tx);
 EXPORT_SYMBOL(ipc_shm_unmanaged_acquire);
 EXPORT_SYMBOL(ipc_shm_unmanaged_tx);
+EXPORT_SYMBOL(ipc_shm_is_remote_ready);
 
 module_init(shm_mod_init);
 module_exit(shm_mod_exit);
