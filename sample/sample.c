@@ -140,6 +140,10 @@ static int init_ipc_shm(void)
 		.shm_size = IPC_SHM_SIZE,
 		.inter_core_tx_irq = INTER_CORE_TX_IRQ,
 		.inter_core_rx_irq = INTER_CORE_RX_IRQ,
+		.local_core = {
+			.type = IPC_CORE_DEFAULT,
+			.index = 0,
+		},
 		.remote_core = {
 			.type = IPC_CORE_DEFAULT,
 			.index = 0,

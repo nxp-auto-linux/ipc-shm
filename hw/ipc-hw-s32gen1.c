@@ -21,6 +21,7 @@ enum s32gen1_processor_idx {
 
 /* S32gen1 Specific Definitions */
 #define DEFAULT_REMOTE_CORE    M7_0
+#define DEFAULT_LOCAL_CORE     A53_0  /* default core targeted by remote */
 #define IRQ_ID_MIN             0
 #define IRQ_ID_MAX             2
 
@@ -251,6 +252,13 @@ struct mscm_regs {
 #define MSCM_IRCPnIGRn_INT_EN    0x1uL /* Interrupt Enable */
 
 #define MSCM_IRCPCFG_LOCK    0x80000000uL /* Interrupt Router Config Lock Bit */
+#define MSCM_IRCPCFG_CP0_TR  0x01uL /* Processor 0 Trusted core */
+#define MSCM_IRCPCFG_CP1_TR  0x02uL /* Processor 1 Trusted core */
+#define MSCM_IRCPCFG_CP2_TR  0x04uL /* Processor 2 Trusted core */
+#define MSCM_IRCPCFG_CP3_TR  0x08uL /* Processor 3 Trusted core */
+#define MSCM_IRCPCFG_CP4_TR  0x10uL /* Processor 4 Trusted core */
+#define MSCM_IRCPCFG_CP5_TR  0x20uL /* Processor 5 Trusted core */
+#define MSCM_IRCPCFG_CP6_TR  0x40uL /* Processor 6 Trusted core */
 
 #define MSCM_IRSPRCn_LOCK    0x8000u /* Interrupt Routing Control Lock Bit */
 
@@ -267,13 +275,15 @@ struct mscm_regs {
  *
  * @mscm_tx_irq:    MSCM inter-core interrupt reserved for shm driver tx
  * @mscm_rx_irq:    MSCM inter-core interrupt reserved for shm driver rx
- * @remote_core:    remote core to trigger the interrupt on
+ * @remote_core:    index of remote core to trigger the interrupt on
+ * @local_core:     index of the local core targeted by remote
  * @mscm:           pointer to memory-mapped hardware peripheral MSCM
  */
 static struct ipc_hw_priv {
 	int mscm_tx_irq;
 	int mscm_rx_irq;
 	int remote_core;
+	int local_core;
 	struct mscm_regs *mscm;
 } priv;
 
@@ -296,11 +306,12 @@ int ipc_hw_get_rx_irq(void)
  * desired in transmit notification path. inter_core_tx_irq and
  * inter_core_rx_irq are not allowed to have the same value to avoid possible
  * race conditions when updating the value of the IRSPRCn register.
- * If the value IPC_CORE_DEFAULT is passed as remote_core, the default value
- * defined for the selected platform will be used instead.
+ * If the value IPC_CORE_DEFAULT is passed as local_core or remote_core, the
+ * default value defined for the selected platform will be used instead.
  *
  * Return: 0 for success, -EINVAL for either inter core interrupt invalid or
- *         invalid remote core, -ENOMEM for failing to map MSCM address space
+ *         invalid remote core, -ENOMEM for failing to map MSCM address space,
+ *         -EACCES for failing to access MSCM registers
  */
 int ipc_hw_init(const struct ipc_shm_cfg *cfg)
 {
@@ -308,7 +319,7 @@ int ipc_hw_init(const struct ipc_shm_cfg *cfg)
 	void *addr = ipc_os_map_intc();
 
 	return _ipc_hw_init(cfg->inter_core_tx_irq, cfg->inter_core_rx_irq,
-			    &cfg->remote_core, addr);
+			    &cfg->remote_core, &cfg->local_core, addr);
 }
 
 /**
@@ -317,15 +328,43 @@ int ipc_hw_init(const struct ipc_shm_cfg *cfg)
  * Low level variant of ipc_hw_init() used by UIO device implementation.
  */
 int _ipc_hw_init(int tx_irq, int rx_irq,
-		 const struct ipc_shm_remote_core *remote_core,
-		 void *mscm_addr)
+		 const struct ipc_shm_core *remote_core,
+		 const struct ipc_shm_core *local_core, void *mscm_addr)
 {
 	int remote_core_idx;
+	int local_core_idx;
+	uint32_t ircpcfg_mask;
 
 	if (!mscm_addr)
 		return -EINVAL;
 
 	priv.mscm = (struct mscm_regs *)mscm_addr;
+
+	switch (local_core->type) {
+	case IPC_CORE_A53:
+		switch (local_core->index) {
+		case 0:
+			local_core_idx = A53_0;
+			break;
+		case 1:
+			local_core_idx = A53_1;
+			break;
+		case 2:
+			local_core_idx = A53_2;
+			break;
+		case 3:
+			local_core_idx = A53_3;
+			break;
+		default:
+			return -EINVAL;
+		}
+		break;
+	case IPC_CORE_DEFAULT:
+		local_core_idx = DEFAULT_LOCAL_CORE;
+		break;
+	default:
+		return -EINVAL;
+	}
 
 	switch (remote_core->type) {
 	case IPC_CORE_A53:
@@ -372,19 +411,33 @@ int _ipc_hw_init(int tx_irq, int rx_irq,
 			&& ((tx_irq < IRQ_ID_MIN) || (tx_irq > IRQ_ID_MAX)))
 		|| (rx_irq < IRQ_ID_MIN || rx_irq > IRQ_ID_MAX)
 		|| (rx_irq == tx_irq)
-		|| (remote_core_idx == readl_relaxed(&priv.mscm->cpxnum))) {
+		|| (remote_core_idx == readl_relaxed(&priv.mscm->cpxnum))
+		|| (remote_core_idx == local_core_idx)) {
 		return -EINVAL;
 	}
 
 	priv.mscm_tx_irq = tx_irq;
 	priv.mscm_rx_irq = rx_irq;
 	priv.remote_core = remote_core_idx;
+	priv.local_core = local_core_idx;
 
 	/*
 	 * disable rx irq source to avoid receiving an interrupt from remote
 	 * before any of the buffer rings are initialized
 	 */
 	ipc_hw_irq_disable();
+
+	/*
+	 * mark all A53 cores as trusted so thay they can read full contents
+	 * of IRCPnISRx registers
+	 */
+	ircpcfg_mask = readl_relaxed(&priv.mscm->ircpcfg);
+	if (ircpcfg_mask & MSCM_IRCPCFG_LOCK)
+		return -EACCES;
+
+	writel_relaxed(ircpcfg_mask | MSCM_IRCPCFG_CP0_TR | MSCM_IRCPCFG_CP1_TR
+			| MSCM_IRCPCFG_CP2_TR | MSCM_IRCPCFG_CP3_TR,
+			&priv.mscm->ircpcfg);
 
 	return 0;
 }
@@ -452,12 +505,7 @@ void ipc_hw_irq_notify(void)
  */
 void ipc_hw_irq_clear(void)
 {
-	int current_cpu;
-
-	/* get current processor id */
-	current_cpu = readl_relaxed(&priv.mscm->cpxnum);
-
-	/* clear MSCM core-to-core directed interrupt */
+	/* clear MSCM core-to-core directed interrupt on the targeted core */
 	writel_relaxed(MSCM_IRCPnISRn_CPx_INT,
-		&priv.mscm->ircpnirx[current_cpu][priv.mscm_rx_irq].isr);
+		&priv.mscm->ircpnirx[priv.local_core][priv.mscm_rx_irq].isr);
 }

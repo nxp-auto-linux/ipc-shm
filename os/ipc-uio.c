@@ -18,16 +18,20 @@
 /* module parameters section */
 static int inter_core_rx_irq = -1;
 static int inter_core_tx_irq = -1;
+static int remote_core_type = -1;
 static int remote_core_index = -1;
+static int local_core_type = -1;
+static int local_core_index = -1;
 module_param(inter_core_rx_irq, int, 0);
 module_param(inter_core_tx_irq, int, 0);
+module_param(remote_core_type, int, 0);
 module_param(remote_core_index, int, 0);
+module_param(local_core_type, int, 0);
+module_param(local_core_index, int, 0);
 
 /**
  * struct ipc_uio_priv - IPCF SHM UIO device data
  * @dev:	Linux device
- * @irq:	Linux IRQ number
- * @mscm:	MSCM register configuration space
  * @refcnt:	reference counter to allow a single UIO device open at a time
  * @info:	UIO device capabilities
  */
@@ -90,19 +94,28 @@ static irqreturn_t ipc_shm_uio_handler(int irq, struct uio_info *dev_info)
 static int ipc_shm_uio_probe(struct platform_device *pdev)
 {
 	struct ipc_uio_priv *priv;
-	struct ipc_shm_remote_core remote_core = {IPC_CORE_DEFAULT, 0};
+	struct ipc_shm_core remote_core = {IPC_CORE_DEFAULT, 0};
+	struct ipc_shm_core local_core = {IPC_CORE_DEFAULT, 0};
 	struct resource *res;
 	void __iomem *mscm;
 	int irq, err;
 
 	if ((inter_core_tx_irq < 0 && inter_core_tx_irq != IPC_IRQ_NONE)
-		|| inter_core_rx_irq < 0 || remote_core_index < 0) {
-		dev_err(&pdev->dev, "Inter-core interrupt module parameters not specified!\n");
+		|| (inter_core_rx_irq < 0)
+		|| (remote_core_type < 0) || (local_core_type < 0)
+		|| ((remote_core_type != IPC_CORE_DEFAULT)
+			&& (remote_core_index < 0))
+		|| ((local_core_type != IPC_CORE_DEFAULT)
+			&& (local_core_index < 0))) {
+		dev_err(&pdev->dev, "Module parameters not specified!\n");
 		return -EINVAL;
 	}
 	dev_dbg(&pdev->dev, "inter_core_rx_irq = %d\n", inter_core_rx_irq);
 	dev_dbg(&pdev->dev, "inter_core_tx_irq = %d\n", inter_core_tx_irq);
+	dev_dbg(&pdev->dev, "remote_core_type = %d\n", remote_core_type);
 	dev_dbg(&pdev->dev, "remote_core_index = %d\n", remote_core_index);
+	dev_dbg(&pdev->dev, "local_core_index = %d\n", local_core_index);
+	dev_dbg(&pdev->dev, "local_core_type = %d\n", local_core_type);
 
 	priv = devm_kzalloc(&pdev->dev, sizeof(*priv), GFP_KERNEL);
 	if (IS_ERR_OR_NULL(priv))
@@ -121,9 +134,12 @@ static int ipc_shm_uio_probe(struct platform_device *pdev)
 	}
 
 	/* init MSCM HW for MSI inter-core interrupts */
+	remote_core.type = (enum ipc_shm_core_type)remote_core_type;
 	remote_core.index = remote_core_index;
+	local_core.type = (enum ipc_shm_core_type)local_core_type;
+	local_core.index = local_core_index;
 	err = _ipc_hw_init(inter_core_tx_irq, inter_core_rx_irq,
-			   &remote_core, mscm);
+			   &remote_core, &local_core, mscm);
 	if (err)
 		return err;
 

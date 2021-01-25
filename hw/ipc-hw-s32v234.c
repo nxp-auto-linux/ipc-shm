@@ -159,7 +159,8 @@ int ipc_hw_get_rx_irq(void)
  * inter_core_rx_irq are not allowed to have the same value to avoid possible
  * race conditions when updating the value of the IRSPRCn register.
  * If the value IPC_CORE_DEFAULT is passed as remote_core, the default value
- * defined for the selected platform will be used instead.
+ * defined for the selected platform will be used instead. local_core value has
+ * no effect for this platform.
  *
  * Return: 0 for success, -EINVAL for either inter core interrupt invalid or
  *         invalid remote core, -ENOMEM for failing to map MSCM address space
@@ -170,7 +171,7 @@ int ipc_hw_init(const struct ipc_shm_cfg *cfg)
 	void *addr = ipc_os_map_intc();
 
 	return _ipc_hw_init(cfg->inter_core_tx_irq, cfg->inter_core_rx_irq,
-			    &cfg->remote_core, addr);
+			    &cfg->remote_core, &cfg->local_core, addr);
 }
 
 /**
@@ -179,9 +180,12 @@ int ipc_hw_init(const struct ipc_shm_cfg *cfg)
  * Low level variant of ipc_hw_init() used by UIO device implementation.
  */
 int _ipc_hw_init(int tx_irq, int rx_irq,
-		 const struct ipc_shm_remote_core *remote_core,
+		 const struct ipc_shm_core *remote_core,
+		 const struct ipc_shm_core *local_core,
 		 void *mscm_addr)
 {
+	(void)local_core; /* unused */
+
 	if (!mscm_addr)
 		return -EINVAL;
 

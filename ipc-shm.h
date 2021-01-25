@@ -109,14 +109,14 @@ struct ipc_shm_channel_cfg {
 };
 
 /**
- * struct ipc_shm_remote_core - remote core type and index
- * @type:	remote core type from &enum ipc_shm_core_type
- * @index:	remote core number
+ * struct ipc_shm_core - core type and index
+ * @type:	core type from &enum ipc_shm_core_type
+ * @index:	core number
  *
  * Core type can be IPC_CORE_DEFAULT, in which case core index doesn't matter
- * because it's chosen automatically be the driver.
+ * because it's chosen automatically by the driver.
  */
-struct ipc_shm_remote_core {
+struct ipc_shm_core {
 	enum ipc_shm_core_type type;
 	int index;
 };
@@ -128,12 +128,15 @@ struct ipc_shm_remote_core {
  * @shm_size:		local/remote shared memory size
  * @inter_core_tx_irq:	inter-core interrupt reserved for shm driver Tx
  * @inter_core_rx_irq:	inter-core interrupt reserved for shm driver Rx
+ * @local_core:		local core targeted by remote core interrupt
  * @remote_core:	remote core to trigger the interrupt on
  * @num_channels:	number of shared memory channels
  * @channels:		IPC channels' parameters array
  *
  * The TX and RX interrupts used must be different. For ARM platforms, a default
- * value can be assigned to the remote core using IPC_CORE_DEFAULT.
+ * value can be assigned to the local and remote core using IPC_CORE_DEFAULT.
+ * Local core is only used for platforms on which Linux may be running on
+ * multiple cores, and is ignored for RTOS and baremetal implementations.
  *
  * Local and remote channel and buffer pool configurations must be symmetric.
  */
@@ -143,7 +146,8 @@ struct ipc_shm_cfg {
 	uint32_t shm_size;
 	int inter_core_tx_irq;
 	int inter_core_rx_irq;
-	struct ipc_shm_remote_core remote_core;
+	struct ipc_shm_core local_core;
+	struct ipc_shm_core remote_core;
 	int num_channels;
 	struct ipc_shm_channel_cfg *channels;
 };
