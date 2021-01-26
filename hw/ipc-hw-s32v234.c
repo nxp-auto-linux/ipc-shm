@@ -8,9 +8,6 @@
 #include "ipc-os.h"
 #include "ipc-hw.h"
 
-/* Hardware IP Block Base Addresses - TODO: get them from device tree */
-#define MSCM_BASE    0x40081000ul /* Miscellaneous System Control Module */
-
 /* S32V234 Processor IDs */
 enum s32v234_processor_idx {
 	M4 = 0, /* ARM Cortex-M4 core */
@@ -19,6 +16,15 @@ enum s32v234_processor_idx {
 
 /* S32V234 Specific Definitions */
 #define DEFAULT_REMOTE_CORE    M4
+#define IRQ_ID_MIN             0
+#define IRQ_ID_MAX             3
+
+/* MSCM registers count for S32V234 */
+#define MSCM_CPnCFG_COUNT      4
+#define MSCM_OCMDR_COUNT       4
+#define MSCM_IRSPRC_COUNT      175
+#define MSCM_IPCE_COUNT        4
+#define MSCM_IPCIE_COUNT       4
 
 /**
  * struct mscm_regs - MSCM Peripheral Register Structure
@@ -62,19 +68,19 @@ struct mscm_regs {
 	volatile const uint32_t cpxnum;
 	volatile const uint32_t cpxmaster;
 	volatile const uint32_t cpxcount;
-	volatile const uint32_t cpxcfg[4];
+	volatile const uint32_t cpxcfg[MSCM_CPnCFG_COUNT];
 	volatile const uint32_t cp0type;
 	volatile const uint32_t cp0num;
 	volatile const uint32_t cp0master;
 	volatile const uint32_t cp0count;
-	volatile const uint32_t cp0cfg[4];
+	volatile const uint32_t cp0cfg[MSCM_CPnCFG_COUNT];
 	volatile const uint32_t cp1type;
 	volatile const uint32_t cp1num;
 	volatile const uint32_t cp1master;
 	volatile const uint32_t cp1count;
-	volatile const uint32_t cp1cfg[4];
+	volatile const uint32_t cp1cfg[MSCM_CPnCFG_COUNT];
 	uint8_t reserved00[928]; /* 0x3A8 */
-	volatile uint32_t ocmdr[4];
+	volatile uint32_t ocmdr[MSCM_OCMDR_COUNT];
 	uint8_t reserved01[112]; /* 0x70 */
 	volatile uint32_t tcmdr0;
 	uint8_t reserved02[124]; /* 0x7C */
@@ -85,24 +91,24 @@ struct mscm_regs {
 	uint8_t reserved04[24]; /* 0x18 */
 	volatile uint32_t ircpgir;
 	uint8_t reserved05[92]; /* 0x5C */
-	volatile uint16_t irsprc[175];
+	volatile uint16_t irsprc[MSCM_IRSPRC_COUNT];
 	uint8_t reserved06[800]; /* 0x320 */
 	volatile uint32_t ipcge;
 	uint8_t reserved07[12]; /* 0xC */
-	volatile uint32_t ipce[4];
+	volatile uint32_t ipce[MSCM_IPCE_COUNT];
 	uint8_t reserved08[32]; /* 0x20 */
 	volatile uint32_t ipcgie;
 	uint8_t reserved09[12]; /* 0xC */
-	volatile uint32_t ipcie[4];
+	volatile uint32_t ipcie[MSCM_IPCIE_COUNT];
 };
 
 /* MSCM Hardware Register Bit Fields Definitions */
 
 #define MSCM_IRCPxIR_INT(n)    (1u << n) /* Interrupt Router CPx Interrupt n */
 
-#define MSCM_IRCPGIR_TLF_MASK      0x03000000ul /* Target List Field */
-#define MSCM_IRCPGIR_CPUTL_MASK    0x000F0000ul /* CPU Target List */
-#define MSCM_IRCPGIR_INTID_MASK    0x00000003ul /* Interrupt MSCM ID */
+#define MSCM_IRCPGIR_TLF_MASK      0x03000000uL /* Target List Field */
+#define MSCM_IRCPGIR_CPUTL_MASK    0x000F0000uL /* CPU Target List */
+#define MSCM_IRCPGIR_INTID_MASK    0x00000003uL /* Interrupt MSCM ID */
 
 #define MSCM_IRCPGIR_TLF(n)      ((n << 24u) & MSCM_IRCPGIR_TLF_MASK)
 #define MSCM_IRCPGIR_CPUTL(n)    (((1u << n) << 16u) & MSCM_IRCPGIR_CPUTL_MASK)
@@ -187,16 +193,16 @@ int _ipc_hw_init(int tx_irq, int rx_irq,
 		return -EINVAL;
 	}
 
-	priv.remote_core = DEFAULT_REMOTE_CORE;
-
-	if (((tx_irq != IPC_IRQ_NONE) && ((tx_irq < 0) || (tx_irq > 3)))
-		|| (rx_irq < 0) || (rx_irq > 3)
+	if (((tx_irq != IPC_IRQ_NONE)
+			&& ((tx_irq < IRQ_ID_MIN) || (tx_irq > IRQ_ID_MAX)))
+		|| (rx_irq < IRQ_ID_MIN) || (rx_irq > IRQ_ID_MAX)
 		|| (rx_irq == tx_irq)) {
 		return -EINVAL;
 	}
 
 	priv.mscm_tx_irq = tx_irq;
 	priv.mscm_rx_irq = rx_irq;
+	priv.remote_core = DEFAULT_REMOTE_CORE;
 
 	/*
 	 * disable rx irq source to avoid receiving an interrupt from remote
