@@ -1,6 +1,6 @@
 /* SPDX-License-Identifier: BSD-3-Clause */
 /*
- * Copyright 2019 NXP
+ * Copyright 2019,2021 NXP
  */
 #include <linux/module.h>
 #include <linux/platform_device.h>
@@ -95,12 +95,12 @@ static int ipc_shm_uio_probe(struct platform_device *pdev)
 	void __iomem *mscm;
 	int irq, err;
 
-	if (inter_core_rx_irq < 0 || inter_core_tx_irq < 0 ||
-		remote_core_index < 0) {
+	if ((inter_core_tx_irq < 0 && inter_core_tx_irq != IPC_IRQ_NONE)
+		|| inter_core_rx_irq < 0 || remote_core_index < 0) {
 		dev_err(&pdev->dev, "Inter-core interrupt module parameters not specified!\n");
 		return -EINVAL;
 	}
-	dev_dbg(&pdev->dev, "inter_core_tx_irq = %d\n", inter_core_rx_irq);
+	dev_dbg(&pdev->dev, "inter_core_rx_irq = %d\n", inter_core_rx_irq);
 	dev_dbg(&pdev->dev, "inter_core_tx_irq = %d\n", inter_core_tx_irq);
 	dev_dbg(&pdev->dev, "remote_core_index = %d\n", remote_core_index);
 

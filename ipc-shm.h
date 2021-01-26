@@ -1,6 +1,6 @@
 /* SPDX-License-Identifier: BSD-3-Clause */
 /*
- * Copyright 2018-2020 NXP
+ * Copyright 2018-2021 NXP
  */
 #ifndef IPC_SHM_H
 #define IPC_SHM_H
@@ -19,6 +19,11 @@
  * Maximum number of buffers per pool
  */
 #define IPC_SHM_MAX_BUFS_PER_POOL 4096u
+
+/*
+ * Used when polling is desired on either transmit or receive path
+ */
+#define IPC_IRQ_NONE -1
 
 /**
  * enum ipc_shm_channel_type - channel type
@@ -231,5 +236,15 @@ int ipc_shm_unmanaged_tx(int chan_id);
  * Return: 0 if remote is initialized, error code otherwise
  */
 int ipc_shm_is_remote_ready(void);
+
+/**
+ * ipc_shm_poll_channels() - poll the channels for available messages to process
+ *
+ * This function handles all channels using a fair handling algorithm: all
+ * channels are treated equally and no channel is starving.
+ *
+ * Return: number of messages processed, error code otherwise
+ */
+int ipc_shm_poll_channels(void);
 
 #endif /* IPC_SHM_H */

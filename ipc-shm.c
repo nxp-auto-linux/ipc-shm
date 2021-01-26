@@ -1,6 +1,6 @@
 /* SPDX-License-Identifier: BSD-3-Clause */
 /*
- * Copyright 2018-2020 NXP
+ * Copyright 2018-2021 NXP
  */
 #include "ipc-os.h"
 #include "ipc-hw.h"
@@ -816,4 +816,9 @@ int ipc_shm_is_remote_ready(void)
 		return -EAGAIN;
 
 	return 0;
+}
+
+int ipc_shm_poll_channels(void)
+{
+	return ipc_os_poll_channels();
 }

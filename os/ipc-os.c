@@ -1,6 +1,6 @@
 /* SPDX-License-Identifier: BSD-3-Clause */
 /*
- * Copyright 2018-2020 NXP
+ * Copyright 2018-2021 NXP
  */
 #include <linux/ioport.h>
 #include <linux/io.h>
@@ -235,6 +235,18 @@ void ipc_os_unmap_intc(void *addr)
 	iounmap(addr);
 }
 
+/**
+ * ipc_os_poll_channels() - invoke rx callback configured at initialization
+ *
+ * Not implemented for Linux.
+ *
+ * Return: work done, error code otherwise
+ */
+int ipc_os_poll_channels(void)
+{
+	return -EOPNOTSUPP;
+}
+
 /* module init function */
 static int __init shm_mod_init(void)
 {
@@ -256,6 +268,7 @@ EXPORT_SYMBOL(ipc_shm_tx);
 EXPORT_SYMBOL(ipc_shm_unmanaged_acquire);
 EXPORT_SYMBOL(ipc_shm_unmanaged_tx);
 EXPORT_SYMBOL(ipc_shm_is_remote_ready);
+EXPORT_SYMBOL(ipc_shm_poll_channels);
 
 module_init(shm_mod_init);
 module_exit(shm_mod_exit);

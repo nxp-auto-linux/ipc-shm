@@ -1,6 +1,6 @@
 /* SPDX-License-Identifier: BSD-3-Clause */
 /*
- * Copyright 2018-2019 NXP
+ * Copyright 2018-2019,2021 NXP
  */
 #include <linux/io.h>
 
@@ -148,10 +148,12 @@ int ipc_hw_get_rx_irq(void)
  *
  * @cfg:    configuration parameters
  *
- * inter_core_tx_irq and inter_core_rx_irq are not allowed to have the same
- * value to avoid possible race conditions when updating the value of the
- * IRSPRCn register. If the value IPC_CORE_DEFAULT is passed as remote_core,
- * the default value defined for the selected platform will be used instead.
+ * inter_core_tx_irq can be disabled by passing IPC_IRQ_NONE, if polling is
+ * desired in transmit notification path. inter_core_tx_irq and
+ * inter_core_rx_irq are not allowed to have the same value to avoid possible
+ * race conditions when updating the value of the IRSPRCn register.
+ * If the value IPC_CORE_DEFAULT is passed as remote_core, the default value
+ * defined for the selected platform will be used instead.
  *
  * Return: 0 for success, -EINVAL for either inter core interrupt invalid or
  *         invalid remote core, -ENOMEM for failing to map MSCM address space
@@ -187,9 +189,9 @@ int _ipc_hw_init(int tx_irq, int rx_irq,
 
 	priv.remote_core = DEFAULT_REMOTE_CORE;
 
-	if (tx_irq < 0 || tx_irq > 3
-		|| rx_irq < 0 || rx_irq > 3
-		|| rx_irq == tx_irq) {
+	if (((tx_irq != IPC_IRQ_NONE) && ((tx_irq < 0) || (tx_irq > 3)))
+		|| (rx_irq < 0) || (rx_irq > 3)
+		|| (rx_irq == tx_irq)) {
 		return -EINVAL;
 	}
 
@@ -247,6 +249,9 @@ void ipc_hw_irq_disable(void)
  */
 void ipc_hw_irq_notify(void)
 {
+	if (priv.mscm_tx_irq == IPC_IRQ_NONE)
+		return;
+
 	/* trigger MSCM core-to-core directed interrupt */
 	writel_relaxed(MSCM_IRCPGIR_TLF(MSCM_IRCPGIR_TLF_CPUTL) |
 			MSCM_IRCPGIR_CPUTL(priv.remote_core) |

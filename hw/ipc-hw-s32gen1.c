@@ -1,6 +1,6 @@
 /* SPDX-License-Identifier: BSD-3-Clause */
 /*
- * Copyright 2018-2019 NXP
+ * Copyright 2018-2019,2021 NXP
  */
 #include <linux/io.h>
 
@@ -339,10 +339,12 @@ int ipc_hw_get_rx_irq(void)
  *
  * @cfg:    configuration parameters
  *
- * inter_core_tx_irq and inter_core_rx_irq are not allowed to have the same
- * value to avoid possible race conditions when updating the value of the
- * IRSPRCn register. If the value IPC_CORE_DEFAULT is passed as remote_core,
- * the default value defined for the selected platform will be used instead.
+ * inter_core_tx_irq can be disabled by passing IPC_IRQ_NONE, if polling is
+ * desired in transmit notification path. inter_core_tx_irq and
+ * inter_core_rx_irq are not allowed to have the same value to avoid possible
+ * race conditions when updating the value of the IRSPRCn register.
+ * If the value IPC_CORE_DEFAULT is passed as remote_core, the default value
+ * defined for the selected platform will be used instead.
  *
  * Return: 0 for success, -EINVAL for either inter core interrupt invalid or
  *         invalid remote core, -ENOMEM for failing to map MSCM address space
@@ -414,10 +416,11 @@ int _ipc_hw_init(int inter_core_tx_irq, int inter_core_rx_irq,
 	priv.mscm_tx_irq = inter_core_tx_irq;
 	priv.mscm_rx_irq = inter_core_rx_irq;
 
-	if (priv.mscm_tx_irq < 0 || priv.mscm_tx_irq > 2
-		|| priv.mscm_rx_irq < 0 || priv.mscm_rx_irq > 2
-		|| priv.mscm_rx_irq == priv.mscm_tx_irq
-		|| priv.remote_core == readl_relaxed(&priv.mscm->cpxnum)) {
+	if (((priv.mscm_tx_irq != IPC_IRQ_NONE)
+		&& ((priv.mscm_tx_irq < 0) || (priv.mscm_tx_irq > 2)))
+	    || (priv.mscm_rx_irq < 0 || priv.mscm_rx_irq > 2)
+	    || (priv.mscm_rx_irq == priv.mscm_tx_irq)
+	    || (priv.remote_core == readl_relaxed(&priv.mscm->cpxnum))) {
 		return -EINVAL;
 	}
 
@@ -480,6 +483,9 @@ void ipc_hw_irq_disable(void)
  */
 void ipc_hw_irq_notify(void)
 {
+	if (priv.mscm_tx_irq == IPC_IRQ_NONE)
+		return;
+
 	/* trigger MSCM core-to-core directed interrupt */
 	switch (priv.remote_core) {
 	case A53_0:
