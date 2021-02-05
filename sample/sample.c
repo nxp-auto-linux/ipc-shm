@@ -1,6 +1,6 @@
 /* SPDX-License-Identifier: BSD-3-Clause */
 /*
- * Copyright 2018-2019 NXP
+ * Copyright 2018-2019,2021 NXP
  */
 #include <linux/module.h>
 #include <linux/kernel.h>
@@ -31,8 +31,14 @@ MODULE_VERSION(MODULE_VER);
 #endif
 #define IPC_SHM_SIZE 0x100000 /* 1M local shm, 1M remote shm */
 #define REMOTE_SHM_ADDR (LOCAL_SHM_ADDR + IPC_SHM_SIZE)
+
+#ifdef POLLING
+#define INTER_CORE_TX_IRQ IPC_IRQ_NONE
+#else
 #define INTER_CORE_TX_IRQ 2u
+#endif /* POLLING */
 #define INTER_CORE_RX_IRQ 1u
+
 #define S_BUF_LEN 16
 #define M_BUF_LEN 256
 #define L_BUF_LEN 4096

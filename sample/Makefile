@@ -1,6 +1,6 @@
 # SPDX-License-Identifier:	BSD-3-Clause
 #
-# Copyright 2018 NXP Semiconductors
+# Copyright 2018,2021 NXP
 #
 
 MODULE_NAME := ipc-shm-sample
@@ -10,6 +10,11 @@ ifneq ($(KERNELRELEASE),)
 
 obj-m := $(MODULE_NAME).o
 $(MODULE_NAME)-y := sample.o
+
+polling ?= no
+ifeq ($(polling),yes)
+ccflags-y += -DPOLLING
+endif
 
 # Add here cc flags (e.g. header lookup paths, defines, etc)
 ccflags-y +=
@@ -29,6 +34,9 @@ EXTRA_SYMBOLS=${IPC_SHM_DEV_PATH}/Module.symvers
 # KERNELDIR    : Linux kernel source code location
 # INSTALL_DIR  : location of the module installation
 # CROSS_COMPILE: cross compiler path and prefix
+# Optional parameters:
+# polling      : set yo 'yes' to disable tx interrupt if
+#                remote sample application use polling
 
 modules:
 	$(MAKE) -C $(IPC_SHM_DEV_PATH) KERNELDIR=$(KERNELDIR) ARCH=$(ARCH) CROSS_COMPILE=$(CROSS_COMPILE) $@
