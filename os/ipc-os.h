@@ -21,12 +21,13 @@
 struct ipc_shm_cfg;
 
 /* function declarations */
-int ipc_os_init(const struct ipc_shm_cfg *cfg, int (*rx_cb)(int));
-void ipc_os_free(void);
-uintptr_t ipc_os_get_local_shm(void);
-uintptr_t ipc_os_get_remote_shm(void);
+int ipc_os_init(const uint8_t instance, const struct ipc_shm_cfg *cfg,
+		int (*rx_cb)(const uint8_t, int));
+void ipc_os_free(const uint8_t instance);
+uintptr_t ipc_os_get_local_shm(const uint8_t instance);
+uintptr_t ipc_os_get_remote_shm(const uint8_t instance);
 void *ipc_os_map_intc(void);
 void ipc_os_unmap_intc(void *addr);
-int ipc_os_poll_channels(void);
+int ipc_os_poll_channels(const uint8_t instance);
 
 #endif /* IPC_OS_H */

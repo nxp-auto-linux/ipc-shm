@@ -25,6 +25,11 @@
  */
 #define IPC_IRQ_NONE -1
 
+/*
+ * Maximum number of instances
+ */
+#define IPC_SHM_MAX_INSTANCES	4u
+
 /**
  * enum ipc_shm_channel_type - channel type
  * @IPC_SHM_MANAGED:	channel with buffer management enabled
@@ -92,7 +97,8 @@ struct ipc_shm_pool_cfg {
 struct ipc_shm_managed_cfg {
 	int num_pools;
 	struct ipc_shm_pool_cfg *pools;
-	void (*rx_cb)(void *cb_arg, int chan_id, void *buf, size_t size);
+	void (*rx_cb)(void *cb_arg, const uint8_t instance, int chan_id,
+			void *buf, size_t size);
 	void *cb_arg;
 };
 
@@ -104,7 +110,8 @@ struct ipc_shm_managed_cfg {
  */
 struct ipc_shm_unmanaged_cfg {
 	uint32_t size;
-	void (*rx_cb)(void *cb_arg, int chan_id, void *mem);
+	void (*rx_cb)(void *cb_arg, const uint8_t instance, int chan_id,
+			void *mem);
 	void *cb_arg;
 };
 
@@ -186,17 +193,28 @@ struct ipc_shm_cfg {
 };
 
 /**
+ * struct ipc_shm_cfg - IPC shm parameters
+ * @num_instances:	number of shared memory instances
+ * @shm_cfg_instances:		IPC shm parameters array
+ *
+ */
+struct ipc_shm_instances_cfg {
+	uint8_t num_instances;
+	struct ipc_shm_cfg *shm_cfg;
+};
+
+/**
  * ipc_shm_init() - initialize shared memory device
- * @cfg:         configuration parameters
+ * @cfgs:              configuration parameters
  *
  * Function is non-reentrant.
  *
  * Return: 0 on success, error code otherwise
  */
-int ipc_shm_init(const struct ipc_shm_cfg *cfg);
+int ipc_shm_init(const struct ipc_shm_instances_cfg *cfg);
 
 /**
- * ipc_shm_free() - release shared memory device
+ * ipc_shm_free() - release all instances of shared memory device
  *
  * Function is non-reentrant.
  */
@@ -204,6 +222,7 @@ void ipc_shm_free(void);
 
 /**
  * ipc_shm_acquire_buf() - request a buffer for the given channel
+ * @instance:       instance id
  * @chan_id:        channel index
  * @size:           required size
  *
@@ -212,10 +231,11 @@ void ipc_shm_free(void);
  *
  * Return: pointer to the buffer base address or NULL if buffer not found
  */
-void *ipc_shm_acquire_buf(int chan_id, size_t size);
+void *ipc_shm_acquire_buf(const uint8_t instance, int chan_id, size_t size);
 
 /**
  * ipc_shm_release_buf() - release a buffer for the given channel
+ * @instance:       instance id
  * @chan_id:        channel index
  * @buf:            buffer pointer
  *
@@ -224,10 +244,11 @@ void *ipc_shm_acquire_buf(int chan_id, size_t size);
  *
  * Return: 0 on success, error code otherwise
  */
-int ipc_shm_release_buf(int chan_id, const void *buf);
+int ipc_shm_release_buf(const uint8_t instance, int chan_id, const void *buf);
 
 /**
  * ipc_shm_tx() - send data on given channel and notify remote
+ * @instance:       instance id
  * @chan_id:        channel index
  * @buf:            buffer pointer
  * @size:           size of data written in buffer
@@ -237,10 +258,11 @@ int ipc_shm_release_buf(int chan_id, const void *buf);
  *
  * Return: 0 on success, error code otherwise
  */
-int ipc_shm_tx(int chan_id, void *buf, size_t size);
+int ipc_shm_tx(const uint8_t instance, int chan_id, void *buf, size_t size);
 
 /**
  * ipc_shm_unmanaged_acquire() - acquire the unmanaged channel local memory
+ * @instance:       instance id
  * @chan_id:        channel index
  *
  * Function used only for unmanaged channels. The memory must be acquired only
@@ -249,10 +271,11 @@ int ipc_shm_tx(int chan_id, void *buf, size_t size);
  *
  * Return: pointer to the channel memory or NULL if invalid channel
  */
-void *ipc_shm_unmanaged_acquire(int chan_id);
+void *ipc_shm_unmanaged_acquire(const uint8_t instance, int chan_id);
 
 /**
  * ipc_shm_unmanaged_tx() - notify remote that data has been written in channel
+ * @instance:       instance id
  * @chan_id:        channel index
  *
  * Function used only for unmanaged channels. It can be used after the channel
@@ -262,26 +285,28 @@ void *ipc_shm_unmanaged_acquire(int chan_id);
  *
  * Return: 0 on success, error code otherwise
  */
-int ipc_shm_unmanaged_tx(int chan_id);
+int ipc_shm_unmanaged_tx(const uint8_t instance, int chan_id);
 
 /**
  * ipc_shm_is_remote_ready() - check whether remote is initialized
+ * @instance:        instance id
  *
  * Function used to check if the remote is initialized and ready to receive
  * messages. It should be invoked at least before the first transmit operation.
  *
  * Return: 0 if remote is initialized, error code otherwise
  */
-int ipc_shm_is_remote_ready(void);
+int ipc_shm_is_remote_ready(const uint8_t instance);
 
 /**
  * ipc_shm_poll_channels() - poll the channels for available messages to process
+ * @instance:        instance id
  *
  * This function handles all channels using a fair handling algorithm: all
  * channels are treated equally and no channel is starving.
  *
  * Return: number of messages processed, error code otherwise
  */
-int ipc_shm_poll_channels(void);
+int ipc_shm_poll_channels(const uint8_t instance);
 
 #endif /* IPC_SHM_H */

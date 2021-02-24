@@ -73,13 +73,13 @@ static int ipc_shm_uio_irqcontrol(struct uio_info *dev_info, int cmd)
 {
 	switch (cmd) {
 	case IPC_UIO_DISABLE_RX_IRQ_CMD:
-		ipc_hw_irq_disable();
+		ipc_hw_irq_disable(0);
 		break;
 	case IPC_UIO_ENABLE_RX_IRQ_CMD:
-		ipc_hw_irq_enable();
+		ipc_hw_irq_enable(0);
 		break;
 	case IPC_UIO_TRIGGER_TX_IRQ_CMD:
-		ipc_hw_irq_notify();
+		ipc_hw_irq_notify(0);
 		break;
 	default:
 		break;
@@ -90,8 +90,8 @@ static int ipc_shm_uio_irqcontrol(struct uio_info *dev_info, int cmd)
 /* hardirq handler */
 static irqreturn_t ipc_shm_uio_handler(int irq, struct uio_info *dev_info)
 {
-	ipc_hw_irq_disable();
-	ipc_hw_irq_clear();
+	ipc_hw_irq_disable(0);
+	ipc_hw_irq_clear(0);
 
 	/* return IRQ_HANDLED to trigger uio_event_notify() to user-space */
 	return IRQ_HANDLED;
@@ -147,7 +147,7 @@ static int ipc_shm_uio_probe(struct platform_device *pdev)
 	local_core_cfg.type = (enum ipc_shm_core_type)local_core[IDX_TYPE];
 	local_core_cfg.index = (enum ipc_shm_core_index)local_core[IDX_INDEX];
 	local_core_cfg.trusted = (uint32_t)local_core[IDX_TRUSTED];
-	err = _ipc_hw_init(inter_core_tx_irq, inter_core_rx_irq,
+	err = _ipc_hw_init(0, inter_core_tx_irq, inter_core_rx_irq,
 			   &remote_core_cfg, &local_core_cfg, mscm);
 	if (err)
 		return err;

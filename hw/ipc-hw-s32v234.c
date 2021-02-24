@@ -144,7 +144,7 @@ static struct ipc_hw_priv {
  *
  * Return: MSCM inter-core interrupt index used for Rx
  */
-int ipc_hw_get_rx_irq(void)
+int ipc_hw_get_rx_irq(const uint8_t instance)
 {
 	return priv.mscm_rx_irq;
 }
@@ -165,13 +165,14 @@ int ipc_hw_get_rx_irq(void)
  * Return: 0 for success, -EINVAL for either inter core interrupt invalid or
  *         invalid remote core, -ENOMEM for failing to map MSCM address space
  */
-int ipc_hw_init(const struct ipc_shm_cfg *cfg)
+int ipc_hw_init(const uint8_t instance, const struct ipc_shm_cfg *cfg)
 {
 	/* map MSCM hardware peripheral block */
 	void *addr = ipc_os_map_intc();
 
-	return _ipc_hw_init(cfg->inter_core_tx_irq, cfg->inter_core_rx_irq,
-			    &cfg->remote_core, &cfg->local_core, addr);
+	return _ipc_hw_init(instance, cfg->inter_core_tx_irq,
+			cfg->inter_core_rx_irq, &cfg->remote_core,
+			&cfg->local_core, addr);
 }
 
 /**
@@ -179,10 +180,9 @@ int ipc_hw_init(const struct ipc_shm_cfg *cfg)
  *
  * Low level variant of ipc_hw_init() used by UIO device implementation.
  */
-int _ipc_hw_init(int tx_irq, int rx_irq,
+int _ipc_hw_init(const uint8_t instance, int tx_irq, int rx_irq,
 		 const struct ipc_shm_remote_core *remote_core,
-		 const struct ipc_shm_local_core *local_core,
-		 void *mscm_addr)
+		 const struct ipc_shm_local_core *local_core, void *mscm_addr)
 {
 	(void)local_core; /* unused */
 
@@ -212,7 +212,7 @@ int _ipc_hw_init(int tx_irq, int rx_irq,
 	 * disable rx irq source to avoid receiving an interrupt from remote
 	 * before any of the buffer rings are initialized
 	 */
-	ipc_hw_irq_disable();
+	ipc_hw_irq_disable(instance);
 
 	return 0;
 }
@@ -220,9 +220,9 @@ int _ipc_hw_init(int tx_irq, int rx_irq,
 /**
  * ipc_hw_free() - unmap MSCM IP block and clear irq
  */
-void ipc_hw_free(void)
+void ipc_hw_free(const uint8_t instance)
 {
-	ipc_hw_irq_clear();
+	ipc_hw_irq_clear(instance);
 
 	/* unmap MSCM hardware peripheral block */
 	ipc_os_unmap_intc(priv.mscm);
@@ -231,7 +231,7 @@ void ipc_hw_free(void)
 /**
  * ipc_hw_irq_enable() - enable notifications from remote
  */
-void ipc_hw_irq_enable(void)
+void ipc_hw_irq_enable(const uint8_t instance)
 {
 	uint16_t irsprc_mask;
 
@@ -244,7 +244,7 @@ void ipc_hw_irq_enable(void)
 /**
  * ipc_hw_irq_disable() - disable notifications from remote
  */
-void ipc_hw_irq_disable(void)
+void ipc_hw_irq_disable(const uint8_t instance)
 {
 	uint16_t irsprc_mask;
 
@@ -257,7 +257,7 @@ void ipc_hw_irq_disable(void)
 /**
  * ipc_hw_irq_notify() - notify remote that data is available
  */
-void ipc_hw_irq_notify(void)
+void ipc_hw_irq_notify(const uint8_t instance)
 {
 	if (priv.mscm_tx_irq == IPC_IRQ_NONE)
 		return;
@@ -272,7 +272,7 @@ void ipc_hw_irq_notify(void)
 /**
  * ipc_hw_irq_clear() - clear available data notification
  */
-void ipc_hw_irq_clear(void)
+void ipc_hw_irq_clear(const uint8_t instance)
 {
 	/* clear MSCM core-to-core directed interrupt */
 	writel_relaxed(MSCM_IRCPxIR_INT(priv.mscm_rx_irq),

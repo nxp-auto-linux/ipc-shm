@@ -293,7 +293,7 @@ static struct ipc_hw_priv {
  *
  * Return: MSCM inter-core interrupt index used for Rx
  */
-int ipc_hw_get_rx_irq(void)
+int ipc_hw_get_rx_irq(const uint8_t instance)
 {
 	return priv.mscm_rx_irq;
 }
@@ -314,13 +314,14 @@ int ipc_hw_get_rx_irq(void)
  *         invalid remote core, -ENOMEM for failing to map MSCM address space,
  *         -EACCES for failing to access MSCM registers
  */
-int ipc_hw_init(const struct ipc_shm_cfg *cfg)
+int ipc_hw_init(const uint8_t instance, const struct ipc_shm_cfg *cfg)
 {
 	/* map MSCM hardware peripheral block registers */
 	void *addr = ipc_os_map_intc();
 
-	return _ipc_hw_init(cfg->inter_core_tx_irq, cfg->inter_core_rx_irq,
-			    &cfg->remote_core, &cfg->local_core, addr);
+	return _ipc_hw_init(instance, cfg->inter_core_tx_irq,
+			cfg->inter_core_rx_irq, &cfg->remote_core,
+			&cfg->local_core, addr);
 }
 
 /**
@@ -328,7 +329,7 @@ int ipc_hw_init(const struct ipc_shm_cfg *cfg)
  *
  * Low level variant of ipc_hw_init() used by UIO device implementation.
  */
-int _ipc_hw_init(int tx_irq, int rx_irq,
+int _ipc_hw_init(const uint8_t instance, int tx_irq, int rx_irq,
 		 const struct ipc_shm_remote_core *remote_core,
 		 const struct ipc_shm_local_core *local_core, void *mscm_addr)
 {
@@ -433,7 +434,7 @@ int _ipc_hw_init(int tx_irq, int rx_irq,
 	 * disable rx irq source to avoid receiving an interrupt from remote
 	 * before any of the buffer rings are initialized
 	 */
-	ipc_hw_irq_disable();
+	ipc_hw_irq_disable(instance);
 
 	/*
 	 * enable local trusted cores so that they can read full contents of
@@ -451,9 +452,9 @@ int _ipc_hw_init(int tx_irq, int rx_irq,
 /**
  * ipc_hw_free() - unmap MSCM IP block and clear irq
  */
-void ipc_hw_free(void)
+void ipc_hw_free(const uint8_t instance)
 {
-	ipc_hw_irq_clear();
+	ipc_hw_irq_clear(instance);
 
 	/* unmap MSCM hardware peripheral block */
 	ipc_os_unmap_intc(priv.mscm);
@@ -466,7 +467,7 @@ void ipc_hw_free(void)
  * of the first MSCM inter-core interrupt is 1. In order to obtain the correct
  * index for the interrupt routing register, this value is added to mscm_rx_irq.
  */
-void ipc_hw_irq_enable(void)
+void ipc_hw_irq_enable(const uint8_t instance)
 {
 	uint16_t irsprc_mask;
 
@@ -483,7 +484,7 @@ void ipc_hw_irq_enable(void)
  * of the first MSCM inter-core interrupt is 1. In order to obtain the correct
  * index for the interrupt routing register, this value is added to mscm_rx_irq.
  */
-void ipc_hw_irq_disable(void)
+void ipc_hw_irq_disable(const uint8_t instance)
 {
 	uint16_t irsprc_mask;
 
@@ -496,7 +497,7 @@ void ipc_hw_irq_disable(void)
 /**
  * ipc_hw_irq_notify() - notify remote that data is available
  */
-void ipc_hw_irq_notify(void)
+void ipc_hw_irq_notify(const uint8_t instance)
 {
 	if (priv.mscm_tx_irq == IPC_IRQ_NONE)
 		return;
@@ -509,7 +510,7 @@ void ipc_hw_irq_notify(void)
 /**
  * ipc_hw_irq_clear() - clear available data notification
  */
-void ipc_hw_irq_clear(void)
+void ipc_hw_irq_clear(const uint8_t instance)
 {
 	/* clear MSCM core-to-core directed interrupt on the targeted core */
 	writel_relaxed(MSCM_IRCPnISRn_CPx_INT,

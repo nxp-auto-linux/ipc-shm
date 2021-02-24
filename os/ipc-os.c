@@ -41,7 +41,7 @@ struct ipc_os_priv {
 	uintptr_t remote_phys_shm;
 	uintptr_t local_virt_shm;
 	uintptr_t remote_virt_shm;
-	int (*rx_cb)(int budget);
+	int (*rx_cb)(const uint8_t instance, int budget);
 	int irq_num;
 };
 
@@ -61,11 +61,11 @@ static void ipc_shm_softirq(unsigned long arg)
 	int work = 0;
 	unsigned long budget = IPC_SOFTIRQ_BUDGET;
 
-	work = priv.rx_cb(budget);
+	work = priv.rx_cb(0, budget);
 
 	if (work < budget) {
 		/* work done, re-enable irq */
-		ipc_hw_irq_enable();
+		ipc_hw_irq_enable(0);
 	} else {
 		/* work not done, reschedule softirq */
 		tasklet_schedule(&ipc_shm_rx_tasklet);
@@ -75,8 +75,8 @@ static void ipc_shm_softirq(unsigned long arg)
 /* driver interrupt service routine */
 static irqreturn_t ipc_shm_hardirq(int irq, void *dev)
 {
-	ipc_hw_irq_disable();
-	ipc_hw_irq_clear();
+	ipc_hw_irq_disable(0);
+	ipc_hw_irq_clear(0);
 
 	tasklet_schedule(&ipc_shm_rx_tasklet);
 
@@ -90,13 +90,18 @@ static irqreturn_t ipc_shm_hardirq(int irq, void *dev)
  *
  * Return: 0 on success, error code otherwise
  */
-int ipc_os_init(const struct ipc_shm_cfg *cfg, int (*rx_cb)(int))
+int ipc_os_init(const uint8_t instance, const struct ipc_shm_cfg *cfg,
+		int (*rx_cb)(const uint8_t, int))
 {
 	struct device_node *mscm = NULL;
 	struct resource *res;
 	int err;
 
 	if (!rx_cb)
+		return -EINVAL;
+
+	/* multi-instance is not yet implemented */
+	if (instance > 1)
 		return -EINVAL;
 
 	/* save params */
@@ -144,7 +149,7 @@ int ipc_os_init(const struct ipc_shm_cfg *cfg, int (*rx_cb)(int))
 		goto err_unmap_remote_shm;
 	}
 
-	priv.irq_num = of_irq_get(mscm, ipc_hw_get_rx_irq());
+	priv.irq_num = of_irq_get(mscm, ipc_hw_get_rx_irq(instance));
 	shm_dbg("Rx IRQ = %d\n", priv.irq_num);
 	of_node_put(mscm); /* release refcount to mscm DT node */
 
@@ -172,10 +177,10 @@ err_release_local_region:
 /**
  * ipc_os_free() - free OS specific resources
  */
-void ipc_os_free(void)
+void ipc_os_free(const uint8_t instance)
 {
 	/* disable hardirq */
-	ipc_hw_irq_disable();
+	ipc_hw_irq_disable(instance);
 
 	/* kill softirq task */
 	tasklet_kill(&ipc_shm_rx_tasklet);
@@ -190,7 +195,7 @@ void ipc_os_free(void)
 /**
  * ipc_os_get_local_shm() - get local shared mem address
  */
-uintptr_t ipc_os_get_local_shm(void)
+uintptr_t ipc_os_get_local_shm(const uint8_t instance)
 {
 	return priv.local_virt_shm;
 }
@@ -198,7 +203,7 @@ uintptr_t ipc_os_get_local_shm(void)
 /**
  * ipc_os_get_remote_shm() - get remote shared mem address
  */
-uintptr_t ipc_os_get_remote_shm(void)
+uintptr_t ipc_os_get_remote_shm(const uint8_t instance)
 {
 	return priv.remote_virt_shm;
 }
@@ -248,7 +253,7 @@ void ipc_os_unmap_intc(void *addr)
  *
  * Return: work done, error code otherwise
  */
-int ipc_os_poll_channels(void)
+int ipc_os_poll_channels(const uint8_t instance)
 {
 	return -EOPNOTSUPP;
 }
