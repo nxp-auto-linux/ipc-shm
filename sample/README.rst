@@ -4,7 +4,7 @@
 IPCF Shared Memory Sample Application for Linux
 ===============================================
 
-:Copyright: 2018-2020 NXP
+:Copyright: 2018-2021 NXP
 
 Overview
 ========
@@ -18,7 +18,7 @@ is controlled from console via a sysfs file (see Running the Application).
 
 Prerequisites
 =============
- - EVB board for supported processors: S32V234, S32G274A and S32R45X
+ - EVB board for supported processors: S32V234, S32G274A and S32R45
  - NXP Automotive Linux BSP
 
 Building the application
@@ -35,21 +35,25 @@ Follow the steps for building NXP Auto Linux BSP with Yocto:
  - https://source.codeaurora.org/external/autobsps32/auto_yocto_bsp/tree/README?h=alb/master
 
 Note: use image fsl-image-auto with any of the following machines supported for IPCF:
-      s32g274aevb, s32r45xevb, s32v234evb.
+      s32g274aevb, s32r45evb, s32v234evb.
 
 Building manually
 -----------------
-- Get NXP Auto Linux kernel and IPCF driver from Code Aurora::
+1. Get NXP Auto Linux kernel and IPCF driver from Code Aurora::
 
    git clone https://source.codeaurora.org/external/autobsps32/linux/
    git clone https://source.codeaurora.org/external/autobsps32/ipcf/ipc-shm/
 
-- Export CROSS_COMPILE variable and build modules providing kernel source
-  location, e.g.::
+2. Export CROSS_COMPILE and ARCH variables and build Linux kernel providing the
+   desired config, e.g. for S32G274A or S32R45::
 
    export CROSS_COMPILE=/<toolchain-path>/aarch64-linux-gnu-
-   make -C ./linux
-   make -C ./ipc-shm/sample KERNELDIR=./linux modules
+   export ARCH=arm64
+   make -C ./linux s32gen1_defconfig
+
+3. Build IPCF driver and sample modules providing kernel source location, e.g.::
+
+   make -C ./ipc-shm/sample KERNELDIR=$PWD/linux modules
 
 .. _run-shm-linux:
 
