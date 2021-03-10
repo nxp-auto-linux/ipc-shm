@@ -11,8 +11,8 @@ ifneq ($(KERNELRELEASE),)
 obj-m := $(MODULE_NAME).o
 $(MODULE_NAME)-y := sample.o
 
-polling ?= no
-ifeq ($(polling),yes)
+POLLING ?= no
+ifeq ($(POLLING),yes)
 ccflags-y += -DPOLLING
 endif
 
@@ -35,7 +35,7 @@ EXTRA_SYMBOLS=${IPC_SHM_DEV_PATH}/Module.symvers
 # INSTALL_DIR  : location of the module installation
 # CROSS_COMPILE: cross compiler path and prefix
 # Optional parameters:
-# polling      : set yo 'yes' to disable tx interrupt if
+# POLLING      : set yo 'yes' to disable tx interrupt if
 #                remote sample application use polling
 
 modules:

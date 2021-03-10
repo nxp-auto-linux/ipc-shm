@@ -11,10 +11,17 @@ Overview
 This sample application is a kernel module that demonstrates a ping-pong message
 communication with an RTOS application, using the shared memory driver.
 
-The sample app initializes the shared memory driver and sends messages to the
-remote app, waiting for a reply after each message is sent. When a reply is
-received from remote app, it wakes up and sends another message. The Linux app
-is controlled from console via a sysfs file (see Running the Application).
+The application initializes the shared memory driver and sends messages to the
+remote application, waiting for a reply after each message is sent. When a reply
+is received from remote application, it wakes up and sends another message.
+
+This application can be built to notify the remote application using inter-core
+interrupts (default behavior) or to transmit without notifying the remote
+application. If the latter is used, the remote application polls for available
+messages.
+
+This application is controlled from console via a sysfs file (see Running the
+Application).
 
 Prerequisites
 =============
@@ -83,3 +90,19 @@ Running the application
 7. Unload the modules::
 
     rmmod ipc-shm-sample ipc-shm-dev
+
+Configuration Notes
+===================
+
+Polling
+-------
+In order to compile the shared memory sample application with polling support,
+the makefile parameter ``POLLING`` must be set to ``yes``, e.g.::
+
+    make -C ./ipc-shm/sample POLLING=yes KERNELDIR=$PWD/linux modules
+
+Note: the remote sample application must be built with polling support as well.
+Please refer to the remote sample build instructions for more details.
+
+This sample demonstrates how shared memory polling API can be used to poll for
+incoming messages instead of using inter-core interrupts notifications.
