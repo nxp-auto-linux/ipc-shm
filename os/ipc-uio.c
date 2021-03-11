@@ -16,20 +16,24 @@
 #define DRIVER_VERSION	"0.1"
 
 /* module parameters section */
+#define REMOTE_CORE_LEN	2
+#define LOCAL_CORE_LEN	3
+#define IDX_TYPE	0
+#define IDX_INDEX	1
+#define IDX_TRUSTED	2
+
 static int inter_core_rx_irq = -1;
 static int inter_core_tx_irq = -1;
-static int remote_core_type = -1;
-static int remote_core_index = -1;
-static int local_core_type = -1;
-static int local_core_index = -1;
-static int local_core_trusted = -1;
+static int remote_core[REMOTE_CORE_LEN] = {-1, -1};
+static int local_core[LOCAL_CORE_LEN] = {-1, -1, -1};
 module_param(inter_core_rx_irq, int, 0);
+MODULE_PARM_DESC(inter_core_rx_irq, "inter-core rx interrupt number");
 module_param(inter_core_tx_irq, int, 0);
-module_param(remote_core_type, int, 0);
-module_param(remote_core_index, int, 0);
-module_param(local_core_type, int, 0);
-module_param(local_core_index, int, 0);
-module_param(local_core_trusted, int, 0);
+MODULE_PARM_DESC(inter_core_tx_irq, "inter-core tx interrupt number");
+module_param_array(remote_core, int, NULL, 0);
+MODULE_PARM_DESC(remote_core, "remote core: type,index");
+module_param_array(local_core, int, NULL, 0);
+MODULE_PARM_DESC(local_core, "local core: type,index,trusted");
 
 /**
  * struct ipc_uio_priv - IPCF SHM UIO device data
@@ -96,30 +100,30 @@ static irqreturn_t ipc_shm_uio_handler(int irq, struct uio_info *dev_info)
 static int ipc_shm_uio_probe(struct platform_device *pdev)
 {
 	struct ipc_uio_priv *priv;
-	struct ipc_shm_remote_core remote_core = {IPC_CORE_DEFAULT, 0};
-	struct ipc_shm_local_core local_core = {IPC_CORE_DEFAULT, 0, 0};
+	struct ipc_shm_remote_core remote_core_cfg = {IPC_CORE_DEFAULT, 0};
+	struct ipc_shm_local_core local_core_cfg = {IPC_CORE_DEFAULT, 0, 0};
 	struct resource *res;
 	void __iomem *mscm;
 	int irq, err;
 
 	if ((inter_core_tx_irq < 0 && inter_core_tx_irq != IPC_IRQ_NONE)
 		|| (inter_core_rx_irq < 0)
-		|| (remote_core_type < 0) || (local_core_type < 0)
-		|| ((remote_core_type != IPC_CORE_DEFAULT)
-			&& (remote_core_index < 0))
-		|| (local_core_trusted < 0)
-		|| ((local_core_type != IPC_CORE_DEFAULT)
-			&& (local_core_index < 0))) {
+		|| (remote_core[IDX_TYPE] < 0) || (local_core[IDX_TYPE] < 0)
+		|| ((remote_core[IDX_TYPE] != IPC_CORE_DEFAULT)
+			&& (remote_core[IDX_INDEX] < 0))
+		|| (local_core[IDX_TRUSTED] < 0)
+		|| ((local_core[IDX_TYPE] != IPC_CORE_DEFAULT)
+			&& (local_core[IDX_INDEX] < 0))) {
 		dev_err(&pdev->dev, "Module parameters not specified!\n");
 		return -EINVAL;
 	}
 	dev_dbg(&pdev->dev, "inter_core_rx_irq = %d\n", inter_core_rx_irq);
 	dev_dbg(&pdev->dev, "inter_core_tx_irq = %d\n", inter_core_tx_irq);
-	dev_dbg(&pdev->dev, "remote_core_type = %d\n", remote_core_type);
-	dev_dbg(&pdev->dev, "remote_core_index = %d\n", remote_core_index);
-	dev_dbg(&pdev->dev, "local_core_index = %d\n", local_core_index);
-	dev_dbg(&pdev->dev, "local_core_type = %d\n", local_core_type);
-	dev_dbg(&pdev->dev, "local_core_trusted = %d\n", local_core_trusted);
+	dev_dbg(&pdev->dev, "remote_core = %d,%d\n",
+		remote_core[IDX_TYPE], remote_core[IDX_INDEX]);
+	dev_dbg(&pdev->dev, "local_core = %d,%d,%d\n",
+		local_core[IDX_TYPE], local_core[IDX_INDEX],
+		local_core[IDX_TRUSTED]);
 
 	priv = devm_kzalloc(&pdev->dev, sizeof(*priv), GFP_KERNEL);
 	if (IS_ERR_OR_NULL(priv))
@@ -138,13 +142,13 @@ static int ipc_shm_uio_probe(struct platform_device *pdev)
 	}
 
 	/* init MSCM HW for MSI inter-core interrupts */
-	remote_core.type = (enum ipc_shm_core_type)remote_core_type;
-	remote_core.index = (enum ipc_shm_core_index)remote_core_index;
-	local_core.type = (enum ipc_shm_core_type)local_core_type;
-	local_core.index = (enum ipc_shm_core_index)local_core_index;
-	local_core.trusted = (uint32_t)local_core_trusted;
+	remote_core_cfg.type = (enum ipc_shm_core_type)remote_core[IDX_TYPE];
+	remote_core_cfg.index = (enum ipc_shm_core_index)remote_core[IDX_INDEX];
+	local_core_cfg.type = (enum ipc_shm_core_type)local_core[IDX_TYPE];
+	local_core_cfg.index = (enum ipc_shm_core_index)local_core[IDX_INDEX];
+	local_core_cfg.trusted = (uint32_t)local_core[IDX_TRUSTED];
 	err = _ipc_hw_init(inter_core_tx_irq, inter_core_rx_irq,
-			   &remote_core, &local_core, mscm);
+			   &remote_core_cfg, &local_core_cfg, mscm);
 	if (err)
 		return err;
 
