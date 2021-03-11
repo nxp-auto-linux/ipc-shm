@@ -142,11 +142,13 @@ static int init_ipc_shm(void)
 		.inter_core_rx_irq = INTER_CORE_RX_IRQ,
 		.local_core = {
 			.type = IPC_CORE_DEFAULT,
-			.index = 0,
+			.index = IPC_CORE_INDEX_0,  /* automatically assigned */
+			.trusted = IPC_CORE_INDEX_0 | IPC_CORE_INDEX_1
+				   | IPC_CORE_INDEX_2 | IPC_CORE_INDEX_3
 		},
 		.remote_core = {
 			.type = IPC_CORE_DEFAULT,
-			.index = 0,
+			.index = IPC_CORE_INDEX_0,  /* automatically assigned */
 		},
 		.num_channels = ARRAY_SIZE(channels),
 		.channels = channels

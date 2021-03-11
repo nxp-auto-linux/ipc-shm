@@ -180,8 +180,8 @@ int ipc_hw_init(const struct ipc_shm_cfg *cfg)
  * Low level variant of ipc_hw_init() used by UIO device implementation.
  */
 int _ipc_hw_init(int tx_irq, int rx_irq,
-		 const struct ipc_shm_core *remote_core,
-		 const struct ipc_shm_core *local_core,
+		 const struct ipc_shm_remote_core *remote_core,
+		 const struct ipc_shm_local_core *local_core,
 		 void *mscm_addr)
 {
 	(void)local_core; /* unused */

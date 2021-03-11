@@ -27,8 +27,9 @@ The supported processors are listed in the sample application documentation.
 
 Configuration notes
 ===================
-There are four hardware-related parameters that can be configured at the driver
-API level: TX and RX inter-core interrupt IDs, local core ID and remote core ID.
+There are five hardware-related parameters that can be configured at the driver
+API level: TX and RX inter-core interrupt IDs, local core ID, remote core ID and
+trusted cores.
 
 The interrupt IDs are MSCM core-to-core directed interrupt IDs. Valid values are
 in range [0..2] for S32xx and [0..3] for S32V234. TX and RX interrupt IDs must
@@ -39,20 +40,30 @@ the corresponding processor exception number (used to register the interrupt
 handler); see Reference Manual of each platform for specific information.
 
 The local and remote core IDs configuration is divided into core type and core
-index. Supported values for core type are defined in ipc_shm_core_type enum.
+index. Supported values for core type and index are defined in ipc_shm_core_type
+and ipc_shm_core_index enum, respectively.
+
 For ARM platforms, a default value can be assigned to the local and/or remote
 core IDs passing IPC_CORE_DEFAULT as the core type. When using this default
-value, the core index is not used.
+value, the core index is ignored and automatically chosen by the driver.
 
 Note: see Reference Manual of each platform for the core types and indexes
 supported.
 
 The remote core ID specifies the remote core to be interrupted and the local
 core ID specifies the core targeted by the remote core interrupt. The local core
-ID configuration is only applicable to S32xx platforms where Linux may be
-running SMP and the interrupt could be serviced by a different core than the
-targeted (e.g. interrupt load balancing). For other platforms or Operating
-Systems, the local core ID configuration is not used.
+ID configuration is only applicable to platforms where Linux may be running SMP
+and the interrupt could be serviced by a different core than the targeted (e.g.
+interrupt load balancing).
+
+The trusted cores mask specifies which cores (of the same core type as local
+core) have access to the inter-core interrupt status register of the local core
+targeted by remote. The mask can be formed from valid values defined in
+ipc_shm_core_index enum.
+
+Note: the local core ID and trusted cores configuration is only applicable to
+S32xx platforms running Linux. For other platforms or Operating Systems, the
+local core ID configuration is not used.
 
 Cautions
 ========

@@ -59,6 +59,20 @@ enum ipc_shm_core_type {
 };
 
 /**
+ * enum ipc_shm_core_index - core index
+ * @IPC_CORE_INDEX_0:	Processor index 0
+ * @IPC_CORE_INDEX_1:	Processor index 1
+ * @IPC_CORE_INDEX_2:	Processor index 2
+ * @IPC_CORE_INDEX_3:	Processor index 3
+ */
+enum ipc_shm_core_index {
+	IPC_CORE_INDEX_0 = 0x01u,
+	IPC_CORE_INDEX_1 = 0x02u,
+	IPC_CORE_INDEX_2 = 0x04u,
+	IPC_CORE_INDEX_3 = 0x08u,
+};
+
+/**
  * struct ipc_shm_pool_cfg - memory buffer pool parameters
  * @num_bufs:	number of buffers
  * @buf_size:	buffer size
@@ -109,16 +123,35 @@ struct ipc_shm_channel_cfg {
 };
 
 /**
- * struct ipc_shm_core - core type and index
+ * struct ipc_shm_remote_core - remote core type and index
  * @type:	core type from &enum ipc_shm_core_type
  * @index:	core number
  *
  * Core type can be IPC_CORE_DEFAULT, in which case core index doesn't matter
  * because it's chosen automatically by the driver.
  */
-struct ipc_shm_core {
+struct ipc_shm_remote_core {
 	enum ipc_shm_core_type type;
-	int index;
+	enum ipc_shm_core_index index;
+};
+
+/**
+ * struct ipc_shm_local_core - local core type, index and trusted cores
+ * @type:	core type from &enum ipc_shm_core_type
+ * @index:	core number targeted by remote core interrupt
+ * @trusted:    trusted cores mask
+ *
+ * Core type can be IPC_CORE_DEFAULT, in which case core index doesn't matter
+ * because it's chosen automatically by the driver.
+ *
+ * Trusted cores mask specifies which cores (of the same core type) have access
+ * to the inter-core interrupt status register of the targeted core. The mask
+ * can be formed from &enum ipc_shm_core_index.
+ */
+struct ipc_shm_local_core {
+	enum ipc_shm_core_type type;
+	enum ipc_shm_core_index index;
+	uint32_t trusted;
 };
 
 /**
@@ -146,8 +179,8 @@ struct ipc_shm_cfg {
 	uint32_t shm_size;
 	int inter_core_tx_irq;
 	int inter_core_rx_irq;
-	struct ipc_shm_core local_core;
-	struct ipc_shm_core remote_core;
+	struct ipc_shm_local_core local_core;
+	struct ipc_shm_remote_core remote_core;
 	int num_channels;
 	struct ipc_shm_channel_cfg *channels;
 };

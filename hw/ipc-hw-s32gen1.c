@@ -259,6 +259,7 @@ struct mscm_regs {
 #define MSCM_IRCPCFG_CP4_TR  0x10uL /* Processor 4 Trusted core */
 #define MSCM_IRCPCFG_CP5_TR  0x20uL /* Processor 5 Trusted core */
 #define MSCM_IRCPCFG_CP6_TR  0x40uL /* Processor 6 Trusted core */
+#define MSCM_IRCPCFG_A53_TR  0x0FuL /* Processors 0 to 3 Trusted cores */
 
 #define MSCM_IRSPRCn_LOCK    0x8000u /* Interrupt Routing Control Lock Bit */
 
@@ -328,8 +329,8 @@ int ipc_hw_init(const struct ipc_shm_cfg *cfg)
  * Low level variant of ipc_hw_init() used by UIO device implementation.
  */
 int _ipc_hw_init(int tx_irq, int rx_irq,
-		 const struct ipc_shm_core *remote_core,
-		 const struct ipc_shm_core *local_core, void *mscm_addr)
+		 const struct ipc_shm_remote_core *remote_core,
+		 const struct ipc_shm_local_core *local_core, void *mscm_addr)
 {
 	int remote_core_idx;
 	int local_core_idx;
@@ -343,16 +344,16 @@ int _ipc_hw_init(int tx_irq, int rx_irq,
 	switch (local_core->type) {
 	case IPC_CORE_A53:
 		switch (local_core->index) {
-		case 0:
+		case IPC_CORE_INDEX_0:
 			local_core_idx = A53_0;
 			break;
-		case 1:
+		case IPC_CORE_INDEX_1:
 			local_core_idx = A53_1;
 			break;
-		case 2:
+		case IPC_CORE_INDEX_2:
 			local_core_idx = A53_2;
 			break;
-		case 3:
+		case IPC_CORE_INDEX_3:
 			local_core_idx = A53_3;
 			break;
 		default:
@@ -366,19 +367,26 @@ int _ipc_hw_init(int tx_irq, int rx_irq,
 		return -EINVAL;
 	}
 
+	/* check trusted cores mask contains the targeted and other A53 cores */
+	if ((!local_core->trusted)
+		|| (local_core->trusted & ~MSCM_IRCPCFG_A53_TR)
+		|| ((0x01uL << local_core_idx) & ~local_core->trusted)) {
+		return -EINVAL;
+	}
+
 	switch (remote_core->type) {
 	case IPC_CORE_A53:
 		switch (remote_core->index) {
-		case 0:
+		case IPC_CORE_INDEX_0:
 			remote_core_idx = A53_0;
 			break;
-		case 1:
+		case IPC_CORE_INDEX_1:
 			remote_core_idx = A53_1;
 			break;
-		case 2:
+		case IPC_CORE_INDEX_2:
 			remote_core_idx = A53_2;
 			break;
-		case 3:
+		case IPC_CORE_INDEX_3:
 			remote_core_idx = A53_3;
 			break;
 		default:
@@ -387,13 +395,13 @@ int _ipc_hw_init(int tx_irq, int rx_irq,
 		break;
 	case IPC_CORE_M7:
 		switch (remote_core->index) {
-		case 0:
+		case IPC_CORE_INDEX_0:
 			remote_core_idx = M7_0;
 			break;
-		case 1:
+		case IPC_CORE_INDEX_1:
 			remote_core_idx = M7_1;
 			break;
-		case 2:
+		case IPC_CORE_INDEX_2:
 			remote_core_idx = M7_2;
 			break;
 		default:
@@ -428,16 +436,14 @@ int _ipc_hw_init(int tx_irq, int rx_irq,
 	ipc_hw_irq_disable();
 
 	/*
-	 * mark all A53 cores as trusted so thay they can read full contents
-	 * of IRCPnISRx registers
+	 * enable local trusted cores so that they can read full contents of
+	 * IRCPnISRx registers
 	 */
 	ircpcfg_mask = readl_relaxed(&priv.mscm->ircpcfg);
 	if (ircpcfg_mask & MSCM_IRCPCFG_LOCK)
 		return -EACCES;
 
-	writel_relaxed(ircpcfg_mask | MSCM_IRCPCFG_CP0_TR | MSCM_IRCPCFG_CP1_TR
-			| MSCM_IRCPCFG_CP2_TR | MSCM_IRCPCFG_CP3_TR,
-			&priv.mscm->ircpcfg);
+	writel_relaxed(ircpcfg_mask | local_core->trusted, &priv.mscm->ircpcfg);
 
 	return 0;
 }
