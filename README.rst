@@ -39,6 +39,10 @@ Note: the interrupt ID expected in the driver configuration is different from
 the corresponding processor exception number (used to register the interrupt
 handler); see Reference Manual of each platform for specific information.
 
+The TX interrupt can be disabled by setting its ID to IPC_IRQ_NONE. When
+disabled, the remote application must check for incoming messages by invoking
+the function ipc_shm_poll_channels().
+
 The local and remote core IDs configuration is divided into core type and core
 index. Supported values for core type and index are defined in ipc_shm_core_type
 and ipc_shm_core_index enum, respectively.
