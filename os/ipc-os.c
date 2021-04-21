@@ -7,6 +7,7 @@
 #include <linux/interrupt.h>
 #include <linux/of_irq.h>
 #include <linux/of_address.h>
+#include <linux/version.h>
 
 #include "ipc-os.h"
 #include "ipc-hw.h"
@@ -48,12 +49,17 @@ struct ipc_os_priv {
 static struct ipc_os_priv priv;
 
 static void ipc_shm_softirq(unsigned long arg);
-static DECLARE_TASKLET(ipc_shm_rx_tasklet, ipc_shm_softirq, IPC_SOFTIRQ_BUDGET);
+#if LINUX_VERSION_CODE < KERNEL_VERSION(5, 10, 0)
+static DECLARE_TASKLET(ipc_shm_rx_tasklet, ipc_shm_softirq, 0);
+#else
+static DECLARE_TASKLET_OLD(ipc_shm_rx_tasklet, ipc_shm_softirq);
+#endif
 
 /* sotfirq routine for deferred interrupt handling */
-static void ipc_shm_softirq(unsigned long budget)
+static void ipc_shm_softirq(unsigned long arg)
 {
 	int work = 0;
+	unsigned long budget = IPC_SOFTIRQ_BUDGET;
 
 	work = priv.rx_cb(budget);
 
