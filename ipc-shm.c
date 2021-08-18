@@ -275,15 +275,13 @@ static int ipc_channel_rx(const uint8_t instance, int chan_id, int budget)
  * Return: IPC_SHM_INSTANCE_FREE if instance is free,
  *     IPC_SHM_INSTANCE_USED otherwise
  */
-static int ipc_instance_is_free(const uint8_t instance)
+static uint8_t ipc_instance_is_free(const uint8_t instance)
 {
-	/* ipc_os_instance_lock(); */
 	if (ipc_shm_priv_data[instance].global == NULL)
 		return IPC_SHM_INSTANCE_FREE;
 	if (ipc_shm_priv_data[instance].global->state == IPC_SHM_STATE_CLEAR)
 		return IPC_SHM_INSTANCE_FREE;
 
-	/* ipc_os_instance_unlock(); */
 	return IPC_SHM_INSTANCE_USED;
 }
 
@@ -365,7 +363,7 @@ static int ipc_buf_pool_init(const uint8_t instance, int chan_id, int pool_id,
 	 */
 	err = ipc_queue_init(&pool->bd_queue, pool->num_bufs,
 		(uint16_t)sizeof(struct ipc_shm_bd), local_shm, remote_shm);
-	if (err)
+	if (err != 0)
 		return err;
 
 	/* init local/remote buffer pool addrs */
@@ -395,7 +393,7 @@ static int ipc_buf_pool_init(const uint8_t instance, int chan_id, int pool_id,
 		bd.data_size = 0;
 
 		err = ipc_queue_push(&pool->bd_queue, &bd);
-		if (err) {
+		if (err != 0) {
 			shm_err("Unable to init queue with free buffer descriptors "
 					"for pool %d of channel %d\n",
 					pool_id, chan_id);
@@ -463,7 +461,7 @@ static int managed_channel_init(const uint8_t instance, int chan_id,
 	err = ipc_queue_init(&chan->bd_queue, total_bufs,
 			     (uint16_t)sizeof(struct ipc_shm_bd),
 			     local_shm, remote_shm);
-	if (err)
+	if (err != 0)
 		return err;
 
 	/* init&map buffer pools after channel bd_queue */
@@ -474,7 +472,7 @@ static int managed_channel_init(const uint8_t instance, int chan_id,
 	for (i = 0; i < chan->num_pools; i++) {
 		err = ipc_buf_pool_init(instance, chan_id, i, local_pool_shm,
 				remote_pool_shm, &cfg->pools[i]);
-		if (err)
+		if (err != 0)
 			return err;
 
 		/* compute next pool local/remote shm base address */
@@ -547,7 +545,7 @@ static int ipc_shm_channel_init(const uint8_t instance, int chan_id,
 		shm_err("Invalid channel type\n");
 		err = -EINVAL;
 	}
-	if (err)
+	if (err != 0)
 		return err;
 
 	shm_dbg("ipc shm channel %d initialized\n", chan_id);
@@ -613,12 +611,12 @@ static int ipc_shm_init_instance(uint8_t instance,
 
 	/* pass interrupt and core data to hw */
 	err = ipc_hw_init(instance, cfg);
-	if (err)
+	if (err != 0)
 		return err;
 
 	/* init OS specific resources */
 	err = ipc_os_init(instance, cfg, ipc_shm_rx);
-	if (err)
+	if (err != 0)
 		goto err_free_hw;
 
 	/* global data stored at beginning of local shared memory */
@@ -634,7 +632,7 @@ static int ipc_shm_init_instance(uint8_t instance,
 	for (i = 0; i < ipc_shm_priv_data[instance].num_channels; i++) {
 		err = ipc_shm_channel_init(instance, i, local_chan_shm,
 				remote_chan_shm, &cfg->channels[i]);
-		if (err)
+		if (err != 0)
 			goto err_free_os;
 
 		/* compute next channel local/remote shm base address */
@@ -720,23 +718,23 @@ void *ipc_shm_acquire_buf(const uint8_t instance, int chan_id, size_t size)
 	return (void *) buf_addr;
 }
 
-int ipc_shm_init(const struct ipc_shm_instances_cfg *cfgs)
+int ipc_shm_init(const struct ipc_shm_instances_cfg *cfg)
 {
 	uint8_t i = 0;
 	int err = 0;
 
-	if (cfgs == NULL) {
+	if (cfg == NULL) {
 		shm_err("NULL argument\n");
 		return -EINVAL;
 	}
 
-	if (cfgs->num_instances > IPC_SHM_MAX_INSTANCES)
+	if (cfg->num_instances > IPC_SHM_MAX_INSTANCES)
 		return -EINVAL;
 
 	/* init all instances */
-	for (i = 0; i < cfgs->num_instances; i++) {
-		err = ipc_shm_init_instance(i, &cfgs->shm_cfg[i]);
-		if (err)
+	for (i = 0; i < cfg->num_instances; i++) {
+		err = ipc_shm_init_instance(i, &cfg->shm_cfg[i]);
+		if (err != 0)
 			return err;
 	}
 	return 0;
@@ -797,7 +795,7 @@ int ipc_shm_release_buf(const uint8_t instance, int chan_id, const void *buf)
 	bd.data_size = 0; /* reset size of written data in buffer */
 
 	err = ipc_queue_push(&pool->bd_queue, &bd);
-	if (err) {
+	if (err != 0) {
 		shm_err("Unable to release buffer %d from pool %d from channel %d with address %p\n",
 				bd.buf_id, bd.pool_id, chan_id, buf);
 		return err;
@@ -834,7 +832,7 @@ int ipc_shm_tx(const uint8_t instance, int chan_id, void *buf, size_t size)
 
 	/* push buffer descriptor in queue */
 	err = ipc_queue_push(&chan->bd_queue, &bd);
-	if (err) {
+	if (err != 0) {
 		shm_err("Unable to push buffer descriptor in channel queue\n");
 		return err;
 	}
