@@ -9,6 +9,7 @@
 #include <linux/string.h>
 #include <linux/stat.h>
 #include <linux/completion.h>
+#include <linux/of_address.h>
 
 #include "../ipc-shm.h"
 
@@ -69,6 +70,7 @@ MODULE_PARM_DESC(msg_sizes, "Sample message sizes");
  * @ipc_kobj:		sysfs kernel object
  * @ping_attr:		sysfs ping command attributes
  * @instance:		instance id
+ * @local_virt_shm:	local shared memory virtual address
  */
 static struct ipc_sample_app {
 	int num_channels;
@@ -78,6 +80,7 @@ static struct ipc_sample_app {
 	struct kobject *ipc_kobj;
 	struct kobj_attribute ping_attr;
 	uint8_t instance;
+	uintptr_t local_virt_shm;
 } app;
 
 /* Completion variable used to sync send_msg func with shm_rx_cb */
@@ -450,10 +453,22 @@ static int __init sample_mod_init(void)
 
 static void __exit sample_mod_exit(void)
 {
+	int err = 0;
+
 	sample_dbg("module version "MODULE_VER" exit\n");
 
 	free_sysfs();
 	ipc_shm_free();
+
+	err = request_mem_region((phys_addr_t) LOCAL_SHM_ADDR, IPC_SHM_SIZE, "sample");
+	if (!err) {
+		sample_info("Unable to reserve local shm region\n");
+		return;
+	}
+	app.local_virt_shm = (uintptr_t)ioremap(LOCAL_SHM_ADDR, IPC_SHM_SIZE);
+	memset_io(app.local_virt_shm, 0, IPC_SHM_SIZE);
+	iounmap((void *)app.local_virt_shm);
+	release_mem_region((phys_addr_t) LOCAL_SHM_ADDR, IPC_SHM_SIZE);
 }
 
 module_init(sample_mod_init);
