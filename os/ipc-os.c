@@ -26,27 +26,34 @@
 
 
 /**
- * struct ipc_os_priv - OS specific private data
- * @shm_size:		local/remote shared memory size
- * @local_phys_shm:	local shared memory physical address
+ * struct ipc_os_priv_instance - OS specific private data each instance
+ * @shm_size:			local/remote shared memory size
+ * @local_phys_shm:		local shared memory physical address
  * @remote_phys_shm:	remote shared memory physical address
- * @local_virt_shm:	local shared memory virtual address
+ * @local_virt_shm:		local shared memory virtual address
  * @remote_virt_shm:	remote shared memory virtual address
- * @rx_cb:		upper layer rx callback
- * @irq_num:		Linux IRQ number
+ * @irq_num:			Linux IRQ number
+ * @state:				state to indicate whether instance is initialized
  */
-struct ipc_os_priv {
+struct ipc_os_priv_instance {
 	int shm_size;
 	uintptr_t local_phys_shm;
 	uintptr_t remote_phys_shm;
 	uintptr_t local_virt_shm;
 	uintptr_t remote_virt_shm;
-	int (*rx_cb)(const uint8_t instance, int budget);
 	int irq_num;
+	int state;
 };
 
-/* OS specific private data */
-static struct ipc_os_priv priv;
+/**
+ * struct ipc_os_priv - OS specific private data
+ * @id:             private data per instance
+ * @rx_cb:          upper layer rx callback
+ */
+static struct ipc_os_priv {
+	struct ipc_os_priv_instance id[IPC_SHM_MAX_INSTANCES];
+	int (*rx_cb)(const uint8_t instance, int budget);
+} priv;
 
 static void ipc_shm_softirq(unsigned long arg);
 #if LINUX_VERSION_CODE < KERNEL_VERSION(5, 10, 0)
@@ -60,23 +67,39 @@ static void ipc_shm_softirq(unsigned long arg)
 {
 	int work = 0;
 	unsigned long budget = IPC_SOFTIRQ_BUDGET;
+	uint8_t i = 0;
 
-	work = priv.rx_cb(0, budget);
-
-	if (work < budget) {
-		/* work done, re-enable irq */
-		ipc_hw_irq_enable(0);
-	} else {
-		/* work not done, reschedule softirq */
-		tasklet_schedule(&ipc_shm_rx_tasklet);
+	for (i = 0; i < IPC_SHM_MAX_INSTANCES; i++) {
+		work = priv.rx_cb(i, budget);
+		if ((priv.id[i].state == IPC_SHM_INSTANCE_DISABLED)
+					|| (priv.id[i].irq_num == IPC_IRQ_NONE))
+			continue;
+		if (work < budget) {
+			/* work done, re-enable irq */
+			ipc_hw_irq_enable(i);
+		} else {
+			/* work not done, reschedule softirq */
+			tasklet_schedule(&ipc_shm_rx_tasklet);
+		}
 	}
 }
 
 /* driver interrupt service routine */
 static irqreturn_t ipc_shm_hardirq(int irq, void *dev)
 {
-	ipc_hw_irq_disable(0);
-	ipc_hw_irq_clear(0);
+	uint8_t i = 0;
+
+	for (i = 0; i < IPC_SHM_MAX_INSTANCES; i++) {
+		if ((priv.id[i].state == IPC_SHM_INSTANCE_DISABLED)
+					|| (priv.id[i].irq_num == IPC_IRQ_NONE))
+			continue;
+
+		/* disable notifications from remote */
+		ipc_hw_irq_disable(i);
+
+		/* clear notification */
+		ipc_hw_irq_clear(i);
+	}
 
 	tasklet_schedule(&ipc_shm_rx_tasklet);
 
@@ -85,6 +108,7 @@ static irqreturn_t ipc_shm_hardirq(int irq, void *dev)
 
 /**
  * ipc_shm_os_init() - OS specific initialization code
+ * @instance:	 instance id
  * @cfg:         configuration parameters
  * @rx_cb:	rx callback to be called from rx softirq
  *
@@ -100,14 +124,15 @@ int ipc_os_init(const uint8_t instance, const struct ipc_shm_cfg *cfg,
 	if (!rx_cb)
 		return -EINVAL;
 
-	/* multi-instance is not yet implemented */
-	if (instance > 1)
+	/* check valid instance */
+	if ((instance > IPC_SHM_MAX_INSTANCES) || (instance < 0))
 		return -EINVAL;
 
 	/* save params */
-	priv.shm_size = cfg->shm_size;
-	priv.local_phys_shm = cfg->local_shm_addr;
-	priv.remote_phys_shm = cfg->remote_shm_addr;
+	priv.id[instance].shm_size = cfg->shm_size;
+	priv.id[instance].local_phys_shm = cfg->local_shm_addr;
+	priv.id[instance].remote_phys_shm = cfg->remote_shm_addr;
+	priv.id[instance].state = IPC_SHM_INSTANCE_ENABLED;
 	priv.rx_cb = rx_cb;
 
 	/* request and map local physical shared memory */
@@ -118,9 +143,9 @@ int ipc_os_init(const uint8_t instance, const struct ipc_shm_cfg *cfg,
 		return -EADDRINUSE;
 	}
 
-	priv.local_virt_shm = (uintptr_t)ioremap(cfg->local_shm_addr,
+	priv.id[instance].local_virt_shm = (uintptr_t)ioremap(cfg->local_shm_addr,
 						 cfg->shm_size);
-	if (!priv.local_virt_shm) {
+	if (!priv.id[instance].local_virt_shm) {
 		err = -ENOMEM;
 		goto err_release_local_region;
 	}
@@ -134,9 +159,9 @@ int ipc_os_init(const uint8_t instance, const struct ipc_shm_cfg *cfg,
 		goto err_unmap_local_shm;
 	}
 
-	priv.remote_virt_shm = (uintptr_t)ioremap(cfg->remote_shm_addr,
+	priv.id[instance].remote_virt_shm = (uintptr_t)ioremap(cfg->remote_shm_addr,
 						  cfg->shm_size);
-	if (!priv.remote_virt_shm) {
+	if (!priv.id[instance].remote_virt_shm) {
 		err = -ENOMEM;
 		goto err_release_remote_region;
 	}
@@ -149,14 +174,14 @@ int ipc_os_init(const uint8_t instance, const struct ipc_shm_cfg *cfg,
 		goto err_unmap_remote_shm;
 	}
 
-	priv.irq_num = of_irq_get(mscm, ipc_hw_get_rx_irq(instance));
-	shm_dbg("Rx IRQ = %d\n", priv.irq_num);
+	priv.id[instance].irq_num = of_irq_get(mscm, ipc_hw_get_rx_irq(instance));
+	shm_dbg("Rx IRQ = %d\n", priv.id[instance].irq_num);
 	of_node_put(mscm); /* release refcount to mscm DT node */
 
 	/* init rx interrupt */
-	err = request_irq(priv.irq_num, ipc_shm_hardirq, 0, DRIVER_NAME, &priv);
+	err = request_irq(priv.id[instance].irq_num, ipc_shm_hardirq, 0, DRIVER_NAME, &priv);
 	if (err) {
-		shm_err("Request interrupt %d failed\n", priv.irq_num);
+		shm_err("Request interrupt %d failed\n", priv.id[instance].irq_num);
 		goto err_unmap_remote_shm;
 	}
 
@@ -185,11 +210,13 @@ void ipc_os_free(const uint8_t instance)
 	/* kill softirq task */
 	tasklet_kill(&ipc_shm_rx_tasklet);
 
-	free_irq(priv.irq_num, &priv);
-	iounmap((void *)priv.remote_virt_shm);
-	release_mem_region((phys_addr_t)priv.remote_phys_shm, priv.shm_size);
-	iounmap((void *)priv.local_virt_shm);
-	release_mem_region((phys_addr_t)priv.local_phys_shm, priv.shm_size);
+	free_irq(priv.id[instance].irq_num, &priv);
+	iounmap((void *)priv.id[instance].remote_virt_shm);
+	release_mem_region((phys_addr_t)priv.id[instance].remote_phys_shm,
+		priv.id[instance].shm_size);
+	iounmap((void *)priv.id[instance].local_virt_shm);
+	release_mem_region((phys_addr_t)priv.id[instance].local_phys_shm,
+		priv.id[instance].shm_size);
 }
 
 /**
@@ -197,7 +224,7 @@ void ipc_os_free(const uint8_t instance)
  */
 uintptr_t ipc_os_get_local_shm(const uint8_t instance)
 {
-	return priv.local_virt_shm;
+	return priv.id[instance].local_virt_shm;
 }
 
 /**
@@ -205,7 +232,7 @@ uintptr_t ipc_os_get_local_shm(const uint8_t instance)
  */
 uintptr_t ipc_os_get_remote_shm(const uint8_t instance)
 {
-	return priv.remote_virt_shm;
+	return priv.id[instance].remote_virt_shm;
 }
 
 /**

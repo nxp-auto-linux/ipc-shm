@@ -12,6 +12,9 @@
 /* softirq work budget used to prevent CPU starvation */
 #define IPC_SOFTIRQ_BUDGET 128
 
+#define IPC_SHM_INSTANCE_DISABLED   0
+#define IPC_SHM_INSTANCE_ENABLED    1
+
 /* convenience wrappers for printing errors and debug messages */
 #define shm_fmt(fmt) DRIVER_NAME": %s(): "fmt
 #define shm_err(fmt, ...) pr_err(shm_fmt(fmt), __func__, ##__VA_ARGS__)
