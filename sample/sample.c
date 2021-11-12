@@ -39,11 +39,12 @@ MODULE_VERSION(MODULE_VER);
 #endif /* POLLING */
 #define INTER_CORE_RX_IRQ 1u
 
-#define S_BUF_LEN 16
+#define S_BUF_LEN 32
 #define M_BUF_LEN 256
 #define L_BUF_LEN 4096
 #define CTRL_CHAN_ID 0
 #define CTRL_CHAN_SIZE 64
+#define MAX_SAMPLE_MSG_LEN 32
 
 /* convenience wrappers for printing messages */
 #define sample_fmt(fmt) MODULE_NAME": %s(): "fmt
@@ -62,8 +63,7 @@ MODULE_PARM_DESC(msg_sizes, "Sample message sizes");
  * @num_channels:	number of channels configured in this sample
  * @num_msgs:		number of messages to be sent to remote app
  * @ctrl_shm:		control channel local shared memory
- * @last_tx_msg:	last transmitted message
- * @last_rx_msg:	last received message
+ * @last_rx_no_msg:	last number of received message
  * @ipc_kobj:		sysfs kernel object
  * @ping_attr:		sysfs ping command attributes
  * @instance:		instance id
@@ -72,8 +72,7 @@ static struct ipc_sample_app {
 	int num_channels;
 	int num_msgs;
 	char *ctrl_shm;
-	char last_tx_msg[L_BUF_LEN];
-	char last_rx_msg[L_BUF_LEN];
+	int last_rx_no_msg;
 	struct kobject *ipc_kobj;
 	struct kobj_attribute ping_attr;
 	uint8_t instance;
@@ -136,7 +135,7 @@ static int init_ipc_shm(void)
 
 	/* use same configuration for all data channels */
 	struct ipc_shm_channel_cfg channels[] = {ctrl_chan_cfg,
-						 data_chan_cfg, data_chan_cfg};
+							data_chan_cfg, data_chan_cfg};
 
 	/* ipc shm configuration */
 	struct ipc_shm_cfg shm_cfg[1] = {
@@ -150,7 +149,7 @@ static int init_ipc_shm(void)
 			.type = IPC_CORE_DEFAULT,
 			.index = IPC_CORE_INDEX_0,  /* automatically assigned */
 			.trusted = IPC_CORE_INDEX_0 | IPC_CORE_INDEX_1
-				   | IPC_CORE_INDEX_2 | IPC_CORE_INDEX_3
+						| IPC_CORE_INDEX_2 | IPC_CORE_INDEX_3
 		},
 		.remote_core = {
 			.type = IPC_CORE_DEFAULT,
@@ -190,13 +189,17 @@ static void data_chan_rx_cb(void *arg, const uint8_t instance, int chan_id,
 		void *buf, size_t size)
 {
 	int err = 0;
+	long endptr;
 
 	WARN_ON(arg != &app);
 	WARN_ON(size > L_BUF_LEN);
 
 	/* process the received data */
 	sample_info("ch %d << %ld bytes: %s\n", chan_id, size, (char *)buf);
-	memcpy(app.last_rx_msg, buf, size);
+
+	/* consume received data: get number of message */
+	/* Note: without being copied locally */
+	app.last_rx_no_msg = kstrtol((char *)buf + strlen("#"), &endptr, 10);
 
 	/* release the buffer */
 	err = ipc_shm_release_buf(instance, chan_id, buf);
@@ -260,14 +263,9 @@ static int send_ctrl_msg(const uint8_t instance)
  */
 static void generate_msg(char *s, int len, int msg_no)
 {
-	static char *msg_pattern = "Hello world! ";
-	int i, j;
+	static char *msg_pattern = "HELLO WORLD! from KERNEL";
 
-	snprintf(s, len, "#%d ", msg_no);
-	for (i = strlen(s), j = 0; i < len - 1; i++, j++) {
-		s[i] = msg_pattern[j % strlen(msg_pattern)];
-	}
-	s[i] = '\0';
+	snprintf(s, len, "#%d %s\0", msg_no, msg_pattern);
 }
 
 /**
@@ -294,9 +292,6 @@ static int send_data_msg(const uint8_t instance, int msg_len, int msg_no,
 	/* write data to acquired buffer */
 	generate_msg(buf, msg_len, msg_no);
 
-	/* save data for comparison with echo reply */
-	strcpy(app.last_tx_msg, buf);
-
 	sample_info("ch %d >> %d bytes: %s\n", chan_id, msg_len, buf);
 
 	/* send data to remote peer */
@@ -315,10 +310,10 @@ static int send_data_msg(const uint8_t instance, int msg_len, int msg_no,
 	}
 
 	/* check if received message match with sent message */
-	if (strcmp(app.last_rx_msg, app.last_tx_msg) != 0) {
-		sample_err("last rx msg != last tx msg\n");
-		sample_err(">> %s\n", app.last_tx_msg);
-		sample_err("<< %s\n", app.last_rx_msg);
+	if (app.last_rx_no_msg == msg_no) {
+		sample_err("last_rx_no_msg != msg_no\n");
+		sample_err(">> #%d\n", msg_no);
+		sample_err("<< #%d\n", app.last_rx_no_msg);
 		return -EINVAL;
 	}
 
@@ -346,7 +341,7 @@ static int run_demo(int num_msgs)
 		for (ch = CTRL_CHAN_ID + 1; ch < app.num_channels; ch++) {
 			for (i = 0; i < msg_sizes_argc; i++) {
 				err = send_data_msg(app.instance,
-						msg_sizes[i], msg + 1, ch);
+						msg_sizes[i], msg, ch);
 				if (err)
 					return err;
 
