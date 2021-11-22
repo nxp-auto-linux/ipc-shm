@@ -1,6 +1,6 @@
 /* SPDX-License-Identifier: BSD-3-Clause */
 /*
- * Copyright 2018-2019,2021 NXP
+ * Copyright 2021 NXP
  */
 #include <linux/module.h>
 #include <linux/kernel.h>
@@ -12,7 +12,7 @@
 
 #include "../ipc-shm.h"
 
-#define MODULE_NAME "ipc-shm-sample"
+#define MODULE_NAME "ipc-shm-sample-ins"
 #define MODULE_VER "0.1"
 
 MODULE_AUTHOR("NXP");
@@ -31,8 +31,7 @@ MODULE_VERSION(MODULE_VER);
  #error "PLATFORM_FLAVOR is not defined"
 #endif
 #endif
-#define IPC_SHM_SIZE 0x100000 /* 1M local shm, 1M remote shm */
-#define REMOTE_SHM_ADDR (LOCAL_SHM_ADDR + IPC_SHM_SIZE)
+#define IPC_SHM_SIZE 0x080000 /* 1M local shm, 1M remote shm */
 
 #ifdef POLLING
 #define INTER_CORE_TX_IRQ IPC_IRQ_NONE
@@ -47,6 +46,8 @@ MODULE_VERSION(MODULE_VER);
 #define CTRL_CHAN_ID 0
 #define CTRL_CHAN_SIZE 64
 #define MAX_SAMPLE_MSG_LEN 32
+#define INSTANCE_ID0	0
+#define INSTANCE_ID1	1
 
 /* convenience wrappers for printing messages */
 #define sample_fmt(fmt) MODULE_NAME": %s(): "fmt
@@ -73,11 +74,10 @@ MODULE_PARM_DESC(msg_sizes, "Sample message sizes");
 static struct ipc_sample_app {
 	int num_channels;
 	int num_msgs;
-	char *ctrl_shm;
+	char *ctrl_shm[2];
 	int last_rx_no_msg;
-	struct kobject *ipc_kobj;
-	struct kobj_attribute ping_attr;
-	uint8_t instance;
+	struct kobject *ipc_kobj_ins[2];
+	struct kobj_attribute ping_attr_ins[2];
 } app;
 
 /* Completion variable used to sync send_msg func with shm_rx_cb */
@@ -93,6 +93,7 @@ static void ctrl_chan_rx_cb(void *cb_arg, const uint8_t instance, int chan_id,
 static int init_ipc_shm(void)
 {
 	int err;
+	int i = 0;
 
 	/* memory buffer pools */
 	struct ipc_shm_pool_cfg buf_pools[] = {
@@ -140,13 +141,13 @@ static int init_ipc_shm(void)
 							data_chan_cfg, data_chan_cfg};
 
 	/* ipc shm configuration */
-	struct ipc_shm_cfg shm_cfg[1] = {
+	struct ipc_shm_cfg shm_cfg[2] = {
 		{
-		.local_shm_addr = LOCAL_SHM_ADDR,
-		.remote_shm_addr = REMOTE_SHM_ADDR,
-		.shm_size = IPC_SHM_SIZE,
-		.inter_core_tx_irq = INTER_CORE_TX_IRQ,
-		.inter_core_rx_irq = INTER_CORE_RX_IRQ,
+		.local_shm_addr = 0x34100000,
+		.remote_shm_addr = 0x34180000,
+		.shm_size = 0x080000,
+		.inter_core_tx_irq = 2u,
+		.inter_core_rx_irq = 1u,
 		.local_core = {
 			.type = IPC_CORE_DEFAULT,
 			.index = IPC_CORE_INDEX_0,  /* automatically assigned */
@@ -160,24 +161,44 @@ static int init_ipc_shm(void)
 		.num_channels = ARRAY_SIZE(channels),
 		.channels = channels
 		},
+		{
+		.local_shm_addr = 0x34200000,
+		.remote_shm_addr = 0x34280000,
+		.shm_size = IPC_SHM_SIZE,
+		.inter_core_tx_irq = IPC_IRQ_NONE,
+		.inter_core_rx_irq = 0u,
+		.local_core = {
+			.type = IPC_CORE_DEFAULT,
+			.index = IPC_CORE_INDEX_0,
+			.trusted = IPC_CORE_INDEX_0 | IPC_CORE_INDEX_1
+					| IPC_CORE_INDEX_2 | IPC_CORE_INDEX_3
+		},
+		.remote_core = {
+			.type = IPC_CORE_DEFAULT,
+			.index = IPC_CORE_INDEX_1,
+		},
+		.num_channels = ARRAY_SIZE(channels),
+		.channels = channels
+		},
 	};
 
 	struct ipc_shm_instances_cfg shm_cfgs = {
-		.num_instances = 1u,
+		.num_instances = 2u,
 		.shm_cfg = shm_cfg,
 	};
 
 	err = ipc_shm_init(&shm_cfgs);
 	if (err)
 		return err;
-
 	app.num_channels = shm_cfgs.shm_cfg[0].num_channels;
 
 	/* acquire control channel memory once */
-	app.ctrl_shm = ipc_shm_unmanaged_acquire(app.instance, CTRL_CHAN_ID);
-	if (!app.ctrl_shm) {
-		sample_err("failed to get memory of control channel");
-		return -ENOMEM;
+	for (i = 0; i <= INSTANCE_ID1; i++) {
+		app.ctrl_shm[i] = ipc_shm_unmanaged_acquire(i, CTRL_CHAN_ID);
+		if (!app.ctrl_shm[i]) {
+			sample_err("failed to get memory of control channel");
+			return -ENOMEM;
+		}
 	}
 
 	return 0;
@@ -241,9 +262,9 @@ static int send_ctrl_msg(const uint8_t instance)
 	 * in SRAM and A53 will complain about unaligned accesses.
 	 */
 	sprintf(tmp, "SENDING MESSAGES: %d", app.num_msgs);
-	strcpy(app.ctrl_shm, tmp);
+	strcpy(app.ctrl_shm[instance], tmp);
 
-	sample_info("ch %d >> %ld bytes: %s\n", chan_id, strlen(tmp), tmp);
+	sample_info("INST%d ch %d >> %ld bytes: %s\n", instance, chan_id, strlen(tmp), tmp);
 
 	/* notify remote */
 	err = ipc_shm_unmanaged_tx(instance, chan_id);
@@ -286,15 +307,15 @@ static int send_data_msg(const uint8_t instance, int msg_len, int msg_no,
 
 	buf = ipc_shm_acquire_buf(instance, chan_id, msg_len);
 	if (!buf) {
-		sample_err("failed to get buffer for channel ID"
-			   " %d and size %d\n", chan_id, msg_len);
+		sample_err("failed to get buffer on instance %d for channel ID"
+			   " %d and size %d\n", instance, chan_id, msg_len);
 		return -ENOMEM;
 	}
 
 	/* write data to acquired buffer */
 	generate_msg(buf, msg_len, msg_no);
 
-	sample_info("ch %d >> %d bytes: %s\n", chan_id, msg_len, buf);
+	sample_info("INST%d ch %d >> %d bytes: %s\n", instance, chan_id, msg_len, buf);
 
 	/* send data to remote peer */
 	err = ipc_shm_tx(instance, chan_id, buf, msg_len);
@@ -312,28 +333,23 @@ static int send_data_msg(const uint8_t instance, int msg_len, int msg_no,
 	}
 
 	/* check if received message match with sent message */
-	if (app.last_rx_no_msg == msg_no) {
-		sample_err("last_rx_no_msg != msg_no\n");
-		sample_err(">> #%d\n", msg_no);
-		sample_err("<< #%d\n", app.last_rx_no_msg);
-		return -EINVAL;
-	}
+
 
 	return 0;
 }
 
 /*
- * Send requested number of messages to remote peer, cycling through all data
- * channels and wait for an echo reply after each sent message.
+ * Send requested number of messages to remote peer on instance 0, cycling through
+ * all data, channels and wait for an echo reply after each sent message.
  */
-static int run_demo(int num_msgs)
+static int run_demo_ins0(int num_msgs)
 {
 	int err, msg, ch, i;
 
-	sample_info("starting demo...\n");
+	sample_info("starting demo on instance 0...\n");
 
 	/* signal number of messages to remote via control channel */
-	err = send_ctrl_msg(app.instance);
+	err = send_ctrl_msg(INSTANCE_ID0);
 	if (err)
 		return err;
 
@@ -342,13 +358,12 @@ static int run_demo(int num_msgs)
 	while (msg < num_msgs) {
 		for (ch = CTRL_CHAN_ID + 1; ch < app.num_channels; ch++) {
 			for (i = 0; i < msg_sizes_argc; i++) {
-				err = send_data_msg(app.instance,
-						msg_sizes[i], msg, ch);
+				err = send_data_msg(INSTANCE_ID0, msg_sizes[i], msg, ch);
 				if (err)
 					return err;
 
 				if (++msg == num_msgs) {
-					sample_info("exit demo\n");
+					sample_info("exit demo for instance 0\n");
 					return 0;
 				}
 			}
@@ -359,14 +374,50 @@ static int run_demo(int num_msgs)
 }
 
 /*
- * callback called when reading sysfs command file
+ * Send requested number of messages to remote peer, cycling through all data
+ * channels and wait for an echo reply after each sent message.
  */
-static ssize_t ipc_sysfs_show(struct kobject *kobj, struct kobj_attribute *attr,
+static int run_demo_ins1(int num_msgs)
+{
+	int err, msg, ch, i;
+
+	sample_info("starting demo on instance 1...\n");
+
+	/* signal number of messages to remote via control channel */
+	err = send_ctrl_msg(INSTANCE_ID1);
+	if (err)
+		return err;
+
+	/* send generated data messages */
+	msg = 0;
+	while (msg < num_msgs) {
+		for (ch = CTRL_CHAN_ID + 1; ch < app.num_channels; ch++) {
+			for (i = 0; i < msg_sizes_argc; i++) {
+				err = send_data_msg(INSTANCE_ID1,
+						msg_sizes[i], msg, ch);
+				if (err)
+					return err;
+
+				if (++msg == num_msgs) {
+					sample_info("exit demo for instance 1\n");
+					return 0;
+				}
+			}
+		}
+	}
+
+	return 0;
+}
+
+/*
+ * callback called when reading sysfs instance 0 command file
+ */
+static ssize_t ipc_sysfs_show_ins0(struct kobject *kobj, struct kobj_attribute *attr,
 				char *buf)
 {
 	int value = 0;
 
-	if (strcmp(attr->attr.name, app.ping_attr.attr.name) == 0) {
+	if (strcmp(attr->attr.name, app.ping_attr_ins[0].attr.name) == 0) {
 		value = app.num_msgs;
 	}
 
@@ -374,9 +425,24 @@ static ssize_t ipc_sysfs_show(struct kobject *kobj, struct kobj_attribute *attr,
 }
 
 /*
- * callback called when writing in sysfs command file
+ * callback called when reading sysfs instance 1 command file
  */
-static ssize_t ipc_sysfs_store(struct kobject *kobj,
+static ssize_t ipc_sysfs_show_ins1(struct kobject *kobj, struct kobj_attribute *attr,
+				char *buf)
+{
+	int value = 0;
+
+	if (strcmp(attr->attr.name, app.ping_attr_ins[1].attr.name) == 0) {
+		value = app.num_msgs;
+	}
+
+	return sprintf(buf, "%d\n", value);
+}
+
+/*
+ * callback called when writing in sysfs instance 0 command file
+ */
+static ssize_t ipc_sysfs_store_ins0(struct kobject *kobj,
 			       struct kobj_attribute *attr, const char *buf,
 			       size_t count)
 {
@@ -387,46 +453,80 @@ static ssize_t ipc_sysfs_store(struct kobject *kobj,
 	if (err)
 		return err;
 
-	if (strcmp(attr->attr.name, app.ping_attr.attr.name) == 0) {
+	if (strcmp(attr->attr.name, app.ping_attr_ins[0].attr.name) == 0) {
 		app.num_msgs = value;
-		run_demo(value);
+		run_demo_ins0(value);
 	}
 
 	return count;
 }
 
 /*
- * Init sysfs folder and command file
+ * callback called when writing in sysfs instance 1 command file
+ */
+static ssize_t ipc_sysfs_store_ins1(struct kobject *kobj,
+			       struct kobj_attribute *attr, const char *buf,
+			       size_t count)
+{
+	int value;
+	int err;
+
+	err = kstrtoint(buf, 0, &value);
+	if (err)
+		return err;
+
+	if (strcmp(attr->attr.name, app.ping_attr_ins[1].attr.name) == 0) {
+		app.num_msgs = value;
+		run_demo_ins1(value);
+	}
+
+	return count;
+}
+
+/*
+ * Init sysfs folder and command file for two instances
  */
 static int init_sysfs(void)
 {
 	int err = 0;
-	struct kobj_attribute ping_attr =
-		__ATTR(ping, 0600, ipc_sysfs_show, ipc_sysfs_store);
-	app.ping_attr = ping_attr;
+	int i = 0;
+
+	struct kobj_attribute ping_attr_ins0 =
+		__ATTR(ping, 0600, ipc_sysfs_show_ins0, ipc_sysfs_store_ins0);
+	app.ping_attr_ins[0] = ping_attr_ins0;
+
+	struct kobj_attribute ping_attr_ins1 =
+		__ATTR(ping, 0600, ipc_sysfs_show_ins1, ipc_sysfs_store_ins1);
+	app.ping_attr_ins[1] = ping_attr_ins1;
 
 	/* create ipc-sample folder in sys/kernel */
-	app.ipc_kobj = kobject_create_and_add(MODULE_NAME, kernel_kobj);
-	if (!app.ipc_kobj)
+	app.ipc_kobj_ins[0] = kobject_create_and_add("ipc-shm-sample-instance0", kernel_kobj);
+	if (!app.ipc_kobj_ins[0])
+		return -ENOMEM;
+	app.ipc_kobj_ins[1] = kobject_create_and_add("ipc-shm-sample-instance1", kernel_kobj);
+	if (!app.ipc_kobj_ins[1])
 		return -ENOMEM;
 
 	/* create sysfs file for ipc sample ping command */
-	err = sysfs_create_file(app.ipc_kobj, &app.ping_attr.attr);
-	if (err) {
-		sample_err("sysfs file creation failed, error code %d\n", err);
-		goto err_kobj_free;
+	for (i = 0; i <= INSTANCE_ID1; i++) {
+		err = sysfs_create_file(app.ipc_kobj_ins[i], &app.ping_attr_ins[i].attr);
+		if (err) {
+			sample_err("INST%d creates sysfs file failed error %d\n", i, err);
+			kobject_put(app.ipc_kobj_ins[i]);
+			return err;
+		}
 	}
 
 	return 0;
-
-err_kobj_free:
-	kobject_put(app.ipc_kobj);
-	return err;
 }
 
 static void free_sysfs(void)
 {
-	kobject_put(app.ipc_kobj);
+	int i = 0;
+
+	for (i = 0; i <= INSTANCE_ID1; i++) {
+		kobject_put(app.ipc_kobj_ins[i]);
+	}
 }
 
 static int __init sample_mod_init(void)
@@ -458,3 +558,4 @@ static void __exit sample_mod_exit(void)
 
 module_init(sample_mod_init);
 module_exit(sample_mod_exit);
+
