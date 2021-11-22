@@ -69,12 +69,20 @@ enum ipc_shm_core_type {
  * @IPC_CORE_INDEX_1:	Processor index 1
  * @IPC_CORE_INDEX_2:	Processor index 2
  * @IPC_CORE_INDEX_3:	Processor index 3
+ * @IPC_CORE_INDEX_4:	Processor index 4
+ * @IPC_CORE_INDEX_5:	Processor index 5
+ * @IPC_CORE_INDEX_6:	Processor index 6
+ * @IPC_CORE_INDEX_7:	Processor index 7
  */
 enum ipc_shm_core_index {
 	IPC_CORE_INDEX_0 = 0x01u,
 	IPC_CORE_INDEX_1 = 0x02u,
 	IPC_CORE_INDEX_2 = 0x04u,
 	IPC_CORE_INDEX_3 = 0x08u,
+	IPC_CORE_INDEX_4 = 0x10u,
+	IPC_CORE_INDEX_5 = 0x20u,
+	IPC_CORE_INDEX_6 = 0x40u,
+	IPC_CORE_INDEX_7 = 0x80u,
 };
 
 /**

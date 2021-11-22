@@ -1,10 +1,11 @@
 # SPDX-License-Identifier:	BSD-3-Clause
 #
-# Copyright 2018-2020 NXP
+# Copyright 2018-2021 NXP
 #
 
 MODULE_NAME := ipc-shm-dev
 UIO_MODULE_NAME := ipc-shm-uio
+PLATFORM_FLAVOR ?= s32g2
 
 ifneq ($(KERNELRELEASE),)
 # kbuild part of makefile
@@ -16,8 +17,14 @@ $(MODULE_NAME)-y := ipc-shm.o ipc-queue.o os/ipc-os.o
 $(UIO_MODULE_NAME)-y := os/ipc-uio.o
 
 ifeq ($(CONFIG_SOC_S32GEN1),y)
+ifeq ($(PLATFORM_FLAVOR),s32g2)
 $(MODULE_NAME)-y += hw/ipc-hw-s32gen1.o
 $(UIO_MODULE_NAME)-y += hw/ipc-hw-s32gen1.o
+endif
+ifeq ($(PLATFORM_FLAVOR),s32g3)
+$(MODULE_NAME)-y += hw/ipc-hw-s32g3xx.o
+$(UIO_MODULE_NAME)-y += hw/ipc-hw-s32g3xx.o
+endif
 endif
 
 ifeq ($(CONFIG_SOC_S32V234),y)
@@ -39,6 +46,7 @@ PWD := $(shell pwd)
 # KERNELDIR    : Linux kernel source code location
 # INSTALL_DIR  : location of the module installation
 # CROSS_COMPILE: the path and prefix of the used cross compiler
+# PLATFORM_FLAVOR: build for s32g2 or s32g3
 
 modules:
 	$(MAKE) -C $(KERNELDIR) M=$(PWD) ARCH=$(ARCH) CROSS_COMPILE=$(CROSS_COMPILE) $@

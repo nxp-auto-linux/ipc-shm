@@ -65,8 +65,10 @@ Follow the steps for building NXP Auto Linux BSP with Yocto::
   Framework release from Flexera catalog and replace the line with SRCREV
   with SRCREV = "${AUTOREV}".
 
-Note: use image **fsl-image-auto** with any of the following machines supported
-      for IPCF: s32g274aevb, s32r45xevb, s32v234evb.
+Note: use image **fsl-image-auto** with any of machine supported or
+      add the following line in conf/local.conf file:
+      *IMAGE_INSTALL_append_pn-fsl-image-auto = " ipc-shm"*
+
 
 Building manually
 -----------------
@@ -86,6 +88,10 @@ Building manually
 3. Build IPCF driver and sample modules providing kernel source location, e.g.::
 
     make -C ./ipc-shm/sample KERNELDIR=$PWD/linux modules
+
+Note: for S32G3xx must add PLATFORM_FLAVOR
+
+    make -C ./ipc-shm/sample PLATFORM_FLAVOR=s32g3 KERNELDIR=$PWD/linux modules
 
 .. _run-shm-linux:
 

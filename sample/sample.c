@@ -23,11 +23,13 @@ MODULE_VERSION(MODULE_VER);
 
 /* IPC SHM configuration defines */
 #if defined(CONFIG_SOC_S32GEN1)
+#if defined(PLATFORM_FLAVOR_s32g3)
+	#define LOCAL_SHM_ADDR 0x34000000
+#elif defined(PLATFORM_FLAVOR_s32g2)
 	#define LOCAL_SHM_ADDR 0x34100000
-#elif defined(CONFIG_SOC_S32V234)
-	#define LOCAL_SHM_ADDR 0x3E900000
 #else
-	#error "Platform not supported"
+ #error "PLATFORM_FLAVOR is not defined"
+#endif
 #endif
 #define IPC_SHM_SIZE 0x100000 /* 1M local shm, 1M remote shm */
 #define REMOTE_SHM_ADDR (LOCAL_SHM_ADDR + IPC_SHM_SIZE)
