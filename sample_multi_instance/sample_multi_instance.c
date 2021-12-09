@@ -31,7 +31,6 @@ MODULE_VERSION(MODULE_VER);
  #error "PLATFORM_FLAVOR is not defined"
 #endif
 #endif
-#define IPC_SHM_SIZE 0x080000 /* 1M local shm, 1M remote shm */
 
 #ifdef POLLING
 #define INTER_CORE_TX_IRQ IPC_IRQ_NONE
@@ -144,8 +143,8 @@ static int init_ipc_shm(void)
 	struct ipc_shm_cfg shm_cfg[2] = {
 		{
 		.local_shm_addr = 0x34100000,
-		.remote_shm_addr = 0x34180000,
-		.shm_size = 0x080000,
+		.remote_shm_addr = 0x34200000,
+		.shm_size = 0x100000,
 		.inter_core_tx_irq = 2u,
 		.inter_core_rx_irq = 1u,
 		.local_core = {
@@ -162,9 +161,9 @@ static int init_ipc_shm(void)
 		.channels = channels
 		},
 		{
-		.local_shm_addr = 0x34200000,
-		.remote_shm_addr = 0x34280000,
-		.shm_size = IPC_SHM_SIZE,
+		.local_shm_addr = 0x34080000,
+		.remote_shm_addr = 0x340C0000,
+		.shm_size = 0x040000,
 		.inter_core_tx_irq = IPC_IRQ_NONE,
 		.inter_core_rx_irq = 0u,
 		.local_core = {
