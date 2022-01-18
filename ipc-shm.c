@@ -1,6 +1,6 @@
 /* SPDX-License-Identifier: BSD-3-Clause */
 /*
- * Copyright 2018-2021 NXP
+ * Copyright 2018-2022 NXP
  */
 #include "ipc-os.h"
 #include "ipc-hw.h"
@@ -272,6 +272,11 @@ static int ipc_channel_rx(const uint8_t instance, int chan_id, int budget)
 }
 
 /**
+ * ipc_instance_is_free() - determine if the instance is used or not
+ * @instance:	instance id
+ *
+ * This function return the state of instance.
+ *
  * Return: IPC_SHM_INSTANCE_FREE if instance is free,
  *     IPC_SHM_INSTANCE_USED otherwise
  */
@@ -688,6 +693,11 @@ void *ipc_shm_acquire_buf(const uint8_t instance, int chan_id, size_t size)
 	uintptr_t buf_addr;
 	int pool_id;
 
+	/* check if instance is valid */
+	if (ipc_instance_is_free(instance) == IPC_SHM_INSTANCE_FREE) {
+		return NULL;
+	}
+
 	chan = get_managed_chan(instance, chan_id);
 	if ((chan == NULL) || (size == 0u))
 		return NULL;
@@ -777,6 +787,11 @@ int ipc_shm_release_buf(const uint8_t instance, int chan_id, const void *buf)
 	struct ipc_shm_bd bd;
 	int err;
 
+	/* check if instance is valid */
+	if (ipc_instance_is_free(instance) == IPC_SHM_INSTANCE_FREE) {
+		return -EINVAL;
+	}
+
 	chan = get_managed_chan(instance, chan_id);
 	if ((chan == NULL) || (buf == NULL))
 		return -EINVAL;
@@ -813,6 +828,11 @@ int ipc_shm_tx(const uint8_t instance, int chan_id, void *buf, size_t size)
 	struct ipc_shm_bd bd;
 	int err;
 
+	/* check if instance is used */
+	if (ipc_instance_is_free(instance) == IPC_SHM_INSTANCE_FREE) {
+		return -EINVAL;
+	}
+
 	chan = get_managed_chan(instance, chan_id);
 	if ((chan == NULL) || (buf == NULL) || (size == 0u))
 		return -EINVAL;
@@ -845,9 +865,14 @@ int ipc_shm_tx(const uint8_t instance, int chan_id, void *buf, size_t size)
 
 void *ipc_shm_unmanaged_acquire(const uint8_t instance, int chan_id)
 {
-	struct ipc_unmanaged_channel *chan = get_unmanaged_chan(instance,
-			chan_id);
+	struct ipc_unmanaged_channel *chan = NULL;
 
+	/* check if instance is used */
+	if (ipc_instance_is_free(instance) == IPC_SHM_INSTANCE_FREE) {
+		return NULL;
+	}
+
+	chan = get_unmanaged_chan(instance, chan_id);
 	if (chan == NULL)
 		return NULL;
 
@@ -857,9 +882,14 @@ void *ipc_shm_unmanaged_acquire(const uint8_t instance, int chan_id)
 
 int ipc_shm_unmanaged_tx(const uint8_t instance, int chan_id)
 {
-	struct ipc_unmanaged_channel *chan = get_unmanaged_chan(instance,
-			chan_id);
+	struct ipc_unmanaged_channel *chan = NULL;
 
+	/* check if instance is used */
+	if (ipc_instance_is_free(instance) == IPC_SHM_INSTANCE_FREE) {
+		return -EINVAL;
+	}
+
+	chan = get_unmanaged_chan(instance, chan_id);
 	if (chan == NULL)
 		return -EINVAL;
 
@@ -876,6 +906,11 @@ int ipc_shm_is_remote_ready(const uint8_t instance)
 {
 	struct ipc_shm_global *remote_global;
 
+	/* check if instance is used */
+	if (ipc_instance_is_free(instance) == IPC_SHM_INSTANCE_FREE) {
+		return -EINVAL;
+	}
+
 	/* global data of remote at beginning of remote shared memory */
 	remote_global = (struct ipc_shm_global *)ipc_os_get_remote_shm(
 			instance);
@@ -888,5 +923,10 @@ int ipc_shm_is_remote_ready(const uint8_t instance)
 
 int ipc_shm_poll_channels(const uint8_t instance)
 {
+	/* check if instance is used */
+	if (ipc_instance_is_free(instance) == IPC_SHM_INSTANCE_FREE) {
+		return -EINVAL;
+	}
+
 	return ipc_os_poll_channels(instance);
 }
