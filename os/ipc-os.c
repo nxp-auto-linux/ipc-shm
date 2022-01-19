@@ -1,6 +1,6 @@
 /* SPDX-License-Identifier: BSD-3-Clause */
 /*
- * Copyright 2018-2021 NXP
+ * Copyright 2018-2022 NXP
  */
 #include <linux/ioport.h>
 #include <linux/io.h>
@@ -49,10 +49,12 @@ struct ipc_os_priv_instance {
  * struct ipc_os_priv - OS specific private data
  * @id:             private data per instance
  * @rx_cb:          upper layer rx callback
+ * @irq_num_init:   array to save all initialized irq
  */
 static struct ipc_os_priv {
 	struct ipc_os_priv_instance id[IPC_SHM_MAX_INSTANCES];
 	int (*rx_cb)(const uint8_t instance, int budget);
+	int irq_num_init[IPC_SHM_MAX_INSTANCES];
 } priv;
 
 static void ipc_shm_softirq(unsigned long arg);
@@ -120,6 +122,7 @@ int ipc_os_init(const uint8_t instance, const struct ipc_shm_cfg *cfg,
 	struct device_node *mscm = NULL;
 	struct resource *res;
 	int err;
+	int i;
 
 	if (!rx_cb)
 		return -EINVAL;
@@ -175,8 +178,16 @@ int ipc_os_init(const uint8_t instance, const struct ipc_shm_cfg *cfg,
 	}
 
 	priv.id[instance].irq_num = of_irq_get(mscm, ipc_hw_get_rx_irq(instance));
-	shm_dbg("Rx IRQ = %d\n", priv.id[instance].irq_num);
+	shm_dbg("Rx IRQ of instance %d = %d\n", instance, priv.id[instance].irq_num);
 	of_node_put(mscm); /* release refcount to mscm DT node */
+
+	/* check duplicate irq number */
+	for (i = 0; i < IPC_SHM_MAX_INSTANCES; i++) {
+		if (priv.id[instance].irq_num == priv.irq_num_init[i]) {
+			return 0;
+		}
+	}
+	priv.irq_num_init[instance] = priv.id[instance].irq_num;
 
 	/* init rx interrupt */
 	err = request_irq(priv.id[instance].irq_num, ipc_shm_hardirq, 0, DRIVER_NAME, &priv);
@@ -210,7 +221,12 @@ void ipc_os_free(const uint8_t instance)
 	/* kill softirq task */
 	tasklet_kill(&ipc_shm_rx_tasklet);
 
-	free_irq(priv.id[instance].irq_num, &priv);
+	/* only free irq if irq number is requested */
+	if (priv.irq_num_init[instance] != 0) {
+		free_irq(priv.id[instance].irq_num, &priv);
+		priv.irq_num_init[instance] = 0;
+	}
+
 	iounmap((void *)priv.id[instance].remote_virt_shm);
 	release_mem_region((phys_addr_t)priv.id[instance].remote_phys_shm,
 		priv.id[instance].shm_size);

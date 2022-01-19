@@ -1,6 +1,6 @@
 /* SPDX-License-Identifier: BSD-3-Clause */
 /*
- * Copyright 2021 NXP
+ * Copyright 2021-2022 NXP
  */
 #include <linux/module.h>
 #include <linux/kernel.h>
@@ -165,7 +165,7 @@ static int init_ipc_shm(void)
 		.remote_shm_addr = 0x340C0000,
 		.shm_size = 0x040000,
 		.inter_core_tx_irq = IPC_IRQ_NONE,
-		.inter_core_rx_irq = 0u,
+		.inter_core_rx_irq = 1u,
 		.local_core = {
 			.type = IPC_CORE_DEFAULT,
 			.index = IPC_CORE_INDEX_0,
