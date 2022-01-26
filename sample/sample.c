@@ -279,9 +279,14 @@ static int send_ctrl_msg(const uint8_t instance)
  */
 static void generate_msg(char *s, int len, int msg_no)
 {
-	static char *msg_pattern = "HELLO WORLD! from KERNEL";
+	char tmp[MAX_SAMPLE_MSG_LEN];
 
-	snprintf(s, len, "#%d %s\0", msg_no, msg_pattern);
+	/* Write number of messages to be sent in control channel memory.
+	 * Use stack temp buffer because sprintf may do unaligned memory writes
+	 * in SRAM and A53 will complain about unaligned accesses.
+	 */
+	sprintf(tmp, "#%d HELLO WORLD! from KERNEL", msg_no);
+	strcpy(s, tmp);
 }
 
 /**

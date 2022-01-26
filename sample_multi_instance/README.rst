@@ -90,7 +90,7 @@ Running the application
 3. Insert IPCF kernel modules after Linux boot::
 
     insmod /lib/modules/`uname -r`/extra/ipc-shm-dev.ko
-    insmod /lib/modules/`uname -r`/extra/ipc-shm-sample-ins.ko
+    insmod /lib/modules/`uname -r`/extra/ipc-shm-sample-instance.ko
 
 4. Clear the kernel log::
 
@@ -110,5 +110,5 @@ Running the application
 
 8. Unload the modules::
 
-    rmmod ipc-shm-sample-ins ipc-shm-dev
+    rmmod ipc-shm-sample-instance ipc-shm-dev
 

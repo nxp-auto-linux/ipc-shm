@@ -3,7 +3,7 @@
 # Copyright 2021 NXP
 #
 
-MODULE_NAME := ipc-shm-sample-ins
+MODULE_NAME := ipc-shm-sample_multi-instance
 PLATFORM_FLAVOR ?= s32g2
 
 ifneq ($(KERNELRELEASE),)
@@ -11,11 +11,6 @@ ifneq ($(KERNELRELEASE),)
 
 obj-m := $(MODULE_NAME).o
 $(MODULE_NAME)-y := sample_multi_instance.o
-
-POLLING ?= no
-ifeq ($(POLLING),yes)
-ccflags-y += -DPOLLING
-endif
 
 ifeq ($(CONFIG_SOC_S32GEN1),y)
 ifeq ($(PLATFORM_FLAVOR),s32g2)
@@ -25,16 +20,16 @@ ifeq ($(PLATFORM_FLAVOR),s32g3)
 ccflags-y += -DPLATFORM_FLAVOR_s32g3
 endif
 endif
-
-# Add here cc flags (e.g. header lookup paths, defines, etc)
-ccflags-y +=
-
+$(MODULE_NAME)-y += ipcf_Ip_Cfg_$(PLATFORM_FLAVOR).o
 else
 # normal part of makefile
 
 ARCH ?= arm64
 PWD := $(shell pwd)
 IPC_SHM_DEV_PATH ?= $(PWD)/..
+
+# Add here cc flags (e.g. header lookup paths, defines, etc)
+ccflags-y +=
 
 # additional module symbols dependency
 EXTRA_SYMBOLS=${IPC_SHM_DEV_PATH}/Module.symvers

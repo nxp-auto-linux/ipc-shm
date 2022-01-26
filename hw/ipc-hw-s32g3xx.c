@@ -170,7 +170,7 @@ static struct ipc_hw_priv {
 	int remote_core;
 	int local_core;
 	struct mscm_regs *mscm;
-} priv;
+} priv[IPC_SHM_MAX_INSTANCES];
 
 /**
  * ipc_hw_get_rx_irq() - get MSCM inter-core interrupt index [0..2] used for Rx
@@ -179,7 +179,7 @@ static struct ipc_hw_priv {
  */
 int ipc_hw_get_rx_irq(const uint8_t instance)
 {
-	return priv.mscm_rx_irq;
+	return priv[instance].mscm_rx_irq;
 }
 
 /**
@@ -224,7 +224,7 @@ int _ipc_hw_init(const uint8_t instance, int tx_irq, int rx_irq,
 	if (!mscm_addr)
 		return -EINVAL;
 
-	priv.mscm = (struct mscm_regs *)mscm_addr;
+	priv[instance].mscm = (struct mscm_regs *)mscm_addr;
 
 	switch (local_core->type) {
 	case IPC_CORE_A53:
@@ -331,16 +331,14 @@ int _ipc_hw_init(const uint8_t instance, int tx_irq, int rx_irq,
 			&& ((tx_irq < IRQ_ID_MIN) || (tx_irq > IRQ_ID_MAX)))
 		|| (rx_irq < IRQ_ID_MIN || rx_irq > IRQ_ID_MAX)
 		|| (rx_irq == tx_irq)
-		|| (remote_core_idx == readl_relaxed(&priv.mscm->cpxnum))
+		|| (remote_core_idx == readl_relaxed(&(priv[instance].mscm->cpxnum)))
 		|| (remote_core_idx == local_core_idx)) {
 		return -EINVAL;
 	}
-
-	priv.mscm_tx_irq = tx_irq;
-	priv.mscm_rx_irq = rx_irq;
-	priv.remote_core = remote_core_idx;
-	priv.local_core = local_core_idx;
-
+	priv[instance].mscm_tx_irq = tx_irq;
+	priv[instance].mscm_rx_irq = rx_irq;
+	priv[instance].remote_core = remote_core_idx;
+	priv[instance].local_core = local_core_idx;
 	/*
 	 * disable rx irq source to avoid receiving an interrupt from remote
 	 * before any of the buffer rings are initialized
@@ -351,11 +349,11 @@ int _ipc_hw_init(const uint8_t instance, int tx_irq, int rx_irq,
 	 * enable local trusted cores so that they can read full contents of
 	 * IRCPnISRx registers
 	 */
-	ircpcfg_mask = readl_relaxed(&priv.mscm->ircpcfg);
+	ircpcfg_mask = readl_relaxed(&priv[instance].mscm->ircpcfg);
 	if (ircpcfg_mask & MSCM_IRCPCFG_LOCK)
 		return -EACCES;
 
-	writel_relaxed(ircpcfg_mask | local_core->trusted, &priv.mscm->ircpcfg);
+	writel_relaxed(ircpcfg_mask | local_core->trusted, &(priv[instance].mscm->ircpcfg));
 
 	return 0;
 }
@@ -368,7 +366,7 @@ void ipc_hw_free(const uint8_t instance)
 	ipc_hw_irq_clear(instance);
 
 	/* unmap MSCM hardware peripheral block */
-	ipc_os_unmap_intc(priv.mscm);
+	ipc_os_unmap_intc(priv[instance].mscm);
 }
 
 /**
@@ -383,9 +381,9 @@ void ipc_hw_irq_enable(const uint8_t instance)
 	uint16_t irsprc_mask;
 
 	/* enable MSCM core-to-core interrupt routing */
-	irsprc_mask = readw_relaxed(&priv.mscm->irsprc[priv.mscm_rx_irq + 1]);
+	irsprc_mask = readw_relaxed(&priv[instance].mscm->irsprc[priv[instance].mscm_rx_irq + 1]);
 	writew_relaxed(irsprc_mask | MSCM_IRSPRCn_GIC500,
-			&priv.mscm->irsprc[priv.mscm_rx_irq + 1]);
+			&((priv[instance].mscm)->irsprc[priv[instance].mscm_rx_irq + 1]));
 }
 
 /**
@@ -399,10 +397,14 @@ void ipc_hw_irq_disable(const uint8_t instance)
 {
 	uint16_t irsprc_mask;
 
+	if (priv[instance].mscm_rx_irq == IPC_IRQ_NONE) {
+		return;
+	}
+
 	/* disable MSCM core-to-core interrupt routing */
-	irsprc_mask = readw_relaxed(&priv.mscm->irsprc[priv.mscm_rx_irq + 1]);
+	irsprc_mask = readw_relaxed(&priv[instance].mscm->irsprc[priv[instance].mscm_rx_irq + 1]);
 	writew_relaxed(irsprc_mask & ~MSCM_IRSPRCn_GIC500,
-			&priv.mscm->irsprc[priv.mscm_rx_irq + 1]);
+			&((priv[instance].mscm)->irsprc[priv[instance].mscm_rx_irq + 1]));
 }
 
 /**
@@ -410,12 +412,14 @@ void ipc_hw_irq_disable(const uint8_t instance)
  */
 void ipc_hw_irq_notify(const uint8_t instance)
 {
-	if (priv.mscm_tx_irq == IPC_IRQ_NONE)
+	if (priv[instance].mscm_tx_irq == IPC_IRQ_NONE) {
 		return;
+	}
 
 	/* trigger MSCM core-to-core directed interrupt */
 	writel_relaxed(MSCM_IRCPnIGRn_INT_EN,
-		&priv.mscm->ircpnirx[priv.remote_core][priv.mscm_tx_irq].igr);
+		&((priv[instance].mscm)->
+		ircpnirx[priv[instance].remote_core][priv[instance].mscm_tx_irq].igr));
 }
 
 /**
@@ -423,7 +427,11 @@ void ipc_hw_irq_notify(const uint8_t instance)
  */
 void ipc_hw_irq_clear(const uint8_t instance)
 {
+	if (priv[instance].mscm_rx_irq == IPC_IRQ_NONE) {
+		return;
+	}
 	/* clear MSCM core-to-core directed interrupt on the targeted core */
 	writel_relaxed(MSCM_IRCPnISRn_CPx_INT,
-		&priv.mscm->ircpnirx[priv.local_core][priv.mscm_rx_irq].isr);
+		&((priv[instance].mscm)->
+		ircpnirx[priv[instance].local_core][priv[instance].mscm_rx_irq].isr));
 }

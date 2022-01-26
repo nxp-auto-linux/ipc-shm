@@ -9,10 +9,12 @@
 #include <linux/string.h>
 #include <linux/stat.h>
 #include <linux/completion.h>
+#include <linux/of_address.h>
 
 #include "../ipc-shm.h"
+#include "ipcf_Ip_Cfg.h"
 
-#define MODULE_NAME "ipc-shm-sample-ins"
+#define MODULE_NAME "ipc-shm-sample_multi-instance"
 #define MODULE_VER "0.1"
 
 MODULE_AUTHOR("NXP");
@@ -21,30 +23,10 @@ MODULE_ALIAS(MODULE_NAME);
 MODULE_DESCRIPTION("NXP Shared Memory IPC Sample Application Module");
 MODULE_VERSION(MODULE_VER);
 
-/* IPC SHM configuration defines */
-#if defined(CONFIG_SOC_S32GEN1)
-#if defined(PLATFORM_FLAVOR_s32g3)
-	#define LOCAL_SHM_ADDR 0x34000000
-#elif defined(PLATFORM_FLAVOR_s32g2)
-	#define LOCAL_SHM_ADDR 0x34100000
-#else
- #error "PLATFORM_FLAVOR is not defined"
-#endif
-#endif
-
-#ifdef POLLING
-#define INTER_CORE_TX_IRQ IPC_IRQ_NONE
-#else
-#define INTER_CORE_TX_IRQ 2u
-#endif /* POLLING */
-#define INTER_CORE_RX_IRQ 1u
-
-#define S_BUF_LEN 32
-#define M_BUF_LEN 256
-#define L_BUF_LEN 4096
 #define CTRL_CHAN_ID 0
 #define CTRL_CHAN_SIZE 64
 #define MAX_SAMPLE_MSG_LEN 32
+
 #define INSTANCE_ID0	0
 #define INSTANCE_ID1	1
 
@@ -55,7 +37,7 @@ MODULE_VERSION(MODULE_VER);
 #define sample_info(fmt, ...) pr_info(MODULE_NAME": "fmt, ##__VA_ARGS__)
 #define sample_dbg(fmt, ...) pr_debug(sample_fmt(fmt), __func__, ##__VA_ARGS__)
 
-static int msg_sizes[IPC_SHM_MAX_POOLS] = {S_BUF_LEN};
+static int msg_sizes[IPC_SHM_MAX_POOLS] = {MAX_SAMPLE_MSG_LEN};
 static int msg_sizes_argc = 1;
 module_param_array(msg_sizes, int, &msg_sizes_argc, 0000);
 MODULE_PARM_DESC(msg_sizes, "Sample message sizes");
@@ -68,7 +50,7 @@ MODULE_PARM_DESC(msg_sizes, "Sample message sizes");
  * @last_rx_no_msg:	last number of received message
  * @ipc_kobj:		sysfs kernel object
  * @ping_attr:		sysfs ping command attributes
- * @instance:		instance id
+ * @local_virt_shm:	local shared memory virtual address
  */
 static struct ipc_sample_app {
 	int num_channels;
@@ -77,16 +59,14 @@ static struct ipc_sample_app {
 	int last_rx_no_msg;
 	struct kobject *ipc_kobj_ins[2];
 	struct kobj_attribute ping_attr_ins[2];
+	uintptr_t local_virt_shm;
 } app;
+
+/* link with generated variables */
+const void *rx_cb_arg = &app;
 
 /* Completion variable used to sync send_msg func with shm_rx_cb */
 static DECLARE_COMPLETION(reply_received);
-
-/* sample Rx callbacks */
-static void data_chan_rx_cb(void *cb_arg, const uint8_t instance, int chan_id,
-		void *buf, size_t size);
-static void ctrl_chan_rx_cb(void *cb_arg, const uint8_t instance, int chan_id,
-		void *mem);
 
 /* Init IPC shared memory driver (see ipc-shm.h for API) */
 static int init_ipc_shm(void)
@@ -94,102 +74,10 @@ static int init_ipc_shm(void)
 	int err;
 	int i = 0;
 
-	/* memory buffer pools */
-	struct ipc_shm_pool_cfg buf_pools[] = {
-		{
-			.num_bufs = 5,
-			.buf_size = S_BUF_LEN
-		},
-		{
-			.num_bufs = 5,
-			.buf_size = M_BUF_LEN
-		},
-		{
-			.num_bufs = 5,
-			.buf_size = L_BUF_LEN
-		},
-	};
-
-	/* data channel configuration */
-	struct ipc_shm_channel_cfg data_chan_cfg = {
-		.type = IPC_SHM_MANAGED,
-		.ch = {
-			.managed = {
-				.num_pools = ARRAY_SIZE(buf_pools),
-				.pools = buf_pools,
-				.rx_cb = data_chan_rx_cb,
-				.cb_arg = &app,
-			},
-		}
-	};
-
-	/* control channel configuration */
-	struct ipc_shm_channel_cfg ctrl_chan_cfg = {
-		.type = IPC_SHM_UNMANAGED,
-		.ch = {
-			.unmanaged = {
-				.size = CTRL_CHAN_SIZE,
-				.rx_cb = ctrl_chan_rx_cb,
-				.cb_arg = &app,
-			},
-		}
-	};
-
-	/* use same configuration for all data channels */
-	struct ipc_shm_channel_cfg channels[] = {ctrl_chan_cfg,
-							data_chan_cfg, data_chan_cfg};
-
-	/* ipc shm configuration */
-	struct ipc_shm_cfg shm_cfg[2] = {
-		{
-		.local_shm_addr = 0x34100000,
-		.remote_shm_addr = 0x34200000,
-		.shm_size = 0x100000,
-		.inter_core_tx_irq = 2u,
-		.inter_core_rx_irq = 1u,
-		.local_core = {
-			.type = IPC_CORE_DEFAULT,
-			.index = IPC_CORE_INDEX_0,  /* automatically assigned */
-			.trusted = IPC_CORE_INDEX_0 | IPC_CORE_INDEX_1
-						| IPC_CORE_INDEX_2 | IPC_CORE_INDEX_3
-		},
-		.remote_core = {
-			.type = IPC_CORE_DEFAULT,
-			.index = IPC_CORE_INDEX_0,  /* automatically assigned */
-		},
-		.num_channels = ARRAY_SIZE(channels),
-		.channels = channels
-		},
-		{
-		.local_shm_addr = 0x34080000,
-		.remote_shm_addr = 0x340C0000,
-		.shm_size = 0x040000,
-		.inter_core_tx_irq = IPC_IRQ_NONE,
-		.inter_core_rx_irq = 1u,
-		.local_core = {
-			.type = IPC_CORE_DEFAULT,
-			.index = IPC_CORE_INDEX_0,
-			.trusted = IPC_CORE_INDEX_0 | IPC_CORE_INDEX_1
-					| IPC_CORE_INDEX_2 | IPC_CORE_INDEX_3
-		},
-		.remote_core = {
-			.type = IPC_CORE_DEFAULT,
-			.index = IPC_CORE_INDEX_1,
-		},
-		.num_channels = ARRAY_SIZE(channels),
-		.channels = channels
-		},
-	};
-
-	struct ipc_shm_instances_cfg shm_cfgs = {
-		.num_instances = 2u,
-		.shm_cfg = shm_cfg,
-	};
-
-	err = ipc_shm_init(&shm_cfgs);
+	err = ipc_shm_init(&ipcf_shm_instances_cfg);
 	if (err)
 		return err;
-	app.num_channels = shm_cfgs.shm_cfg[0].num_channels;
+	app.num_channels = ipcf_shm_instances_cfg.shm_cfg[0].num_channels;
 
 	/* acquire control channel memory once */
 	for (i = 0; i <= INSTANCE_ID1; i++) {
@@ -219,21 +107,23 @@ uint32_t ipc_strtol(char *src)
  * data channel Rx callback: print message, release buffer and signal the
  * completion variable.
  */
-static void data_chan_rx_cb(void *arg, const uint8_t instance, int chan_id,
+void data_chan_rx_cb(void *arg, const uint8_t instance, int chan_id,
 		void *buf, size_t size)
 {
 	int err = 0;
 	long endptr;
 
-	WARN_ON(arg != &app);
 	WARN_ON(size > MAX_SAMPLE_MSG_LEN);
+
+	struct ipc_sample_app *cb_arg_sample =
+			(struct ipc_sample_app *)(*((uintptr_t *)arg));
 
 	/* process the received data */
 	sample_info("ch %d << %ld bytes: %s\n", chan_id, size, (char *)buf);
 
 	/* consume received data: get number of message */
 	/* Note: without being copied locally */
-	app.last_rx_no_msg = ipc_strtol((char *)buf + strlen("#"));
+	cb_arg_sample->last_rx_no_msg = ipc_strtol((char *)buf + strlen("#"));
 
 	/* release the buffer */
 	err = ipc_shm_release_buf(instance, chan_id, buf);
@@ -249,12 +139,11 @@ static void data_chan_rx_cb(void *arg, const uint8_t instance, int chan_id,
 /*
  * control channel Rx callback: print control message
  */
-static void ctrl_chan_rx_cb(void *arg, const uint8_t instance, int chan_id,
+void ctrl_chan_rx_cb(void *arg, const uint8_t instance, int chan_id,
 		void *mem)
 {
-	WARN_ON(arg != &app);
 	WARN_ON(chan_id != CTRL_CHAN_ID);
-	WARN_ON(strlen(mem) > L_BUF_LEN);
+	WARN_ON(strlen(mem) > MAX_SAMPLE_MSG_LEN);
 
 	sample_info("ch %d << %ld bytes: %s\n",
 		    chan_id, strlen(mem), (char *)mem);
@@ -297,9 +186,14 @@ static int send_ctrl_msg(const uint8_t instance)
  */
 static void generate_msg(char *s, int len, int msg_no)
 {
-	static char *msg_pattern = "HELLO WORLD! from KERNEL";
+	char tmp[MAX_SAMPLE_MSG_LEN];
 
-	snprintf(s, len, "#%d %s\0", msg_no, msg_pattern);
+	/* Write number of messages to be sent in control channel memory.
+	 * Use stack temp buffer because sprintf may do unaligned memory writes
+	 * in SRAM and A53 will complain about unaligned accesses.
+	 */
+	sprintf(tmp, "#%d HELLO WORLD! from KERNEL", msg_no);
+	strcpy(s, tmp);
 }
 
 /**
@@ -566,10 +460,32 @@ static int __init sample_mod_init(void)
 
 static void __exit sample_mod_exit(void)
 {
+	int err = 0;
+	int i;
+	uint32_t local_addr;
+	uint32_t shm_size;
+
 	sample_dbg("module version "MODULE_VER" exit\n");
 
 	free_sysfs();
 	ipc_shm_free();
+
+	/* clear shared memory region */
+	for (i = 0; i < ipcf_shm_instances_cfg.num_instances; i++) {
+
+		local_addr = ipcf_shm_instances_cfg.shm_cfg[i].local_shm_addr;
+		shm_size = ipcf_shm_instances_cfg.shm_cfg[i].shm_size;
+
+		err = request_mem_region((phys_addr_t) local_addr, shm_size, "sample");
+		if (!err) {
+			sample_info("Unable to reserve local shm region\n");
+			return;
+		}
+		app.local_virt_shm = (uintptr_t)ioremap(local_addr, shm_size);
+		memset_io(app.local_virt_shm, 0, shm_size);
+		iounmap((void *)app.local_virt_shm);
+		release_mem_region((phys_addr_t) local_addr, shm_size);
+	}
 }
 
 module_init(sample_mod_init);
