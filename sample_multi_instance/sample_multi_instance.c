@@ -203,6 +203,18 @@ static int init_ipc_shm(void)
 	return 0;
 }
 
+/* alternative implementation of kstrtol */
+uint32_t ipc_strtol(char *src)
+{
+	uint32_t res = 0;
+
+	while ((*src >= '0') && (*src <= '9')) {
+		res = res*10 + (*(src++) - '0');
+	}
+
+	return res;
+}
+
 /*
  * data channel Rx callback: print message, release buffer and signal the
  * completion variable.
@@ -221,7 +233,7 @@ static void data_chan_rx_cb(void *arg, const uint8_t instance, int chan_id,
 
 	/* consume received data: get number of message */
 	/* Note: without being copied locally */
-	app.last_rx_no_msg = kstrtol((char *)buf + strlen("#"), &endptr, 10);
+	app.last_rx_no_msg = ipc_strtol((char *)buf + strlen("#"));
 
 	/* release the buffer */
 	err = ipc_shm_release_buf(instance, chan_id, buf);
@@ -331,8 +343,13 @@ static int send_data_msg(const uint8_t instance, int msg_len, int msg_no,
 		return err;
 	}
 
-	/* check if received message match with sent message */
-
+	/* check if received message not match with sent message */
+	if (app.last_rx_no_msg != msg_no) {
+		sample_err("last_rx_no_msg != msg_no\n");
+		sample_err(">> #%d\n", msg_no);
+		sample_err("<< #%d\n", app.last_rx_no_msg);
+		return -EINVAL;
+	}
 
 	return 0;
 }
