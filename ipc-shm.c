@@ -935,10 +935,20 @@ int ipc_shm_is_remote_ready(const uint8_t instance)
 
 int ipc_shm_poll_channels(const uint8_t instance)
 {
+	struct ipc_shm_global *remote_global;
+
 	/* check if instance is used */
 	if (ipc_instance_is_free(instance) == IPC_SHM_INSTANCE_FREE) {
 		return -EINVAL;
 	}
+
+	/* global data of remote at beginning of remote shared memory */
+	remote_global = (struct ipc_shm_global *)ipc_os_get_remote_shm(
+			instance);
+
+	/* check if remote is ready before polling */
+	if (remote_global->state != IPC_SHM_STATE_READY)
+		return -EAGAIN;
 
 	return ipc_os_poll_channels(instance);
 }
