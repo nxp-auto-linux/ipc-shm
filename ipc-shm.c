@@ -15,9 +15,17 @@
 #define IPC_SHM_STATE_READY 0x4950434646435049ULL
 #define IPC_SHM_STATE_CLEAR 0u
 
-/* Used for IPC instance status */
-#define IPC_SHM_INSTANCE_USED	0u
-#define IPC_SHM_INSTANCE_FREE	1u
+/**
+ * enum ipc_shm_instance_state - used for IPC instance status
+ * @IPC_SHM_INSTANCE_USED:	instance is used
+ * @IPC_SHM_INSTANCE_FREE:	instance is free and can be used
+ * @IPC_SHM_INSTANCE_ERROR: there are some errors
+ */
+enum ipc_shm_instance_state {
+	IPC_SHM_INSTANCE_USED = 0u,
+	IPC_SHM_INSTANCE_FREE = 1u,
+	IPC_SHM_INSTANCE_ERROR = 2u,
+};
 
 /**
  * struct ipc_shm_bd - buffer descriptor (store buffer location and data size)
@@ -278,10 +286,14 @@ static int ipc_channel_rx(const uint8_t instance, int chan_id, int budget)
  * This function return the state of instance.
  *
  * Return: IPC_SHM_INSTANCE_FREE if instance is free,
- *     IPC_SHM_INSTANCE_USED otherwise
+ *     IPC_SHM_INSTANCE_USED otherwise or
+ *     IPC_SHM_INSTANCE_ERROR if there is errors
  */
 static uint8_t ipc_instance_is_free(const uint8_t instance)
 {
+	if (instance >= IPC_SHM_MAX_INSTANCES)
+		return IPC_SHM_INSTANCE_ERROR;
+
 	if (ipc_shm_priv_data[instance].global == NULL)
 		return IPC_SHM_INSTANCE_FREE;
 	if (ipc_shm_priv_data[instance].global->state == IPC_SHM_STATE_CLEAR)
