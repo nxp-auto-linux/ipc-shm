@@ -706,7 +706,7 @@ void *ipc_shm_acquire_buf(const uint8_t instance, int chan_id, size_t size)
 	int pool_id;
 
 	/* check if instance is valid */
-	if (ipc_instance_is_free(instance) == IPC_SHM_INSTANCE_FREE) {
+	if (ipc_instance_is_free(instance) != IPC_SHM_INSTANCE_USED) {
 		return NULL;
 	}
 
@@ -800,7 +800,7 @@ int ipc_shm_release_buf(const uint8_t instance, int chan_id, const void *buf)
 	int err;
 
 	/* check if instance is valid */
-	if (ipc_instance_is_free(instance) == IPC_SHM_INSTANCE_FREE) {
+	if (ipc_instance_is_free(instance) != IPC_SHM_INSTANCE_USED) {
 		return -EINVAL;
 	}
 
@@ -841,7 +841,7 @@ int ipc_shm_tx(const uint8_t instance, int chan_id, void *buf, size_t size)
 	int err;
 
 	/* check if instance is used */
-	if (ipc_instance_is_free(instance) == IPC_SHM_INSTANCE_FREE) {
+	if (ipc_instance_is_free(instance) != IPC_SHM_INSTANCE_USED) {
 		return -EINVAL;
 	}
 
@@ -880,7 +880,7 @@ void *ipc_shm_unmanaged_acquire(const uint8_t instance, int chan_id)
 	struct ipc_unmanaged_channel *chan = NULL;
 
 	/* check if instance is used */
-	if (ipc_instance_is_free(instance) == IPC_SHM_INSTANCE_FREE) {
+	if (ipc_instance_is_free(instance) != IPC_SHM_INSTANCE_USED) {
 		return NULL;
 	}
 
@@ -897,7 +897,7 @@ int ipc_shm_unmanaged_tx(const uint8_t instance, int chan_id)
 	struct ipc_unmanaged_channel *chan = NULL;
 
 	/* check if instance is used */
-	if (ipc_instance_is_free(instance) == IPC_SHM_INSTANCE_FREE) {
+	if (ipc_instance_is_free(instance) != IPC_SHM_INSTANCE_USED) {
 		return -EINVAL;
 	}
 
@@ -919,7 +919,7 @@ int ipc_shm_is_remote_ready(const uint8_t instance)
 	struct ipc_shm_global *remote_global;
 
 	/* check if instance is used */
-	if (ipc_instance_is_free(instance) == IPC_SHM_INSTANCE_FREE) {
+	if (ipc_instance_is_free(instance) != IPC_SHM_INSTANCE_USED) {
 		return -EINVAL;
 	}
 
@@ -938,7 +938,7 @@ int ipc_shm_poll_channels(const uint8_t instance)
 	struct ipc_shm_global *remote_global;
 
 	/* check if instance is used */
-	if (ipc_instance_is_free(instance) == IPC_SHM_INSTANCE_FREE) {
+	if (ipc_instance_is_free(instance) != IPC_SHM_INSTANCE_USED) {
 		return -EINVAL;
 	}
 
