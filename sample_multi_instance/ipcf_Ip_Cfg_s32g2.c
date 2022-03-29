@@ -1,10 +1,7 @@
-/******************************************************************************
- *                                                                            *
- *   IPC Shared Memory Driver - RTD configuration                             *
- *                                                                            *
- *   Copyright 2020-2022 NXP                                                  *
- *                                                                            *
- ******************************************************************************/
+/* SPDX-License-Identifier: BSD-3-Clause */
+/*
+ * Copyright 2020-2022 NXP
+ */
 
 #include "ipcf_Ip_Cfg.h"
 
