@@ -4,7 +4,7 @@
 IPCF Shared Memory Sample Application for Linux
 ===============================================
 
-:Copyright: 2021 NXP
+:Copyright: 2021-2022 NXP
 
 Overview
 ========
@@ -26,7 +26,7 @@ Application).
 
 Prerequisites
 =============
- - EVB board for supported processors: S32GEN1
+ - EVB board for supported processors
  - NXP Automotive Linux BSP
 
 Building the application
@@ -39,12 +39,12 @@ Note: modules are also included in NXP Auto Linux BSP pre-built images that can
 
 Building with Yocto
 -------------------
-Follow the steps for building NXP Auto Linux BSP with Yocto::
+1. Follow the steps for building NXP Auto Linux BSP with Yocto::
 
    Linux BSP User Manual from Flexera catalog
 
-* for S32GEN1 use branch release/**IPCF_RELEASE_NAME** and modify in
-  build/sources/meta-alb/recipes-kernel/ipc-shm/ipc-shm.bb::
+2. Use the branch release/**IPCF_RELEASE_NAME** and modify in
+   build/sources/meta-alb/recipes-kernel/ipc-shm/ipc-shm.bb::
 
     - BRANCH ?= "${RELEASE_BASE}"
     + BRANCH ?= "release/**IPCF_RELEASE_NAME**"
@@ -56,8 +56,9 @@ Follow the steps for building NXP Auto Linux BSP with Yocto::
   Framework release from Flexera catalog and replace the line with SRCREV
   with SRCREV = "${AUTOREV}".
 
-Note: use image **fsl-image-auto** with any of the following machines supported
-      for IPCF: s32g274aevb, s32r45xevb.
+Note: use image **fsl-image-auto** with any of machine supported or
+      add the following line in conf/local.conf file:
+      *IMAGE_INSTALL_append_pn-fsl-image-auto = " ipc-shm"*
 
 Building manually
 -----------------
@@ -65,6 +66,10 @@ Building manually
 
     git clone https://source.codeaurora.org/external/autobsps32/linux/
     git clone https://source.codeaurora.org/external/autobsps32/ipcf/ipc-shm/
+
+Note: use  the release branch: release/**IPCF_RELEASE_NAME**
+      where **IPCF_RELEASE_NAME** is the name of Inter-Platform Communication
+      Framework release from Flexera catalog
 
 2. Export CROSS_COMPILE and ARCH variables and build Linux kernel providing the
    desired config::
@@ -77,6 +82,10 @@ Building manually
 3. Build IPCF driver and sample modules providing kernel source location, e.g.::
 
     make -C ./ipc-shm/sample_multi_instance KERNELDIR=$PWD/linux modules
+
+Note: for S32G3xx must add PLATFORM_FLAVOR
+
+    make -C ./ipc-shm/sample_multi_instance PLATFORM_FLAVOR=s32g3 KERNELDIR=$PWD/linux modules
 
 .. _run-shm-linux:
 
@@ -111,4 +120,3 @@ Running the application
 8. Unload the modules::
 
     rmmod ipc-shm-sample-instance ipc-shm-dev
-

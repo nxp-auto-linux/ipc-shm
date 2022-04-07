@@ -4,7 +4,7 @@
 IPCF Shared Memory Sample Application for Linux
 ===============================================
 
-:Copyright: 2018-2021 NXP
+:Copyright: 2018-2022 NXP
 
 Overview
 ========
@@ -25,7 +25,7 @@ Application).
 
 Prerequisites
 =============
- - EVB board for supported processors: S32V234 and S32GEN1
+ - EVB board for supported processors
  - NXP Automotive Linux BSP
 
 Building the application
@@ -38,22 +38,12 @@ Note: modules are also included in NXP Auto Linux BSP pre-built images that can
 
 Building with Yocto
 -------------------
-Follow the steps for building NXP Auto Linux BSP with Yocto::
+1. Follow the steps for building NXP Auto Linux BSP with Yocto::
 
    Linux BSP User Manual from Flexera catalog
 
-* for S32V234 use branch release/bsp23.0 and modify in
-  build/sources/meta-alb/recipes-kernel/ipc-shm/ipc-shm.bb::
-
-    - SRCREV = "af9a41d262a57a2c3f4be0f4042adc10b47ffdd6"
-    + SRCREV = "a32bb41885c21fd440385c2a382a672d40d2397f"
-
-    + KERNEL_MODULE_PROBECONF += "ipc-shm-uio"
-    + module_conf_ipc-shm-uio = "blacklist ipc-shm-uio"
-    + FILES_${PN} += "${sysconfdir}/modprobe.d/*"
-
-* for S32GEN1 use branch release/**IPCF_RELEASE_NAME** and modify in
-  build/sources/meta-alb/recipes-kernel/ipc-shm/ipc-shm.bb::
+2. Use branch release/**IPCF_RELEASE_NAME** and modify in
+   build/sources/meta-alb/recipes-kernel/ipc-shm/ipc-shm.bb::
 
     - BRANCH ?= "${RELEASE_BASE}"
     + BRANCH ?= "release/**IPCF_RELEASE_NAME**"
@@ -69,13 +59,16 @@ Note: use image **fsl-image-auto** with any of machine supported or
       add the following line in conf/local.conf file:
       *IMAGE_INSTALL_append_pn-fsl-image-auto = " ipc-shm"*
 
-
 Building manually
 -----------------
 1. Get NXP Auto Linux kernel and IPCF driver from Code Aurora::
 
     git clone https://source.codeaurora.org/external/autobsps32/linux/
     git clone https://source.codeaurora.org/external/autobsps32/ipcf/ipc-shm/
+
+Note: use  the release branch: release/**IPCF_RELEASE_NAME**
+      where **IPCF_RELEASE_NAME** is the name of Inter-Platform Communication
+      Framework release from Flexera catalogog
 
 2. Export CROSS_COMPILE and ARCH variables and build Linux kernel providing the
    desired config::

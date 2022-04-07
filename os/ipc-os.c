@@ -72,10 +72,12 @@ static void ipc_shm_softirq(unsigned long arg)
 	uint8_t i = 0;
 
 	for (i = 0; i < IPC_SHM_MAX_INSTANCES; i++) {
-		work = priv.rx_cb(i, budget);
 		if ((priv.id[i].state == IPC_SHM_INSTANCE_DISABLED)
 					|| (priv.id[i].irq_num == IPC_IRQ_NONE))
 			continue;
+
+		work = priv.rx_cb(i, budget);
+
 		if (work < budget) {
 			/* work done, re-enable irq */
 			ipc_hw_irq_enable(i);
