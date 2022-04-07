@@ -1,0 +1,16 @@
+# SPDX-License-Identifier:	BSD-3-Clause
+#
+# Copyright 2022 NXP
+#
+
+apps ?= sample sample_multi_instance
+
+# Accept any target, up to and including none
+ifeq ($(MAKECMDGOALS),)
+.PHONY: default
+default:
+else
+$(MAKECMDGOALS):
+endif
+
+	$(foreach app, $(apps), make -C $(app) $(MAKECMDGOALS);)

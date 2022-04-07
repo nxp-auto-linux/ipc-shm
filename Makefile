@@ -1,6 +1,6 @@
 # SPDX-License-Identifier:	BSD-3-Clause
 #
-# Copyright 2018-2021 NXP
+# Copyright 2018-2022 NXP
 #
 
 MODULE_NAME := ipc-shm-dev
@@ -16,20 +16,17 @@ $(MODULE_NAME)-y := ipc-shm.o ipc-queue.o os/ipc-os.o
 
 $(UIO_MODULE_NAME)-y := os/ipc-uio.o
 
-ifeq ($(CONFIG_SOC_S32GEN1),y)
-ifeq ($(PLATFORM_FLAVOR),s32g2)
-$(MODULE_NAME)-y += hw/ipc-hw-s32gen1.o
-$(UIO_MODULE_NAME)-y += hw/ipc-hw-s32gen1.o
-endif
-ifeq ($(PLATFORM_FLAVOR),s32g3)
-$(MODULE_NAME)-y += hw/ipc-hw-s32g3xx.o
-$(UIO_MODULE_NAME)-y += hw/ipc-hw-s32g3xx.o
-endif
-endif
-
 ifeq ($(CONFIG_SOC_S32V234),y)
 $(MODULE_NAME)-y += hw/ipc-hw-s32v234.o
 $(UIO_MODULE_NAME)-y += hw/ipc-hw-s32v234.o
+else
+ifeq ($(PLATFORM_FLAVOR),s32g3)
+$(MODULE_NAME)-y += hw/ipc-hw-s32g3xx.o
+$(UIO_MODULE_NAME)-y += hw/ipc-hw-s32g3xx.o
+else
+$(MODULE_NAME)-y += hw/ipc-hw-s32gen1.o
+$(UIO_MODULE_NAME)-y += hw/ipc-hw-s32gen1.o
+endif
 endif
 
 # Add here cc flags (e.g. header lookup paths, defines, etc)
