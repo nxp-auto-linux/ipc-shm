@@ -1,6 +1,6 @@
 # SPDX-License-Identifier:	BSD-3-Clause
 #
-# Copyright 2021 NXP
+# Copyright 2021-2022 NXP
 #
 
 MODULE_NAME := ipc-shm-sample_multi-instance
@@ -13,14 +13,10 @@ obj-m := $(MODULE_NAME).o
 $(MODULE_NAME)-y := sample_multi_instance.o
 
 ifeq ($(CONFIG_SOC_S32GEN1),y)
-ifeq ($(PLATFORM_FLAVOR),s32g2)
-ccflags-y += -DPLATFORM_FLAVOR_s32g2
-endif
-ifeq ($(PLATFORM_FLAVOR),s32g3)
-ccflags-y += -DPLATFORM_FLAVOR_s32g3
-endif
-endif
+ccflags-y += -DPLATFORM_FLAVOR_$(PLATFORM_FLAVOR)
 $(MODULE_NAME)-y += ipcf_Ip_Cfg_$(PLATFORM_FLAVOR).o
+endif
+
 else
 # normal part of makefile
 
@@ -39,10 +35,7 @@ EXTRA_SYMBOLS=${IPC_SHM_DEV_PATH}/Module.symvers
 # KERNELDIR    : Linux kernel source code location
 # INSTALL_DIR  : location of the module installation
 # CROSS_COMPILE: cross compiler path and prefix
-# PLATFORM_FLAVOR: build for s32g2 or s32g3
-# Optional parameters:
-# POLLING      : set yo 'yes' to disable tx interrupt if
-#                remote sample application use polling
+# PLATFORM_FLAVOR: build for s32g2, s32r45 or s32g3
 
 modules:
 	$(MAKE) -C $(IPC_SHM_DEV_PATH) KERNELDIR=$(KERNELDIR) ARCH=$(ARCH) CROSS_COMPILE=$(CROSS_COMPILE) $@

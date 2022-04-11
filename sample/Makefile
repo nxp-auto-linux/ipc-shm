@@ -1,6 +1,6 @@
 # SPDX-License-Identifier:	BSD-3-Clause
 #
-# Copyright 2018,2021 NXP
+# Copyright 2018,2021-2022 NXP
 #
 
 MODULE_NAME := ipc-shm-sample
@@ -18,12 +18,7 @@ ccflags-y += -DPOLLING
 endif
 
 ifeq ($(CONFIG_SOC_S32GEN1),y)
-ifeq ($(PLATFORM_FLAVOR),s32g2)
-ccflags-y += -DPLATFORM_FLAVOR_s32g2
-endif
-ifeq ($(PLATFORM_FLAVOR),s32g3)
-ccflags-y += -DPLATFORM_FLAVOR_s32g3
-endif
+ccflags-y += -DPLATFORM_FLAVOR_$(PLATFORM_FLAVOR)
 endif
 
 # Add here cc flags (e.g. header lookup paths, defines, etc)
@@ -44,7 +39,7 @@ EXTRA_SYMBOLS=${IPC_SHM_DEV_PATH}/Module.symvers
 # KERNELDIR    : Linux kernel source code location
 # INSTALL_DIR  : location of the module installation
 # CROSS_COMPILE: cross compiler path and prefix
-# PLATFORM_FLAVOR: build for s32g2 or s32g3
+# PLATFORM_FLAVOR: build for s32g2, s32r45 or s32g3
 # Optional parameters:
 # POLLING      : set yo 'yes' to disable tx interrupt if
 #                remote sample application use polling

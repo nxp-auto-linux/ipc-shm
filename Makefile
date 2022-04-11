@@ -43,7 +43,7 @@ PWD := $(shell pwd)
 # KERNELDIR    : Linux kernel source code location
 # INSTALL_DIR  : location of the module installation
 # CROSS_COMPILE: the path and prefix of the used cross compiler
-# PLATFORM_FLAVOR: build for s32g2 or s32g3
+# PLATFORM_FLAVOR: build for s32g2, s32r45 or s32g3
 
 modules:
 	$(MAKE) -C $(KERNELDIR) M=$(PWD) ARCH=$(ARCH) CROSS_COMPILE=$(CROSS_COMPILE) $@

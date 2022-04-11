@@ -26,7 +26,7 @@ MODULE_VERSION(MODULE_VER);
 #if defined(CONFIG_SOC_S32GEN1)
 #if defined(PLATFORM_FLAVOR_s32g3)
 	#define LOCAL_SHM_ADDR 0x34000000
-#elif defined(PLATFORM_FLAVOR_s32g2)
+#elif defined(PLATFORM_FLAVOR_s32g2) || defined(PLATFORM_FLAVOR_s32r45)
 	#define LOCAL_SHM_ADDR 0x34100000
 #else
  #error "PLATFORM_FLAVOR is not defined"
