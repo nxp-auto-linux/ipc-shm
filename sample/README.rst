@@ -65,10 +65,11 @@ Building manually
 
     git clone https://source.codeaurora.org/external/autobsps32/linux/
     git clone https://source.codeaurora.org/external/autobsps32/ipcf/ipc-shm/
+    git -C ipc-shm checkout --track origin/release/**IPCF_RELEASE_NAME**
 
-Note: use  the release branch: release/**IPCF_RELEASE_NAME**
+Note: use the release branch: release/**IPCF_RELEASE_NAME**
       where **IPCF_RELEASE_NAME** is the name of Inter-Platform Communication
-      Framework release from Flexera catalogog
+      Framework release from Flexera catalog
 
 2. Export CROSS_COMPILE and ARCH variables and build Linux kernel providing the
    desired config::

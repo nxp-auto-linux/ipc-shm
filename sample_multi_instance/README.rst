@@ -66,8 +66,9 @@ Building manually
 
     git clone https://source.codeaurora.org/external/autobsps32/linux/
     git clone https://source.codeaurora.org/external/autobsps32/ipcf/ipc-shm/
+    git -C ipc-shm checkout --track origin/release/**IPCF_RELEASE_NAME**
 
-Note: use  the release branch: release/**IPCF_RELEASE_NAME**
+Note: use the release branch: release/**IPCF_RELEASE_NAME**
       where **IPCF_RELEASE_NAME** is the name of Inter-Platform Communication
       Framework release from Flexera catalog
 
