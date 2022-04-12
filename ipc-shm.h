@@ -1,6 +1,6 @@
 /* SPDX-License-Identifier: BSD-3-Clause */
 /*
- * Copyright 2018-2021 NXP
+ * Copyright 2018-2022 NXP
  */
 #ifndef IPC_SHM_H
 #define IPC_SHM_H
@@ -19,6 +19,11 @@
  * Maximum number of buffers per pool
  */
 #define IPC_SHM_MAX_BUFS_PER_POOL 4096u
+
+/*
+ * Used when using MRU driver
+ */
+#define IPC_IRQ_MRU -2
 
 /*
  * Used when polling is desired on either transmit or receive path
@@ -60,6 +65,8 @@ enum ipc_shm_core_type {
 	IPC_CORE_Z7,
 	IPC_CORE_Z4,
 	IPC_CORE_Z2,
+	IPC_CORE_R52,
+	IPC_CORE_M33,
 	IPC_CORE_DEFAULT,
 };
 
@@ -194,6 +201,7 @@ struct ipc_shm_cfg {
 	uint32_t shm_size;
 	int inter_core_tx_irq;
 	int inter_core_rx_irq;
+	uint8_t mru_tx_channel_id;
 	struct ipc_shm_local_core local_core;
 	struct ipc_shm_remote_core remote_core;
 	int num_channels;
