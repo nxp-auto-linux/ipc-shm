@@ -1,6 +1,6 @@
 /* SPDX-License-Identifier: BSD-3-Clause */
 /*
- * Copyright 2019,2021 NXP
+ * Copyright 2019,2021-2022 NXP
  */
 #include <linux/module.h>
 #include <linux/platform_device.h>
@@ -207,7 +207,7 @@ void ipc_os_unmap_intc(void *addr)
 
 static const struct of_device_id ipc_shm_ids[] = {
 	{ .compatible = "fsl,s32v234-mscm", },
-	{ .compatible = "fsl,s32gen1-mscm", },
+	{ .compatible = "fsl,s32cc-mscm", },
 	{}
 };
 
