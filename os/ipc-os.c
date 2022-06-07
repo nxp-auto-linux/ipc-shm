@@ -17,7 +17,7 @@
 
 /* Device tree MSCM node compatible property (search key) */
 #if defined(CONFIG_SOC_S32GEN1)
-	#define DT_INTC_NODE_COMP "fsl,s32cc-mscm"
+	#define DT_INTC_NODE_COMP "nxp,s32cc-mscm"
 #elif defined(CONFIG_SOC_S32V234)
 	#define DT_INTC_NODE_COMP "fsl,s32v234-mscm"
 #else

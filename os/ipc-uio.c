@@ -207,7 +207,7 @@ void ipc_os_unmap_intc(void *addr)
 
 static const struct of_device_id ipc_shm_ids[] = {
 	{ .compatible = "fsl,s32v234-mscm", },
-	{ .compatible = "fsl,s32cc-mscm", },
+	{ .compatible = "nxp,s32cc-mscm", },
 	{}
 };
 
