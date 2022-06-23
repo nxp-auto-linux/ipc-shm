@@ -18,7 +18,9 @@
 /*
  * Maximum number of buffers per pool
  */
+#ifndef IPC_SHM_MAX_BUFS_PER_POOL
 #define IPC_SHM_MAX_BUFS_PER_POOL 4096u
+#endif
 
 /*
  * Used when using MRU driver

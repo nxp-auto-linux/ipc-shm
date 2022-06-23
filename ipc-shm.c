@@ -486,6 +486,15 @@ static int managed_channel_init(const uint8_t instance, int chan_id,
 	local_pool_shm = local_shm + queue_mem_size;
 	remote_pool_shm = remote_shm + queue_mem_size;
 
+	/* check if pool fits into shared memory */
+	if ((local_pool_shm)
+			> (ipc_os_get_local_shm(instance)
+				+ ipc_shm_priv_data[instance].shm_size)) {
+		shm_err("Not enough shared memory for channel %d\n",
+				chan_id);
+		return -ENOMEM;
+	}
+
 	for (i = 0; i < chan->num_pools; i++) {
 		err = ipc_buf_pool_init(instance, chan_id, i, local_pool_shm,
 				remote_pool_shm, &cfg->pools[i]);
