@@ -710,7 +710,8 @@ void *ipc_shm_acquire_buf(const uint8_t instance, int chan_id, size_t size)
 {
 	struct ipc_managed_channel *chan;
 	struct ipc_shm_pool *pool = NULL;
-	struct ipc_shm_bd bd;
+	/* Init struct member with 0 to avoid MISRA 12.1 */
+	struct ipc_shm_bd bd = {.buf_id = 0u, .data_size = 0u, .pool_id = 0u};
 	uintptr_t buf_addr;
 	int pool_id;
 
