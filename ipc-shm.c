@@ -7,9 +7,7 @@
 #include "ipc-queue.h"
 #include "ipc-shm.h"
 
-#ifndef max
-#define max(x, y) ((x) > (y) ? (x) : (y))
-#endif
+#define ipc_max(x, y) (((x) > (y)) ? (x) : (y))
 
 /* magic number to indicate the driver is initialized */
 #define IPC_SHM_STATE_READY 0x4950434646435049ULL
@@ -243,6 +241,7 @@ static int ipc_channel_rx(const uint8_t instance, int chan_id, int budget)
 	struct ipc_shm_bd bd;
 	uintptr_t buf_addr;
 	uint32_t remote_tx_count;
+	int err;
 	int work = 0;
 
 	/* unmanaged channels: call Rx callback if channel Tx counter changed */
@@ -263,9 +262,11 @@ static int ipc_channel_rx(const uint8_t instance, int chan_id, int budget)
 		return 0;
 	}
 
+	err = ipc_queue_pop(&mchan->bd_queue, &bd);
+
 	/* managed channels: process incoming BDs in the limit of budget */
 	while ((work < budget) &&
-			(ipc_queue_pop(&mchan->bd_queue, &bd) == 0)) {
+			(err == 0)) {
 
 		pool = &mchan->pools[bd.pool_id];
 		buf_addr = pool->remote_pool_addr +
@@ -274,6 +275,7 @@ static int ipc_channel_rx(const uint8_t instance, int chan_id, int budget)
 		mchan->rx_cb(mchan->cb_arg, instance, chan->id,
 				(void *)buf_addr, bd.data_size);
 		work++;
+		err = ipc_queue_pop(&mchan->bd_queue, &bd);
 	}
 
 	return work;
@@ -322,7 +324,7 @@ static int ipc_shm_rx(const uint8_t instance, int budget)
 
 	/* fair channel handling algorithm */
 	while ((work < budget) && (more_work > 0)) {
-		chan_budget = max(((budget - work) / num_chans), 1);
+		chan_budget = ipc_max(((budget - work) / num_chans), 1);
 		more_work = 0;
 
 		for (i = 0; i < num_chans; i++) {
@@ -710,7 +712,7 @@ void *ipc_shm_acquire_buf(const uint8_t instance, int chan_id, size_t size)
 {
 	struct ipc_managed_channel *chan;
 	struct ipc_shm_pool *pool = NULL;
-	struct ipc_shm_bd bd = {.buf_id = 0, .data_size = 0u, .pool_id = 0u};
+	struct ipc_shm_bd bd = {.pool_id = 0, .buf_id = 0u, .data_size = 0u};
 	uintptr_t buf_addr;
 	int pool_id;
 

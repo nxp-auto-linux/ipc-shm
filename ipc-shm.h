@@ -61,6 +61,7 @@ enum ipc_shm_channel_type {
  * @IPC_CORE_DEFAULT:	used for letting driver auto-select remote core type
  */
 enum ipc_shm_core_type {
+	IPC_CORE_DEFAULT,
 	IPC_CORE_A53,
 	IPC_CORE_M7,
 	IPC_CORE_M4,
@@ -69,7 +70,7 @@ enum ipc_shm_core_type {
 	IPC_CORE_Z2,
 	IPC_CORE_R52,
 	IPC_CORE_M33,
-	IPC_CORE_DEFAULT,
+	IPC_CORE_BBE32,
 };
 
 /**
