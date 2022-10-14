@@ -761,7 +761,8 @@ int ipc_shm_init(const struct ipc_shm_instances_cfg *cfg)
 		return -EINVAL;
 	}
 
-	if (cfg->num_instances > IPC_SHM_MAX_INSTANCES)
+	if ((cfg->num_instances > IPC_SHM_MAX_INSTANCES)
+			|| (cfg->num_instances == 0))
 		return -EINVAL;
 
 	/* init all instances */
