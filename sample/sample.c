@@ -23,11 +23,7 @@ MODULE_DESCRIPTION("NXP Shared Memory IPC Sample Application Module");
 MODULE_VERSION(MODULE_VER);
 
 /* IPC SHM configuration defines */
-#if defined(CONFIG_SOC_S32GEN1)
-	#define LOCAL_SHM_ADDR 0x34100000
-#else
-	#error "PLATFORM_FLAVOR is not defined"
-#endif
+#define LOCAL_SHM_ADDR 0x34100000
 #define IPC_SHM_SIZE 0x100000 /* 1M local shm, 1M remote shm */
 #define REMOTE_SHM_ADDR (LOCAL_SHM_ADDR + IPC_SHM_SIZE)
 

@@ -16,7 +16,8 @@
 #define DRIVER_VERSION	"0.1"
 
 /* Device tree MSCM node compatible property (search key) */
-#if defined(CONFIG_SOC_S32GEN1)
+#if defined(PLATFORM_FLAVOR_s32g2) || defined(PLATFORM_FLAVOR_s32g3) || \
+	defined(PLATFORM_FLAVOR_s32r45)
 	#define DT_INTC_NODE_COMP "nxp,s32cc-mscm"
 #elif defined(CONFIG_SOC_S32V234)
 	#define DT_INTC_NODE_COMP "fsl,s32v234-mscm"

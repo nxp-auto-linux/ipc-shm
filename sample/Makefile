@@ -4,7 +4,7 @@
 #
 
 MODULE_NAME := ipc-shm-sample
-PLATFORM_FLAVOR ?= s32g2
+PLATFORM_FLAVOR ?= UNDEFINED
 
 ifneq ($(KERNELRELEASE),)
 # kbuild part of makefile

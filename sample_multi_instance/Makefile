@@ -4,7 +4,7 @@
 #
 
 MODULE_NAME := ipc-shm-sample_multi-instance
-PLATFORM_FLAVOR ?= s32g2
+PLATFORM_FLAVOR ?= UNDEFINED
 
 ifneq ($(KERNELRELEASE),)
 # kbuild part of makefile
@@ -12,7 +12,9 @@ ifneq ($(KERNELRELEASE),)
 obj-m := $(MODULE_NAME).o
 $(MODULE_NAME)-y := sample_multi_instance.o
 
-ifeq ($(CONFIG_SOC_S32GEN1),y)
+ifeq ($(PLATFORM_FLAVOR),UNDEFINED)
+$error("PLATFORM_FLAVOR is UNDEFINED")
+else
 ccflags-y += -DPLATFORM_FLAVOR_$(PLATFORM_FLAVOR)
 $(MODULE_NAME)-y += ipcf_Ip_Cfg_$(PLATFORM_FLAVOR).o
 endif

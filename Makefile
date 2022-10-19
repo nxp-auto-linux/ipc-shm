@@ -5,7 +5,7 @@
 
 MODULE_NAME := ipc-shm-dev
 UIO_MODULE_NAME := ipc-shm-uio
-PLATFORM_FLAVOR ?= s32g2
+PLATFORM_FLAVOR ?= UNDEFINED
 
 ifneq ($(KERNELRELEASE),)
 # kbuild part of makefile
@@ -16,6 +16,9 @@ $(MODULE_NAME)-y := ipc-shm.o ipc-queue.o os/ipc-os.o
 
 $(UIO_MODULE_NAME)-y := os/ipc-uio.o
 
+ifeq ($(PLATFORM_FLAVOR),UNDEFINED)
+$error("PLATFORM_FLAVOR is UNDEFINED")
+else
 ifeq ($(CONFIG_SOC_S32V234),y)
 $(MODULE_NAME)-y += hw/ipc-hw-s32v234.o
 $(UIO_MODULE_NAME)-y += hw/ipc-hw-s32v234.o
@@ -28,9 +31,11 @@ $(MODULE_NAME)-y += hw/ipc-hw-s32gen1.o
 $(UIO_MODULE_NAME)-y += hw/ipc-hw-s32gen1.o
 endif
 endif
+endif
 
 # Add here cc flags (e.g. header lookup paths, defines, etc)
 ccflags-y += -I$(src) -I$(src)/hw -I$(src)/os
+ccflags-y += -DPLATFORM_FLAVOR_$(PLATFORM_FLAVOR)
 
 else
 # normal part of makefile
