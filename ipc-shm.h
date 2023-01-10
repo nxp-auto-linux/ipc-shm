@@ -1,6 +1,6 @@
 /* SPDX-License-Identifier: BSD-3-Clause */
 /*
- * Copyright 2018-2022 NXP
+ * Copyright 2018-2023 NXP
  */
 #ifndef IPC_SHM_H
 #define IPC_SHM_H
@@ -21,6 +21,11 @@
 #ifndef IPC_SHM_MAX_BUFS_PER_POOL
 #define IPC_SHM_MAX_BUFS_PER_POOL 4096u
 #endif
+
+/*
+ * Used when using MU driver
+ */
+#define IPC_IRQ_MU -3
 
 /*
  * Used when using MRU driver
