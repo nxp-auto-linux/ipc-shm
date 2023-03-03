@@ -1,6 +1,6 @@
 /* SPDX-License-Identifier: BSD-3-Clause */
 /*
- * Copyright 2018-2022 NXP
+ * Copyright 2018-2023 NXP
  */
 #include "ipc-os.h"
 #include "ipc-hw.h"
@@ -262,12 +262,12 @@ static int ipc_channel_rx(const uint8_t instance, int chan_id, int budget)
 		return 0;
 	}
 
-	err = ipc_queue_pop(&mchan->bd_queue, &bd);
-
 	/* managed channels: process incoming BDs in the limit of budget */
-	while ((work < budget) &&
-			(err == 0)) {
-
+	while (work < budget) {
+		err = ipc_queue_pop(&mchan->bd_queue, &bd);
+		if (err != 0) {
+			break;
+		}
 		pool = &mchan->pools[bd.pool_id];
 		buf_addr = pool->remote_pool_addr +
 			(bd.buf_id * pool->buf_size);
@@ -275,7 +275,6 @@ static int ipc_channel_rx(const uint8_t instance, int chan_id, int budget)
 		mchan->rx_cb(mchan->cb_arg, instance, chan->id,
 				(void *)buf_addr, bd.data_size);
 		work++;
-		err = ipc_queue_pop(&mchan->bd_queue, &bd);
 	}
 
 	return work;
