@@ -1,6 +1,6 @@
 # SPDX-License-Identifier:	BSD-3-Clause
 #
-# Copyright 2018,2021-2022 NXP
+# Copyright 2018,2021-2023 NXP
 #
 
 MODULE_NAME := ipc-shm-sample
@@ -17,12 +17,20 @@ ifeq ($(POLLING),yes)
 ccflags-y += -DPOLLING
 endif
 
-ifeq ($(CONFIG_SOC_S32GEN1),y)
-ccflags-y += -DPLATFORM_FLAVOR_$(PLATFORM_FLAVOR)
+ifeq ($(PLATFORM_FLAVOR),UNDEFINED)
+$(error "PLATFORM_FLAVOR is UNDEFINED")
+else ifeq ($(PLATFORM_FLAVOR),s32g3)
+PLATFORM_HW := s32g3xx
+else
+PLATFORM_HW := s32gen1
 endif
 
-# Add here cc flags (e.g. header lookup paths, defines, etc)
-ccflags-y +=
+$(MODULE_NAME)-y += ipcf_Ip_Cfg_$(PLATFORM_FLAVOR).o
+ccflags-y += -DPLATFORM_FLAVOR_$(PLATFORM_FLAVOR) \
+             -I$(PWD)/.. \
+             -I$(PWD)/../hw \
+             -I$(PWD)/../hw/$(PLATFORM_HW)\
+             -I$(PWD)/../os
 
 else
 # normal part of makefile
@@ -30,6 +38,9 @@ else
 ARCH ?= arm64
 PWD := $(shell pwd)
 IPC_SHM_DEV_PATH ?= $(PWD)/..
+
+# Add here cc flags (e.g. header lookup paths, defines, etc)
+ccflags-y +=
 
 # additional module symbols dependency
 EXTRA_SYMBOLS=${IPC_SHM_DEV_PATH}/Module.symvers

@@ -1,6 +1,6 @@
 /* SPDX-License-Identifier: BSD-3-Clause */
 /*
- * Copyright 2020-2022 NXP
+ * Copyright 2020-2023 NXP
  */
 
 #include "ipcf_Ip_Cfg.h"
@@ -145,17 +145,19 @@ struct ipc_shm_cfg ipcf_shm_cfg_instances[2] = {
 	{
 		.local_shm_addr  = 0x34080000,
 		.remote_shm_addr = 0x340A0000,
-		.inter_core_tx_irq = 2u,
-		.inter_core_rx_irq = 1u,
-		.remote_core = {
-			.type = IPC_CORE_M7,
-			.index = IPC_CORE_INDEX_0,
-		},
+		.inter_core_tx_irq = 2,
+		.inter_core_rx_irq = 1,
 		.local_core = {
 			.type = IPC_CORE_DEFAULT,
 			.index = IPC_CORE_INDEX_0,
 			.trusted = IPC_CORE_INDEX_0 | IPC_CORE_INDEX_1
-						| IPC_CORE_INDEX_2 | IPC_CORE_INDEX_3
+				| IPC_CORE_INDEX_2 | IPC_CORE_INDEX_3
+				| IPC_CORE_INDEX_4 | IPC_CORE_INDEX_5
+				| IPC_CORE_INDEX_6 | IPC_CORE_INDEX_7
+		},
+		.remote_core = {
+			.type = IPC_CORE_M7,
+			.index = IPC_CORE_INDEX_0,
 		},
 		.shm_size  = 0x10000,
 		.num_channels = 3,
@@ -165,16 +167,18 @@ struct ipc_shm_cfg ipcf_shm_cfg_instances[2] = {
 		.local_shm_addr  = 0x340C0000,
 		.remote_shm_addr = 0x340E0000,
 		.inter_core_tx_irq = IPC_IRQ_NONE,
-		.inter_core_rx_irq = 0u,
-		.remote_core = {
-			.type = IPC_CORE_M7,
-			.index = IPC_CORE_INDEX_1,
-		},
+		.inter_core_rx_irq = 0,
 		.local_core = {
 			.type = IPC_CORE_DEFAULT,
 			.index = IPC_CORE_INDEX_0,
 			.trusted = IPC_CORE_INDEX_0 | IPC_CORE_INDEX_1
-						| IPC_CORE_INDEX_2 | IPC_CORE_INDEX_3
+				| IPC_CORE_INDEX_2 | IPC_CORE_INDEX_3
+				| IPC_CORE_INDEX_4 | IPC_CORE_INDEX_5
+				| IPC_CORE_INDEX_6 | IPC_CORE_INDEX_7
+		},
+		.remote_core = {
+			.type = IPC_CORE_M7,
+			.index = IPC_CORE_INDEX_1,
 		},
 		.shm_size  = 0x10000,
 		.num_channels = 3,

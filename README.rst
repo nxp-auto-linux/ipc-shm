@@ -32,8 +32,8 @@ API level: TX and RX inter-core interrupt IDs, local core ID, remote core ID and
 trusted cores.
 
 The interrupt IDs are MSCM core-to-core directed interrupt IDs. Valid values are
-in range [0..2] for S32xx and [0..3] for S32V234. TX and RX interrupt IDs must
-be different.
+in range [0..2] for S32xx, [0..11] for S32G3xx and [0..3] for S32V234. TX and RX
+interrupt IDs must be different.
 
 Note: the interrupt ID expected in the driver configuration is different from
 the corresponding processor exception number (used to register the interrupt

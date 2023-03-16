@@ -1,6 +1,6 @@
 # SPDX-License-Identifier:	BSD-3-Clause
 #
-# Copyright 2021-2022 NXP
+# Copyright 2021-2023 NXP
 #
 
 MODULE_NAME := ipc-shm-sample_multi-instance
@@ -13,11 +13,21 @@ obj-m := $(MODULE_NAME).o
 $(MODULE_NAME)-y := sample_multi_instance.o
 
 ifeq ($(PLATFORM_FLAVOR),UNDEFINED)
-$error("PLATFORM_FLAVOR is UNDEFINED")
+$(error "PLATFORM_FLAVOR is UNDEFINED")
+else ifeq ($(CONFIG_SOC_S32V234),y)
+PLATFORM_HW := s32v234
+else ifeq ($(PLATFORM_FLAVOR),s32g3)
+PLATFORM_HW := s32g3xx
 else
-ccflags-y += -DPLATFORM_FLAVOR_$(PLATFORM_FLAVOR)
-$(MODULE_NAME)-y += ipcf_Ip_Cfg_$(PLATFORM_FLAVOR).o
+PLATFORM_HW := s32gen1
 endif
+
+$(MODULE_NAME)-y += ipcf_Ip_Cfg_$(PLATFORM_FLAVOR).o
+ccflags-y += -DPLATFORM_FLAVOR_$(PLATFORM_FLAVOR) \
+             -I$(PWD)/.. \
+             -I$(PWD)/../hw \
+             -I$(PWD)/../hw/$(PLATFORM_HW)\
+             -I$(PWD)/../os
 
 else
 # normal part of makefile

@@ -1,6 +1,6 @@
 # SPDX-License-Identifier:	BSD-3-Clause
 #
-# Copyright 2018-2022 NXP
+# Copyright 2018-2023 NXP
 #
 
 MODULE_NAME := ipc-shm-dev
@@ -17,24 +17,20 @@ $(MODULE_NAME)-y := ipc-shm.o ipc-queue.o os/ipc-os.o
 $(UIO_MODULE_NAME)-y := os/ipc-uio.o
 
 ifeq ($(PLATFORM_FLAVOR),UNDEFINED)
-$error("PLATFORM_FLAVOR is UNDEFINED")
+$(error "PLATFORM_FLAVOR is UNDEFINED")
+else ifeq ($(CONFIG_SOC_S32V234),y)
+PLATFORM_HW := s32v234
+else ifeq ($(PLATFORM_FLAVOR),s32g3)
+PLATFORM_HW := s32g3xx
 else
-ifeq ($(CONFIG_SOC_S32V234),y)
-$(MODULE_NAME)-y += hw/ipc-hw-s32v234.o
-$(UIO_MODULE_NAME)-y += hw/ipc-hw-s32v234.o
-else
-ifeq ($(PLATFORM_FLAVOR),s32g3)
-$(MODULE_NAME)-y += hw/ipc-hw-s32g3xx.o
-$(UIO_MODULE_NAME)-y += hw/ipc-hw-s32g3xx.o
-else
-$(MODULE_NAME)-y += hw/ipc-hw-s32gen1.o
-$(UIO_MODULE_NAME)-y += hw/ipc-hw-s32gen1.o
-endif
-endif
+PLATFORM_HW := s32gen1
 endif
 
+$(MODULE_NAME)-y += hw/$(PLATFORM_HW)/ipc-hw-$(PLATFORM_HW).o
+$(UIO_MODULE_NAME)-y += hw/$(PLATFORM_HW)/ipc-hw-$(PLATFORM_HW).o
+
 # Add here cc flags (e.g. header lookup paths, defines, etc)
-ccflags-y += -I$(src) -I$(src)/hw -I$(src)/os
+ccflags-y += -I$(src) -I$(src)/hw -I$(src)/hw/$(PLATFORM_HW) -I$(src)/os
 ccflags-y += -DPLATFORM_FLAVOR_$(PLATFORM_FLAVOR)
 
 else
