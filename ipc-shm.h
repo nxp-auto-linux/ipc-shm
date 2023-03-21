@@ -317,6 +317,7 @@ int ipc_shm_unmanaged_tx(const uint8_t instance, int chan_id);
  *
  * Function used to check if the remote is initialized and ready to receive
  * messages. It should be invoked at least before the first transmit operation.
+ * Function is thread-safe.
  *
  * Return: 0 if remote is initialized, error code otherwise
  */
@@ -328,6 +329,7 @@ int ipc_shm_is_remote_ready(const uint8_t instance);
  *
  * This function handles all channels using a fair handling algorithm: all
  * channels are treated equally and no channel is starving.
+ * Function is thread-safe for different instances but not for same instance.
  *
  * Return: number of messages processed, error code otherwise
  */
