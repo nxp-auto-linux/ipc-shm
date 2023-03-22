@@ -4,7 +4,7 @@
 IPCF Shared Memory Kernel Driver for Linux
 ==========================================
 
-:Copyright: 2018-2021 NXP
+:Copyright: 2018-2021,2023 NXP
 
 Overview
 ========
@@ -18,8 +18,8 @@ application (for more details see the readme from sample directory).
 The driver and sample application are integrated as out-of-tree kernel modules
 in NXP Auto Linux BSP.
 
-The source code of this Linux driver is published on `source.codeaurora.org
-<https://source.codeaurora.org/external/autobsps32/ipcf/ipc-shm/>`_.
+The source code of this Linux driver is published on `github.com
+<https://github.com/nxp-auto-linux/ipc-shm>`_.
 
 HW platforms
 ============

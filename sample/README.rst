@@ -4,7 +4,7 @@
 IPCF Shared Memory Sample Application for Linux
 ===============================================
 
-:Copyright: 2018-2022 NXP
+:Copyright: 2018-2022,2023 NXP
 
 Overview
 ========
@@ -63,8 +63,8 @@ Building manually
 -----------------
 1. Get NXP Auto Linux kernel and IPCF driver from Code Aurora::
 
-    git clone https://source.codeaurora.org/external/autobsps32/linux/
-    git clone https://source.codeaurora.org/external/autobsps32/ipcf/ipc-shm/
+    git clone https://github.com/nxp-auto-linux/linux
+    git clone https://github.com/nxp-auto-linux/ipc-shm
     git -C ipc-shm checkout --track origin/release/**IPCF_RELEASE_NAME**
 
 Note: use the release branch: release/**IPCF_RELEASE_NAME**
@@ -81,11 +81,13 @@ Note: use the release branch: release/**IPCF_RELEASE_NAME**
 
 3. Build IPCF driver and sample modules providing kernel source location, e.g.::
 
-    make -C ./ipc-shm/sample KERNELDIR=$PWD/linux modules
+    make -C ./ipc-shm/sample PLATFORM_FLAVOR=[PLATFORM] KERNELDIR=$PWD/linux modules
 
-Note: for S32G3xx must add PLATFORM_FLAVOR
+    User must specific the platform::
 
-    make -C ./ipc-shm/sample PLATFORM_FLAVOR=s32g3 KERNELDIR=$PWD/linux modules
+        PLATFORM_FLAVOR=s32g2
+        PLATFORM_FLAVOR=s32r45
+        PLATFORM_FLAVOR=s32g3
 
 .. _run-shm-linux:
 
