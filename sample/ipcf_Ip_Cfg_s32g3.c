@@ -83,8 +83,6 @@ struct ipc_shm_cfg ipcf_shm_cfg_instances[] = {
 			.index = IPC_CORE_INDEX_0,  /* automatically assigned */
 			.trusted = IPC_CORE_INDEX_0 | IPC_CORE_INDEX_1
 				| IPC_CORE_INDEX_2 | IPC_CORE_INDEX_3
-				| IPC_CORE_INDEX_4 | IPC_CORE_INDEX_5
-				| IPC_CORE_INDEX_6 | IPC_CORE_INDEX_7
 		},
 		.remote_core = {
 			.type = IPC_CORE_M7,
