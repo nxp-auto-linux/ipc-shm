@@ -1,8 +1,8 @@
 .. SPDX-License-Identifier: BSD-3-Clause
 
-===============================================
-IPCF Shared Memory Sample Application for Linux
-===============================================
+==============================================================
+IPCF Shared Memory Sample Multi-Instance Application for Linux
+==============================================================
 
 :Copyright: 2021-2022,2023 NXP
 
@@ -62,7 +62,7 @@ Note: use image **fsl-image-auto** with any of machine supported or
 
 Building manually
 -----------------
-1. Get NXP Auto Linux kernel and IPCF driver from Code Aurora::
+1. Get NXP Auto Linux kernel and IPCF driver from GitHub::
 
     git clone https://github.com/nxp-auto-linux/linux
     git clone https://github.com/nxp-auto-linux/ipc-shm

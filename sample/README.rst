@@ -61,7 +61,7 @@ Note: use image **fsl-image-auto** with any of machine supported or
 
 Building manually
 -----------------
-1. Get NXP Auto Linux kernel and IPCF driver from Code Aurora::
+1. Get NXP Auto Linux kernel and IPCF driver from GitHub::
 
     git clone https://github.com/nxp-auto-linux/linux
     git clone https://github.com/nxp-auto-linux/ipc-shm

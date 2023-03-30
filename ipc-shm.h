@@ -8,12 +8,16 @@
 /*
  * Maximum number of shared memory channels that can be configured
  */
+#ifndef IPC_SHM_MAX_CHANNELS
 #define IPC_SHM_MAX_CHANNELS 8
+#endif
 
 /*
  * Maximum number of buffer pools that can be configured for a managed channel
  */
+#ifndef IPC_SHM_MAX_POOLS
 #define IPC_SHM_MAX_POOLS 4
+#endif
 
 /*
  * Maximum number of buffers per pool
@@ -40,7 +44,9 @@
 /*
  * Maximum number of instances
  */
+#ifndef IPC_SHM_MAX_INSTANCES
 #define IPC_SHM_MAX_INSTANCES	4u
+#endif
 
 /**
  * enum ipc_shm_channel_type - channel type
@@ -57,13 +63,16 @@ enum ipc_shm_channel_type {
 
 /**
  * enum ipc_shm_core_type - core type
- * @IPC_CORE_A53:	ARM Cortex-A53 core
- * @IPC_CORE_M7:	ARM Cortex-M7 core
- * @IPC_CORE_M4:	ARM Cortex-M4 core
- * @IPC_CORE_Z7:	PowerPC e200z7 core
- * @IPC_CORE_Z4:	PowerPC e200z4 core
- * @IPC_CORE_Z2:	PowerPC e200z2 core
- * @IPC_CORE_DEFAULT:	used for letting driver auto-select remote core type
+ * @IPC_CORE_A53:       ARM Cortex-A53 core
+ * @IPC_CORE_M7:        ARM Cortex-M7 core
+ * @IPC_CORE_M4:        ARM Cortex-M4 core
+ * @IPC_CORE_Z7:        PowerPC e200z7 core
+ * @IPC_CORE_Z4:        PowerPC e200z4 core
+ * @IPC_CORE_Z2:        PowerPC e200z2 core
+ * @IPC_CORE_R52:       ARM Cortex-R52 core
+ * @IPC_CORE_M33:       ARM Cortex-M33 core
+ * @IPC_CORE_BBE32:     Tensilica ConnX BBE32EP core
+ * @IPC_CORE_DEFAULT:   used for letting driver auto-select remote core type
  */
 enum ipc_shm_core_type {
 	IPC_CORE_DEFAULT,
@@ -102,8 +111,8 @@ enum ipc_shm_core_index {
 
 /**
  * struct ipc_shm_pool_cfg - memory buffer pool parameters
- * @num_bufs:	number of buffers
- * @buf_size:	buffer size
+ * @num_bufs:   number of buffers
+ * @buf_size:   buffer size
  */
 struct ipc_shm_pool_cfg {
 	uint16_t num_bufs;
@@ -112,10 +121,10 @@ struct ipc_shm_pool_cfg {
 
 /**
  * struct ipc_shm_managed_cfg - managed channel parameters
- * @num_pools:	number of buffer pools
- * @pools:	memory buffer pools parameters
- * @rx_cb:	receive callback
- * @cb_arg:	optional receive callback argument
+ * @num_pools:   number of buffer pools
+ * @pools:       memory buffer pools parameters
+ * @rx_cb:       receive callback
+ * @cb_arg:      optional receive callback argument
  */
 struct ipc_shm_managed_cfg {
 	int num_pools;
@@ -127,9 +136,9 @@ struct ipc_shm_managed_cfg {
 
 /**
  * struct ipc_shm_unmanaged_cfg - unmanaged channel parameters
- * @size:	unmanaged channel memory size
- * @rx_cb:	receive callback
- * @cb_arg:	optional receive callback argument
+ * @size:     unmanaged channel memory size
+ * @rx_cb:    receive callback
+ * @cb_arg:   optional receive callback argument
  */
 struct ipc_shm_unmanaged_cfg {
 	uint32_t size;
@@ -154,8 +163,8 @@ struct ipc_shm_channel_cfg {
 
 /**
  * struct ipc_shm_remote_core - remote core type and index
- * @type:	core type from &enum ipc_shm_core_type
- * @index:	core number
+ * @type:    core type from &enum ipc_shm_core_type
+ * @index:   core number
  *
  * Core type can be IPC_CORE_DEFAULT, in which case core index doesn't matter
  * because it's chosen automatically by the driver.
@@ -167,9 +176,9 @@ struct ipc_shm_remote_core {
 
 /**
  * struct ipc_shm_local_core - local core type, index and trusted cores
- * @type:	core type from &enum ipc_shm_core_type
- * @index:	core number targeted by remote core interrupt
- * @trusted:    trusted cores mask
+ * @type:      core type from &enum ipc_shm_core_type
+ * @index:     core number targeted by remote core interrupt
+ * @trusted:   trusted cores mask
  *
  * Core type can be IPC_CORE_DEFAULT, in which case core index doesn't matter
  * because it's chosen automatically by the driver.
@@ -209,7 +218,6 @@ struct ipc_shm_cfg {
 	uint32_t shm_size;
 	int inter_core_tx_irq;
 	int inter_core_rx_irq;
-	uint8_t mru_tx_channel_id;
 	struct ipc_shm_local_core local_core;
 	struct ipc_shm_remote_core remote_core;
 	int num_channels;
@@ -217,9 +225,9 @@ struct ipc_shm_cfg {
 };
 
 /**
- * struct ipc_shm_cfg - IPC shm parameters
- * @num_instances:	number of shared memory instances
- * @shm_cfg_instances:		IPC shm parameters array
+ * struct ipc_shm_instances_cfg - IPC shm parameters
+ * @num_instances:   number of shared memory instances
+ * @shm_cfg:         IPC shm parameters array
  *
  */
 struct ipc_shm_instances_cfg {
@@ -229,7 +237,7 @@ struct ipc_shm_instances_cfg {
 
 /**
  * ipc_shm_init() - initialize shared memory device
- * @cfgs:              configuration parameters
+ * @cfg:              configuration parameters
  *
  * Function is non-reentrant.
  *

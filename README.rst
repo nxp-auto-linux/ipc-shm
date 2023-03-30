@@ -76,5 +76,16 @@ non-cachable. Therefore, applications should make only aligned accesses in the
 shared memory buffers. Caution should be used when working with functions that
 may do unaligned accesses (e.g., string processing functions).
 
+The driver has freedom from interference between local and remote memory domains
+by executing all write operations only in local memory.
+
+The driver is thread safe as long as only one thread is pushing and only one
+thread is popping: Single-Producer - Single-Consumer.
+
+This thread safety is lock-free and needs one additional sentinel element in
+rings between write and read index that is never written.
+
+The driver is thread safe for different instances but not for same instance.
+
 For technical support please go to:
     https://www.nxp.com/support
