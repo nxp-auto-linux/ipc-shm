@@ -135,13 +135,6 @@ int ipc_os_init(const uint8_t instance, const struct ipc_shm_cfg *cfg,
 	if ((instance > IPC_SHM_MAX_INSTANCES) || (instance < 0))
 		return -EINVAL;
 
-	/* save params */
-	priv.id[instance].shm_size = cfg->shm_size;
-	priv.id[instance].local_phys_shm = cfg->local_shm_addr;
-	priv.id[instance].remote_phys_shm = cfg->remote_shm_addr;
-	priv.id[instance].state = IPC_SHM_INSTANCE_ENABLED;
-	priv.rx_cb = rx_cb;
-
 	/* request and map local physical shared memory */
 	res = request_mem_region((phys_addr_t)cfg->local_shm_addr,
 				 cfg->shm_size, DRIVER_NAME" local");
@@ -199,6 +192,13 @@ int ipc_os_init(const uint8_t instance, const struct ipc_shm_cfg *cfg,
 		shm_err("Request interrupt %d failed\n", priv.id[instance].irq_num);
 		goto err_unmap_remote_shm;
 	}
+
+	/* save params */
+	priv.id[instance].shm_size = cfg->shm_size;
+	priv.id[instance].local_phys_shm = cfg->local_shm_addr;
+	priv.id[instance].remote_phys_shm = cfg->remote_shm_addr;
+	priv.id[instance].state = IPC_SHM_INSTANCE_ENABLED;
+	priv.rx_cb = rx_cb;
 
 	return 0;
 
