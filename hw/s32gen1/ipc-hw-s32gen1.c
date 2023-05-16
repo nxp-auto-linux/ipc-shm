@@ -163,7 +163,7 @@ int _ipc_hw_init(const uint8_t instance, int tx_irq, int rx_irq,
 	if (((tx_irq != IPC_IRQ_NONE)
 			&& (tx_irq == rx_irq))
 		|| (remote_core_idx
-			== readl_relaxed(
+			== readl(
 				&(ipc_hw_priv[instance].ipc_mscm->CPXNUM)))
 		|| (remote_core_idx == local_core_idx)) {
 		return -EINVAL;
@@ -218,11 +218,11 @@ int _ipc_hw_init(const uint8_t instance, int tx_irq, int rx_irq,
 	 * enable local trusted cores so that they can read full contents of
 	 * IRCPnISRx registers
 	 */
-	ircpcfg_mask = readl_relaxed(&ipc_hw_priv[instance].ipc_mscm->IRCPCFG);
+	ircpcfg_mask = readl(&ipc_hw_priv[instance].ipc_mscm->IRCPCFG);
 	if (ircpcfg_mask & IPC_MSCM_IRCPCFG_LOCK)
 		return -EACCES;
 
-	writel_relaxed(ircpcfg_mask | local_core->trusted,
+	writel(ircpcfg_mask | local_core->trusted,
 		&(ipc_hw_priv[instance].ipc_mscm->IRCPCFG));
 
 	return 0;
@@ -257,9 +257,9 @@ void ipc_hw_irq_enable(const uint8_t instance)
 	spi_rx_idx = ipc_hw_priv[instance].spi_index;
 	/* enable MSCM core-to-core interrupt routing */
 	irsprc_mask
-		= readw_relaxed(
+		= readw(
 			&ipc_hw_priv[instance].ipc_mscm->IRSPRC[spi_rx_idx]);
-	writew_relaxed(irsprc_mask | IPC_MSCM_IRSPRCn_GIC500,
+	writew(irsprc_mask | IPC_MSCM_IRSPRCn_GIC500,
 		&((ipc_hw_priv[instance].ipc_mscm)->IRSPRC[spi_rx_idx]));
 }
 
@@ -282,9 +282,9 @@ void ipc_hw_irq_disable(const uint8_t instance)
 	spi_rx_idx = ipc_hw_priv[instance].spi_index;
 	/* disable MSCM core-to-core interrupt routing */
 	irsprc_mask
-		= readw_relaxed(
+		= readw(
 			&ipc_hw_priv[instance].ipc_mscm->IRSPRC[spi_rx_idx]);
-	writew_relaxed(irsprc_mask & ~IPC_MSCM_IRSPRCn_GIC500,
+	writew(irsprc_mask & ~IPC_MSCM_IRSPRCn_GIC500,
 		&((ipc_hw_priv[instance].ipc_mscm)->IRSPRC[spi_rx_idx]));
 }
 
@@ -301,7 +301,7 @@ void ipc_hw_irq_notify(const uint8_t instance)
 	}
 
 	/* trigger MSCM core-to-core directed interrupt */
-	writel_relaxed(IPC_MSCM_IRCPnIGRn_INT_EN,
+	writel(IPC_MSCM_IRCPnIGRn_INT_EN,
 		&((ipc_hw_priv[instance].ipc_mscm)->
 		IRCPnIRx[remote_core][msi_idx].IPC_IGR));
 }
@@ -318,7 +318,7 @@ void ipc_hw_irq_clear(const uint8_t instance)
 		return;
 	}
 	/* clear MSCM core-to-core directed interrupt on the targeted core */
-	writel_relaxed(1 << local_core,
+	writel(1 << local_core,
 		&((ipc_hw_priv[instance].ipc_mscm)->
 		IRCPnIRx[local_core][msi_idx].IPC_ISR));
 }

@@ -121,8 +121,8 @@ void ipc_hw_irq_enable(const uint8_t instance)
 	uint16_t irsprc_mask;
 
 	/* enable MSCM core-to-core interrupt routing */
-	irsprc_mask = readw_relaxed(&priv.mscm->irsprc[priv.mscm_rx_irq]);
-	writew_relaxed(irsprc_mask | MSCM_IRSPRCn_CPxE(A53),
+	irsprc_mask = readw(&priv.mscm->irsprc[priv.mscm_rx_irq]);
+	writew(irsprc_mask | MSCM_IRSPRCn_CPxE(A53),
 			&priv.mscm->irsprc[priv.mscm_rx_irq]);
 }
 
@@ -134,8 +134,8 @@ void ipc_hw_irq_disable(const uint8_t instance)
 	uint16_t irsprc_mask;
 
 	/* disable MSCM core-to-core interrupt routing */
-	irsprc_mask = readw_relaxed(&priv.mscm->irsprc[priv.mscm_rx_irq]);
-	writew_relaxed(irsprc_mask & ~MSCM_IRSPRCn_CPxE(A53),
+	irsprc_mask = readw(&priv.mscm->irsprc[priv.mscm_rx_irq]);
+	writew(irsprc_mask & ~MSCM_IRSPRCn_CPxE(A53),
 			&priv.mscm->irsprc[priv.mscm_rx_irq]);
 }
 
@@ -148,7 +148,7 @@ void ipc_hw_irq_notify(const uint8_t instance)
 		return;
 
 	/* trigger MSCM core-to-core directed interrupt */
-	writel_relaxed(MSCM_IRCPGIR_TLF(MSCM_IRCPGIR_TLF_CPUTL) |
+	writel(MSCM_IRCPGIR_TLF(MSCM_IRCPGIR_TLF_CPUTL) |
 			MSCM_IRCPGIR_CPUTL(priv.remote_core) |
 			MSCM_IRCPGIR_INTID(priv.mscm_tx_irq),
 			&priv.mscm->ircpgir);
@@ -160,6 +160,6 @@ void ipc_hw_irq_notify(const uint8_t instance)
 void ipc_hw_irq_clear(const uint8_t instance)
 {
 	/* clear MSCM core-to-core directed interrupt */
-	writel_relaxed(MSCM_IRCPxIR_INT(priv.mscm_rx_irq),
+	writel(MSCM_IRCPxIR_INT(priv.mscm_rx_irq),
 		       &priv.mscm->ircp1ir);
 }
