@@ -10,8 +10,11 @@
 #define ipc_max(x, y) (((x) > (y)) ? (x) : (y))
 
 /* magic number to indicate the driver is initialized */
-#define IPC_SHM_STATE_READY 0x4950434646435049ULL
+#define IPC_SHM_STATE_READY 0x3252455646435049ULL
 #define IPC_SHM_STATE_CLEAR 0u
+
+/* magic number to indicate the unmanaged channel integrity */
+#define IPC_UCHAN_SENTINEL 0x55435049UL
 
 /**
  * enum ipc_shm_instance_state - used for IPC instance status
@@ -94,16 +97,16 @@ struct ipc_managed_channel {
 
 /**
  * struct ipc_channel_umem - unmanaged channel memory control structure
+ * @sentinel:	magic word to ensure unmanaged channel integrity
  * @tx_count:	local channel Tx counter (it wraps around at max uint32_t)
- * @reserved:	reserved field for memory alignment
  * @mem:	local channel unmanaged memory buffer
  *
  * tx_count is used by remote peer in Rx intr handler to determine if this
  * channel had a Tx operation and decide whether to call the app Rx callback.
  */
 struct ipc_channel_umem {
+	uint32_t sentinel;
 	volatile uint32_t tx_count;
-	uint8_t reserved[4];
 	uint8_t mem[];
 };
 
@@ -224,6 +227,36 @@ static inline struct ipc_unmanaged_channel *get_unmanaged_chan(
 	return &chan->ch.umng;
 }
 
+/* check integrity of uchan: the boundaries have not been altered */
+static int ipc_check_uchan_integrity(const struct ipc_unmanaged_channel *uchan)
+{
+	if ((uchan->local_mem->sentinel == (uint32_t)IPC_UCHAN_SENTINEL)
+			&& (uchan->remote_mem->sentinel
+				== (uint32_t)IPC_UCHAN_SENTINEL))
+		return 0;
+
+	return -EINVAL;
+}
+
+/* check integrity of mchan: the boundaries have not been altered */
+static int ipc_check_mchan_integrity(struct ipc_managed_channel *mchan)
+{
+	uint8_t pool_id;
+	struct ipc_shm_pool *pool = NULL;
+
+	if (0 == ipc_queue_check_integrity(&mchan->bd_queue)) {
+		/* check all the pool bd boundaries */
+		for (pool_id = 0; pool_id < mchan->num_pools; pool_id++) {
+			pool = &mchan->pools[pool_id];
+			if (0 != ipc_queue_check_integrity(&pool->bd_queue))
+				return -EINVAL;
+		}
+		return 0;
+	}
+
+	return -EINVAL;
+}
+
 /**
  * ipc_channel_rx() - handle Rx for a single channel
  * @instance:	instance id
@@ -246,20 +279,22 @@ static int ipc_channel_rx(const uint8_t instance, int chan_id, int budget)
 
 	/* unmanaged channels: call Rx callback if channel Tx counter changed */
 	if (chan->type == IPC_SHM_UNMANAGED) {
-		remote_tx_count = uchan->remote_mem->tx_count;
+		if (0 == ipc_check_uchan_integrity(uchan)) {
+			remote_tx_count = uchan->remote_mem->tx_count;
 
-		/* call Rx cb if remote Tx counter changed */
-		if (remote_tx_count != uchan->remote_tx_count) {
+			/* call Rx cb if remote Tx counter changed */
+			if (remote_tx_count != uchan->remote_tx_count) {
 
-			/* save new remote Tx counter */
-			uchan->remote_tx_count = remote_tx_count;
+				/* save new remote Tx counter */
+				uchan->remote_tx_count = remote_tx_count;
 
-			uchan->rx_cb(uchan->cb_arg, instance, chan->id,
-					(void *)uchan->remote_mem->mem);
+				uchan->rx_cb(uchan->cb_arg, instance, chan->id,
+						(void *)uchan->remote_mem->mem);
 
-			return budget;
+				return budget;
+			}
+			return 0;
 		}
-		return 0;
 	}
 
 	/* managed channels: process incoming BDs in the limit of budget */
@@ -380,7 +415,7 @@ static int ipc_buf_pool_init(const uint8_t instance, int chan_id, int pool_id,
 	 * pool shm and pop ring mapped at start of remote pool shm
 	 */
 	err = ipc_queue_init(&pool->bd_queue, pool->num_bufs,
-		(uint16_t)sizeof(struct ipc_shm_bd), local_shm, remote_shm);
+		(uint8_t)sizeof(struct ipc_shm_bd), local_shm, remote_shm);
 	if (err != 0)
 		return err;
 
@@ -433,7 +468,7 @@ static int managed_channel_init(const uint8_t instance, int chan_id,
 	uintptr_t remote_pool_shm;
 	uint32_t queue_mem_size;
 	uint32_t prev_buf_size = 0;
-	uint16_t total_bufs = 0;
+	uint32_t total_bufs = 0;
 	int err, i;
 
 	if (cfg->rx_cb == NULL) {
@@ -473,11 +508,15 @@ static int managed_channel_init(const uint8_t instance, int chan_id,
 		total_bufs += pool_cfg->num_bufs;
 	}
 
+	if (total_bufs > IPC_SHM_MAX_BUFS_PER_CHANNEL) {
+		return -EINVAL;
+	}
+
 	/* init channel bd_queue with push ring mapped at the start of local
 	 * channel shm and pop ring mapped at start of remote channel shm
 	 */
 	err = ipc_queue_init(&chan->bd_queue, total_bufs,
-			     (uint16_t)sizeof(struct ipc_shm_bd),
+			     (uint8_t)sizeof(struct ipc_shm_bd),
 			     local_shm, remote_shm);
 	if (err != 0)
 		return err;
@@ -517,7 +556,7 @@ static int unmanaged_channel_init(const uint8_t instance, int chan_id,
 	struct ipc_unmanaged_channel *chan = get_unmanaged_chan(instance,
 			chan_id);
 
-	if (cfg->rx_cb == NULL) {
+	if ((cfg->rx_cb == NULL) || (cfg->size > IPC_SHM_MAX_UMNG_SIZE)) {
 		shm_err("Receive callback not specified\n");
 		return -EINVAL;
 	}
@@ -530,6 +569,7 @@ static int unmanaged_channel_init(const uint8_t instance, int chan_id,
 	chan->local_mem = (struct ipc_channel_umem *) local_shm;
 	chan->remote_mem = (struct ipc_channel_umem *) remote_shm;
 
+	chan->local_mem->sentinel = (uint32_t)IPC_UCHAN_SENTINEL;
 	chan->local_mem->tx_count = 0;
 	chan->remote_tx_count = 0;
 
@@ -721,7 +761,8 @@ void *ipc_shm_acquire_buf(const uint8_t instance, int chan_id, size_t size)
 	}
 
 	chan = get_managed_chan(instance, chan_id);
-	if ((chan == NULL) || (size == 0u))
+	if ((chan == NULL) || (size == 0u)
+			|| (ipc_check_mchan_integrity(chan) != 0))
 		return NULL;
 
 	/* find first non-empty pool that accommodates the requested size */
@@ -816,7 +857,8 @@ int ipc_shm_release_buf(const uint8_t instance, int chan_id, const void *buf)
 	}
 
 	chan = get_managed_chan(instance, chan_id);
-	if ((chan == NULL) || (buf == NULL))
+	if ((chan == NULL) || (buf == NULL)
+			|| (ipc_check_mchan_integrity(chan) != 0))
 		return -EINVAL;
 
 	/* Find the pool that owns the buffer */
@@ -857,7 +899,8 @@ int ipc_shm_tx(const uint8_t instance, int chan_id, void *buf, size_t size)
 	}
 
 	chan = get_managed_chan(instance, chan_id);
-	if ((chan == NULL) || (buf == NULL) || (size == 0u))
+	if ((chan == NULL) || (buf == NULL) || (size == 0u)
+			|| (ipc_check_mchan_integrity(chan) != 0))
 		return -EINVAL;
 
 	/* Find the pool that owns the buffer */
@@ -896,7 +939,8 @@ void *ipc_shm_unmanaged_acquire(const uint8_t instance, int chan_id)
 	}
 
 	chan = get_unmanaged_chan(instance, chan_id);
-	if (chan == NULL)
+	if ((chan == NULL)
+			|| (ipc_check_uchan_integrity(chan) != 0))
 		return NULL;
 
 	/* for unmanaged channels return entire channel memory */
@@ -913,7 +957,8 @@ int ipc_shm_unmanaged_tx(const uint8_t instance, int chan_id)
 	}
 
 	chan = get_unmanaged_chan(instance, chan_id);
-	if (chan == NULL)
+	if ((chan == NULL)
+			|| (ipc_check_uchan_integrity(chan) != 0))
 		return -EINVAL;
 
 	/* bump Tx counter */

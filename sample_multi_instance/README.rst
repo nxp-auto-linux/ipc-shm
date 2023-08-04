@@ -94,7 +94,7 @@ Note: use the release branch: release/**IPCF_RELEASE_NAME**
 
 Running the application
 =======================
-1. If sample was built manually, copy ipc-shm-dev.ko and ipc-shm-sample_multi-instance.ko
+1. If sample was built manually, copy ipc-shm-dev.ko and ipc-shm-sample_multi_instance.ko
    in rootfs
 
 2. Boot Linux: see section "How to boot" from Auto Linux BSP user manual.
@@ -102,7 +102,7 @@ Running the application
 3. Insert IPCF kernel modules after Linux boot::
 
     insmod /lib/modules/`uname -r`/extra/ipc-shm-dev.ko
-    insmod /lib/modules/`uname -r`/extra/ipc-shm-sample_multi-instance.ko
+    insmod /lib/modules/`uname -r`/extra/ipc-shm-sample_multi_instance.ko
 
 4. Clear the kernel log::
 

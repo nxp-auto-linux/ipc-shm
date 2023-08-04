@@ -251,16 +251,17 @@ void ipc_hw_irq_enable(const uint8_t instance)
 	uint16_t irsprc_mask;
 	uint8_t spi_rx_idx;
 
-	if (ipc_hw_priv[instance].mscm_rx_irq == IPC_IRQ_NONE)
-		return;
-
-	spi_rx_idx = ipc_hw_priv[instance].spi_index;
-	/* enable MSCM core-to-core interrupt routing */
-	irsprc_mask
-		= readw(
-			&ipc_hw_priv[instance].ipc_mscm->IRSPRC[spi_rx_idx]);
-	writew(irsprc_mask | IPC_MSCM_IRSPRCn_GIC500,
-		&((ipc_hw_priv[instance].ipc_mscm)->IRSPRC[spi_rx_idx]));
+	if (ipc_hw_priv[instance].mscm_rx_irq != IPC_IRQ_NONE) {
+		spi_rx_idx = ipc_hw_priv[instance].spi_index;
+		/* enable MSCM core-to-core interrupt routing */
+		irsprc_mask
+			= readw(
+				&ipc_hw_priv[instance].ipc_mscm
+					->IRSPRC[spi_rx_idx]);
+		writew(irsprc_mask | IPC_MSCM_IRSPRCn_GIC500,
+			&((ipc_hw_priv[instance].ipc_mscm)
+				->IRSPRC[spi_rx_idx]));
+	}
 }
 
 /**
@@ -275,17 +276,17 @@ void ipc_hw_irq_disable(const uint8_t instance)
 	uint16_t irsprc_mask;
 	uint8_t spi_rx_idx;
 
-	if (ipc_hw_priv[instance].mscm_rx_irq == IPC_IRQ_NONE) {
-		return;
+	if (ipc_hw_priv[instance].mscm_rx_irq != IPC_IRQ_NONE) {
+		spi_rx_idx = ipc_hw_priv[instance].spi_index;
+		/* disable MSCM core-to-core interrupt routing */
+		irsprc_mask
+			= readw(&ipc_hw_priv[instance].ipc_mscm
+				->IRSPRC[spi_rx_idx]);
+		writew(irsprc_mask & ~IPC_MSCM_IRSPRCn_GIC500,
+			&((ipc_hw_priv[instance].ipc_mscm)
+				->IRSPRC[spi_rx_idx]));
 	}
 
-	spi_rx_idx = ipc_hw_priv[instance].spi_index;
-	/* disable MSCM core-to-core interrupt routing */
-	irsprc_mask
-		= readw(
-			&ipc_hw_priv[instance].ipc_mscm->IRSPRC[spi_rx_idx]);
-	writew(irsprc_mask & ~IPC_MSCM_IRSPRCn_GIC500,
-		&((ipc_hw_priv[instance].ipc_mscm)->IRSPRC[spi_rx_idx]));
 }
 
 /**
@@ -296,14 +297,12 @@ void ipc_hw_irq_notify(const uint8_t instance)
 	uint8_t msi_idx = ipc_hw_priv[instance].msi_tx_irq;
 	int remote_core = ipc_hw_priv[instance].remote_core;
 
-	if (ipc_hw_priv[instance].mscm_tx_irq == IPC_IRQ_NONE) {
-		return;
+	if (ipc_hw_priv[instance].mscm_tx_irq != IPC_IRQ_NONE) {
+		/* trigger MSCM core-to-core directed interrupt */
+		writel(IPC_MSCM_IRCPnIGRn_INT_EN,
+			&((ipc_hw_priv[instance].ipc_mscm)->
+			IRCPnIRx[remote_core][msi_idx].IPC_IGR));
 	}
-
-	/* trigger MSCM core-to-core directed interrupt */
-	writel(IPC_MSCM_IRCPnIGRn_INT_EN,
-		&((ipc_hw_priv[instance].ipc_mscm)->
-		IRCPnIRx[remote_core][msi_idx].IPC_IGR));
 }
 
 /**
@@ -313,12 +312,15 @@ void ipc_hw_irq_clear(const uint8_t instance)
 {
 	uint8_t msi_idx = ipc_hw_priv[instance].msi_rx_irq;
 	int local_core = ipc_hw_priv[instance].local_core;
+	int remote_core = ipc_hw_priv[instance].remote_core;
 
-	if (ipc_hw_priv[instance].mscm_rx_irq == IPC_IRQ_NONE) {
-		return;
+	if (ipc_hw_priv[instance].mscm_rx_irq != IPC_IRQ_NONE) {
+		/*
+		 * clear MSCM core-to-core directed interrupt
+		 * on the targeted core
+		 */
+		writel(1 << remote_core,
+			&((ipc_hw_priv[instance].ipc_mscm)->
+			IRCPnIRx[local_core][msi_idx].IPC_ISR));
 	}
-	/* clear MSCM core-to-core directed interrupt on the targeted core */
-	writel(1 << local_core,
-		&((ipc_hw_priv[instance].ipc_mscm)->
-		IRCPnIRx[local_core][msi_idx].IPC_ISR));
 }

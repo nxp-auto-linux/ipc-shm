@@ -27,11 +27,6 @@
 #endif
 
 /*
- * Used when using MU driver
- */
-#define IPC_IRQ_MU -3
-
-/*
  * Used when using MRU driver
  */
 #define IPC_IRQ_MRU -2
@@ -47,6 +42,14 @@
 #ifndef IPC_SHM_MAX_INSTANCES
 #define IPC_SHM_MAX_INSTANCES	4u
 #endif
+
+#define IPC_UINT16_MAX 0xFFFFu
+
+/* Maximum number of total buffers per channel */
+#define IPC_SHM_MAX_BUFS_PER_CHANNEL (IPC_UINT16_MAX - 1u)
+
+/* Mixumun unmanaged channel size */
+#define IPC_SHM_MAX_UMNG_SIZE (IPC_UINT16_MAX)
 
 /**
  * enum ipc_shm_channel_type - channel type

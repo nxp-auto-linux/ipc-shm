@@ -1,17 +1,19 @@
 /* SPDX-License-Identifier: BSD-3-Clause */
 /*
- * Copyright 2018-2019 NXP
+ * Copyright 2018-2019,2023 NXP
  */
 #ifndef IPC_QUEUE_H
 #define IPC_QUEUE_H
 
 /**
  * struct ipc_ring - memory mapped circular buffer ring
+ * @sentinel: a magic word to ensure ring integrity
  * @write:	write index, position used to store next byte in the buffer
  * @read:	read index, read next byte from this position
  * @data:	circular buffer
  */
 struct ipc_ring {
+	uint64_t sentinel;
 	volatile uint32_t write;
 	volatile uint32_t read;
 	uint8_t data[];
@@ -41,16 +43,17 @@ struct ipc_ring {
  * write and read index that is never written.
  */
 struct ipc_queue {
+	uint8_t elem_size;
 	uint16_t elem_num;
-	uint16_t elem_size;
 	struct ipc_ring *push_ring;
 	struct ipc_ring *pop_ring;
 };
 
 int ipc_queue_init(struct ipc_queue *queue, uint16_t elem_num,
-	uint16_t elem_size, uintptr_t push_ring_addr, uintptr_t pop_ring_addr);
+	uint8_t elem_size, uintptr_t push_ring_addr, uintptr_t pop_ring_addr);
 int ipc_queue_push(struct ipc_queue *queue, const void *buf);
 int ipc_queue_pop(struct ipc_queue *queue, void *buf);
+int ipc_queue_check_integrity(struct ipc_queue *queue);
 
 /**
  * ipc_queue_mem_size() - return queue footprint in local mapped memory

@@ -1,9 +1,12 @@
 /* SPDX-License-Identifier: BSD-3-Clause */
 /*
- * Copyright 2018-2019,2022 NXP
+ * Copyright 2018-2019,2022-2023 NXP
  */
 #include "ipc-os.h"
 #include "ipc-queue.h"
+
+/* magic number to indicate the queue integrity */
+#define IPC_QUEUE_SENTINEL 0x474E495246435049ULL
 
 /**
  * ipc_queue_pop() - removes element from queue
@@ -101,7 +104,7 @@ int ipc_queue_push(struct ipc_queue *queue, const void *buf)
  * Return: 0 on success, error code otherwise
  */
 int ipc_queue_init(struct ipc_queue *queue,
-		   uint16_t elem_num, uint16_t elem_size,
+		   uint16_t elem_num, uint8_t elem_size,
 		   uintptr_t push_ring_addr, uintptr_t pop_ring_addr)
 {
 	if ((queue == NULL) || (push_ring_addr == (uintptr_t)NULL) ||
@@ -118,6 +121,9 @@ int ipc_queue_init(struct ipc_queue *queue,
 	/* map and init push ring in local memory */
 	queue->push_ring = (struct ipc_ring *) push_ring_addr;
 
+	/* add sentinel to detect integrity */
+	queue->push_ring->sentinel = IPC_QUEUE_SENTINEL;
+
 	queue->push_ring->write = 0;
 	queue->push_ring->read = 0;
 
@@ -125,4 +131,21 @@ int ipc_queue_init(struct ipc_queue *queue,
 	queue->pop_ring = (struct ipc_ring *) pop_ring_addr;
 
 	return 0;
+}
+
+/**
+ * ipc_queue_check_integrity() - check if the sentinel was not overwritten
+ * @queue:	[IN] queue pointer
+ *
+ * Check if the sentinel was not overwritten
+ *
+ * Return:	0 on success, error code otherwise
+ */
+int ipc_queue_check_integrity(struct ipc_queue *queue)
+{
+	if ((IPC_QUEUE_SENTINEL == queue->pop_ring->sentinel) &&
+			(IPC_QUEUE_SENTINEL == queue->push_ring->sentinel))
+		return 0;
+
+	return -EINVAL;
 }

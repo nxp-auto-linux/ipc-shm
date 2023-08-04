@@ -14,7 +14,7 @@
 #include "ipc-shm.h"
 #include "ipcf_Ip_Cfg.h"
 
-#define MODULE_NAME "ipc-shm-sample_multi-instance"
+#define MODULE_NAME "ipc-shm-sample_multi_instance"
 #define MODULE_VER "0.1"
 
 MODULE_AUTHOR("NXP");

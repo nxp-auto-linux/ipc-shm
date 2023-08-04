@@ -3,7 +3,7 @@
 # Copyright 2021-2023 NXP
 #
 
-MODULE_NAME := ipc-shm-sample_multi-instance
+MODULE_NAME := ipc-shm-sample_multi_instance
 PLATFORM_FLAVOR ?= UNDEFINED
 
 ifneq ($(KERNELRELEASE),)
