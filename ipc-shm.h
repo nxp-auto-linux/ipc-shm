@@ -48,7 +48,7 @@
 /* Maximum number of total buffers per channel */
 #define IPC_SHM_MAX_BUFS_PER_CHANNEL (IPC_UINT16_MAX - 1u)
 
-/* Mixumun unmanaged channel size */
+/* Maximum unmanaged channel size */
 #define IPC_SHM_MAX_UMNG_SIZE (IPC_UINT16_MAX)
 
 /**
