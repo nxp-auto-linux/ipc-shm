@@ -4,21 +4,24 @@
 #
 
 MODULE_NAME := ipc-shm-dev
+CDEV_MODULE_NAME := ipc-shm-cdev
 UIO_MODULE_NAME := ipc-shm-uio
 PLATFORM_FLAVOR ?= UNDEFINED
+EXTRA_CFLAGS ?=
 
 ifneq ($(KERNELRELEASE),)
 # kbuild part of makefile
 
-obj-m := $(MODULE_NAME).o $(UIO_MODULE_NAME).o
+obj-m := $(MODULE_NAME).o $(CDEV_MODULE_NAME).o $(UIO_MODULE_NAME).o
 
-$(MODULE_NAME)-y := ipc-shm.o ipc-queue.o os/ipc-os.o
+$(MODULE_NAME)-y := ipc-shm.o ipc-queue.o os_kernel/ipc-os.o
 
-$(UIO_MODULE_NAME)-y := os/ipc-uio.o
+$(CDEV_MODULE_NAME)-y := os_kernel/ipc-cdev.o
+$(UIO_MODULE_NAME)-y := os_kernel/ipc-uio.o
 
 ifeq ($(PLATFORM_FLAVOR),UNDEFINED)
 $(error "PLATFORM_FLAVOR is UNDEFINED")
-else ifeq ($(CONFIG_SOC_S32V234),y)
+else ifeq ($(PLATFORM_FLAVOR),s32v234)
 PLATFORM_HW := s32v234
 else ifeq ($(PLATFORM_FLAVOR),s32g3)
 PLATFORM_HW := s32g3xx
@@ -27,11 +30,15 @@ PLATFORM_HW := s32gen1
 endif
 
 $(MODULE_NAME)-y += hw/$(PLATFORM_HW)/ipc-hw-$(PLATFORM_HW).o
+$(CDEV_MODULE_NAME)-y += hw/$(PLATFORM_HW)/ipc-hw-$(PLATFORM_HW).o
 $(UIO_MODULE_NAME)-y += hw/$(PLATFORM_HW)/ipc-hw-$(PLATFORM_HW).o
 
 # Add here cc flags (e.g. header lookup paths, defines, etc)
-ccflags-y += -I$(src) -I$(src)/hw -I$(src)/hw/$(PLATFORM_HW) -I$(src)/os
+ccflags-y += -I$(src) -I$(src)/hw -I$(src)/hw/$(PLATFORM_HW) -I$(src)/os_kernel
 ccflags-y += -DPLATFORM_FLAVOR_$(PLATFORM_FLAVOR)
+ccflags-y += $(EXTRA_CFLAGS)
+# # For debug
+# ccflags-y +=  -DDEBUG
 
 else
 # normal part of makefile

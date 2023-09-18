@@ -80,11 +80,15 @@ int _ipc_hw_init(const uint8_t instance, int tx_irq, int rx_irq,
 	int remote_core_idx;
 	int local_core_idx;
 	uint32_t ircpcfg_mask;
+	uint32_t trust_cores;
 
 	if (!mscm_addr)
 		return -EINVAL;
 
 	ipc_hw_priv[instance].ipc_mscm = (struct ipc_mscm_regs *)mscm_addr;
+
+	trust_cores = (local_core->trusted & 0x0000000Fu)
+				| ((local_core->trusted & 0x000000F0u) << 4);
 
 	switch (local_core->type) {
 	case IPC_CORE_A53:
@@ -125,11 +129,11 @@ int _ipc_hw_init(const uint8_t instance, int tx_irq, int rx_irq,
 	}
 
 	/* check trusted cores mask contains the targeted and other A53 cores */
-	if ((!local_core->trusted)
-		|| (local_core->trusted & ~IPC_MSCM_IRCPCFG_A53_TR)
-		|| ((0x01uL << local_core_idx) & ~local_core->trusted)) {
+	if ((!trust_cores)
+		|| (trust_cores & ~IPC_MSCM_IRCPCFG_A53_TR)
+			|| ((0x01uL << local_core_idx) & ~trust_cores))
 		return -EINVAL;
-	}
+
 
 	switch (remote_core->type) {
 	case IPC_CORE_A53:
@@ -312,7 +316,7 @@ int _ipc_hw_init(const uint8_t instance, int tx_irq, int rx_irq,
 	if (ircpcfg_mask & IPC_MSCM_IRCPCFG_LOCK)
 		return -EACCES;
 
-	writel(ircpcfg_mask | local_core->trusted,
+	writel(ircpcfg_mask | trust_cores,
 		&(ipc_hw_priv[instance].ipc_mscm->IRCPCFG));
 
 	return 0;

@@ -117,19 +117,3 @@ Running the application
 7. Unload the modules::
 
     rmmod ipc-shm-sample ipc-shm-dev
-
-Configuration Notes
-===================
-
-Polling
--------
-In order to compile the shared memory sample application with polling support,
-the makefile parameter ``POLLING`` must be set to ``yes``, e.g.::
-
-    make -C ./ipc-shm/sample POLLING=yes KERNELDIR=$PWD/linux modules
-
-Note: the remote sample application must be built with polling support as well.
-Please refer to the remote sample build instructions for more details.
-
-This sample demonstrates how shared memory polling API can be used to poll for
-incoming messages instead of using inter-core interrupts notifications.

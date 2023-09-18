@@ -14,7 +14,7 @@ $(MODULE_NAME)-y := sample_multi_instance.o
 
 ifeq ($(PLATFORM_FLAVOR),UNDEFINED)
 $(error "PLATFORM_FLAVOR is UNDEFINED")
-else ifeq ($(CONFIG_SOC_S32V234),y)
+else ifeq ($(PLATFORM_FLAVOR),s32v234)
 PLATFORM_HW := s32v234
 else ifeq ($(PLATFORM_FLAVOR),s32g3)
 PLATFORM_HW := s32g3xx
@@ -27,7 +27,7 @@ ccflags-y += -DPLATFORM_FLAVOR_$(PLATFORM_FLAVOR) \
              -I$(PWD)/.. \
              -I$(PWD)/../hw \
              -I$(PWD)/../hw/$(PLATFORM_HW)\
-             -I$(PWD)/../os
+             -I$(PWD)/../os_kernel
 
 else
 # normal part of makefile

@@ -1,6 +1,6 @@
 /* SPDX-License-Identifier: BSD-3-Clause */
 /*
- * Copyright 2020-2023 NXP
+ * Copyright 2023 NXP
  */
 
 #include "ipcf_Ip_Cfg.h"
@@ -138,7 +138,6 @@ static struct ipc_shm_channel_cfg ipcf_shm_cfg_channels1[3] = {
 		},
 	},
 };
-
 
 /* ipc shm configuration */
 struct ipc_shm_cfg ipcf_shm_cfg_instances[2] = {

@@ -19,7 +19,7 @@
 #if defined(PLATFORM_FLAVOR_s32g2) || defined(PLATFORM_FLAVOR_s32g3) || \
 	defined(PLATFORM_FLAVOR_s32r45)
 	#define DT_INTC_NODE_COMP "nxp,s32cc-mscm"
-#elif defined(CONFIG_SOC_S32V234)
+#elif defined(PLATFORM_FLAVOR_s32v234)
 	#define DT_INTC_NODE_COMP "fsl,s32v234-mscm"
 #else
 	#error "Platform not supported"
@@ -28,13 +28,13 @@
 
 /**
  * struct ipc_os_priv_instance - OS specific private data each instance
- * @shm_size:			local/remote shared memory size
- * @local_phys_shm:		local shared memory physical address
- * @remote_phys_shm:	remote shared memory physical address
- * @local_virt_shm:		local shared memory virtual address
- * @remote_virt_shm:	remote shared memory virtual address
- * @irq_num:			Linux IRQ number
- * @state:				state to indicate whether instance is initialized
+ * @shm_size:           local/remote shared memory size
+ * @local_phys_shm:     local shared memory physical address
+ * @remote_phys_shm:    remote shared memory physical address
+ * @local_virt_shm:     local shared memory virtual address
+ * @remote_virt_shm:    remote shared memory virtual address
+ * @irq_num:            Linux IRQ number
+ * @state:              state to indicate whether instance is initialized
  */
 struct ipc_os_priv_instance {
 	int shm_size;
@@ -143,8 +143,8 @@ int ipc_os_init(const uint8_t instance, const struct ipc_shm_cfg *cfg,
 		return -EADDRINUSE;
 	}
 
-	priv.id[instance].local_virt_shm = (uintptr_t)ioremap(cfg->local_shm_addr,
-						 cfg->shm_size);
+	priv.id[instance].local_virt_shm
+		= (uintptr_t)ioremap(cfg->local_shm_addr, cfg->shm_size);
 	if (!priv.id[instance].local_virt_shm) {
 		err = -ENOMEM;
 		goto err_release_local_region;
@@ -159,24 +159,29 @@ int ipc_os_init(const uint8_t instance, const struct ipc_shm_cfg *cfg,
 		goto err_unmap_local_shm;
 	}
 
-	priv.id[instance].remote_virt_shm = (uintptr_t)ioremap(cfg->remote_shm_addr,
-						  cfg->shm_size);
+	priv.id[instance].remote_virt_shm
+		= (uintptr_t)ioremap(cfg->remote_shm_addr, cfg->shm_size);
 	if (!priv.id[instance].remote_virt_shm) {
 		err = -ENOMEM;
 		goto err_release_remote_region;
 	}
 
-	/* get interrupt number from device tree */
-	mscm = of_find_compatible_node(NULL, NULL, DT_INTC_NODE_COMP);
-	if (!mscm) {
-		shm_err("Unable to find MSCM node in device tree\n");
-		err = -ENXIO;
-		goto err_unmap_remote_shm;
+	if (cfg->inter_core_rx_irq == IPC_IRQ_NONE) {
+		priv.id[instance].irq_num = IPC_IRQ_NONE;
+	} else {
+		/* get interrupt number from device tree */
+		mscm = of_find_compatible_node(NULL, NULL, DT_INTC_NODE_COMP);
+		if (!mscm) {
+			shm_err("Unable to find MSCM node in device tree\n");
+			err = -ENXIO;
+			goto err_unmap_remote_shm;
+		}
+		priv.id[instance].irq_num
+			= of_irq_get(mscm, ipc_hw_get_rx_irq(instance));
+		shm_dbg("Rx IRQ of instance %d = %d\n",
+			instance, priv.id[instance].irq_num);
+		of_node_put(mscm); /* release refcount to mscm DT node */
 	}
-
-	priv.id[instance].irq_num = of_irq_get(mscm, ipc_hw_get_rx_irq(instance));
-	shm_dbg("Rx IRQ of instance %d = %d\n", instance, priv.id[instance].irq_num);
-	of_node_put(mscm); /* release refcount to mscm DT node */
 
 	/* check duplicate irq number */
 	for (i = 0; i < IPC_SHM_MAX_INSTANCES; i++) {
@@ -186,11 +191,15 @@ int ipc_os_init(const uint8_t instance, const struct ipc_shm_cfg *cfg,
 	}
 	priv.irq_num_init[instance] = priv.id[instance].irq_num;
 
-	/* init rx interrupt */
-	err = request_irq(priv.id[instance].irq_num, ipc_shm_hardirq, 0, DRIVER_NAME, &priv);
-	if (err) {
-		shm_err("Request interrupt %d failed\n", priv.id[instance].irq_num);
-		goto err_unmap_remote_shm;
+	if (priv.id[instance].irq_num != IPC_IRQ_NONE) {
+		/* init rx interrupt */
+		err = request_irq(priv.id[instance].irq_num, ipc_shm_hardirq,
+							0, DRIVER_NAME, &priv);
+		if (err) {
+			shm_err("Request interrupt %d failed\n",
+						priv.id[instance].irq_num);
+			goto err_unmap_remote_shm;
+		}
 	}
 
 	/* save params */
@@ -302,6 +311,15 @@ void ipc_os_unmap_intc(void *addr)
  */
 int ipc_os_poll_channels(const uint8_t instance)
 {
+	/* the softirq will handle rx operation if rx interrupt is configured */
+	if (priv.id[instance].irq_num == IPC_IRQ_NONE) {
+		if (priv.rx_cb != NULL) {
+			return priv.rx_cb(instance, IPC_SOFTIRQ_BUDGET);
+		} else {
+			return -EINVAL;
+		}
+	}
+
 	return -EOPNOTSUPP;
 }
 

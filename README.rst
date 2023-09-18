@@ -1,22 +1,22 @@
 .. SPDX-License-Identifier: BSD-3-Clause
 
-==========================================
-IPCF Shared Memory Kernel Driver for Linux
-==========================================
+===================================
+IPCF Shared Memory Driver for Linux
+===================================
 
 :Copyright: 2018-2021,2023 NXP
 
 Overview
 ========
-The Linux IPCF Shared Memory Kernel Driver enables communication over shared memory
+The Linux IPCF Shared Memory Driver enables communication over shared memory
 with an RTOS application running on a different core of the same processor.
 
-The driver is accompanied by a sample application that is also an out-of-tree
-kernel module which demonstrates a ping-pong message communication with a RTOS
-application (for more details see the readme from the sample directory).
+The driver is accompanied by a sample application which demonstrates a ping-pong
+message communication with a RTOS application (for more details see the readme
+from the sample directory).
 
-The driver and sample application are integrated as out-of-tree kernel modules
-in NXP Auto Linux BSP.
+The driver is integrated as an out-of-tree kernel module in NXP Auto
+Linux BSP.
 
 The source code of this Linux driver is published on `github.com
 <https://github.com/nxp-auto-linux/ipc-shm>`_.
@@ -69,12 +69,19 @@ Note: the local core ID and trusted cores configuration is only applicable to
 S32xx platforms running Linux. For other platforms or Operating Systems, the
 local core ID configuration is not used.
 
+If using Linux IPCF Shared Memory User-space Driver, the user-space static library
+(libipc-shm) will automatically insert the IPCF UIO/CDEV kernel module at initialization.
+The path to the kernel module in the target board rootfs can be overwritten
+at compile time by setting IPC_UIO_MODULE_DIR (for using uio driver) or
+IPC_CDEV_MODULE_DIR (for using character driver) variable from the caller.
+
 Cautions
 ========
 This driver provides direct access to physical memory that is mapped as
-non-cachable. Therefore, applications should make only aligned accesses in the
-shared memory buffers. Caution should be used when working with functions that
-may do unaligned accesses (e.g., string processing functions).
+non-cachable in both kernel-space or user-space. Therefore, applications should
+make only aligned accesses in the shared memory buffers.
+Caution should be used when working with functions that may do unaligned accesses
+(e.g., string processing functions).
 
 The driver ensures freedom from interference between local and remote memory domains
 by executing all write operations only in the local memory.

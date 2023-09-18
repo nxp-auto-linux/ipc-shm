@@ -12,11 +12,6 @@ ifneq ($(KERNELRELEASE),)
 obj-m := $(MODULE_NAME).o
 $(MODULE_NAME)-y := sample.o
 
-POLLING ?= no
-ifeq ($(POLLING),yes)
-ccflags-y += -DPOLLING
-endif
-
 ifeq ($(PLATFORM_FLAVOR),UNDEFINED)
 $(error "PLATFORM_FLAVOR is UNDEFINED")
 else ifeq ($(PLATFORM_FLAVOR),s32g3)
@@ -30,7 +25,7 @@ ccflags-y += -DPLATFORM_FLAVOR_$(PLATFORM_FLAVOR) \
              -I$(PWD)/.. \
              -I$(PWD)/../hw \
              -I$(PWD)/../hw/$(PLATFORM_HW)\
-             -I$(PWD)/../os
+             -I$(PWD)/../os_kernel
 
 else
 # normal part of makefile
@@ -51,9 +46,6 @@ EXTRA_SYMBOLS=${IPC_SHM_DEV_PATH}/Module.symvers
 # INSTALL_DIR  : location of the module installation
 # CROSS_COMPILE: cross compiler path and prefix
 # PLATFORM_FLAVOR: build for s32g2, s32r45 or s32g3
-# Optional parameters:
-# POLLING      : set yo 'yes' to disable tx interrupt if
-#                remote sample application use polling
 
 modules:
 	$(MAKE) -C $(IPC_SHM_DEV_PATH) KERNELDIR=$(KERNELDIR) ARCH=$(ARCH) CROSS_COMPILE=$(CROSS_COMPILE) $@

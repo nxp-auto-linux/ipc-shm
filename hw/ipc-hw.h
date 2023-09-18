@@ -1,6 +1,6 @@
 /* SPDX-License-Identifier: BSD-3-Clause */
 /*
- * Copyright 2018-2019,2021 NXP
+ * Copyright 2018-2019,2021,2023 NXP
  */
 #ifndef IPC_HW_H
 #define IPC_HW_H
@@ -24,7 +24,5 @@ struct ipc_shm_local_core;
 int _ipc_hw_init(const uint8_t instance, int tx_irq, int rx_irq,
 		 const struct ipc_shm_remote_core *remote_core,
 		 const struct ipc_shm_local_core *local_core, void *mscm_addr);
-
-int ipc_hw_set_tx_irq(const uint8_t instance, int tx_irq);
 
 #endif /* IPC_HW_H */

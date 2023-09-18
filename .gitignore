@@ -3,6 +3,8 @@
 *.mod
 *.mod.c
 *.ko
+*.elf
+*.a
 modules.order
 Module.symvers
 .cproject
