@@ -15,8 +15,8 @@
 #define DEVICE_NAME		"ipc-shm-cdev"
 #define DRIVER_VERSION	"2.0"
 
-#define IPC_USE_SLEEP_QUEUE	0
-#define IPC_USR_WAKE_QUEUE	1
+#define IPC_CDEV_SLEEP_QUEUE	0
+#define IPC_CDEV_WAKE_QUEUE		1
 
 /* Device tree MSCM node compatible property (search key) */
 #if defined(PLATFORM_FLAVOR_s32g2) || defined(PLATFORM_FLAVOR_s32g3) || \
@@ -44,7 +44,7 @@ struct ipc_os_priv_instance {
 };
 
 /**
- * struct ipc_os_priv - OS specific private data
+ * struct ipc_cdev_priv_type - OS specific private data
  * @dev_is_opened:      to check if device is open or not
  * @target_instance:    instance to be initialized
  * @wait_queue_flag:    flag to wake up the wait queue
@@ -55,7 +55,7 @@ struct ipc_os_priv_instance {
  * @ipc_cdev:           variable use for character device
  * @instance_id:        private data per instance
  */
-struct ipc_usr_priv_type {
+struct ipc_cdev_priv_type {
 	char dev_is_opened;
 	uint8_t target_instance;
 	uint8_t wait_queue_flag;
@@ -65,7 +65,7 @@ struct ipc_usr_priv_type {
 	struct class *ipc_class;
 	struct cdev ipc_cdev;
 	struct ipc_os_priv_instance instance_id[IPC_SHM_MAX_INSTANCES];
-} ipc_usr_priv;
+} ipc_cdev_priv;
 
 
 /* driver interrupt service routine */
@@ -74,9 +74,9 @@ static irqreturn_t ipc_shm_hardirq(int irq, void *dev)
 	uint8_t i = 0;
 
 	for (i = 0; i < IPC_SHM_MAX_INSTANCES; i++) {
-		if ((ipc_usr_priv.instance_id[i].state
+		if ((ipc_cdev_priv.instance_id[i].state
 				== IPC_SHM_INSTANCE_DISABLED)
-			|| (ipc_usr_priv.instance_id[i].irq_num
+			|| (ipc_cdev_priv.instance_id[i].irq_num
 				== IPC_IRQ_NONE))
 			continue;
 
@@ -88,8 +88,8 @@ static irqreturn_t ipc_shm_hardirq(int irq, void *dev)
 	}
 
 	shm_dbg("Waking up the queue...\n");
-	ipc_usr_priv.wait_queue_flag = (uint8_t)IPC_USR_WAKE_QUEUE;
-	wake_up_interruptible(&ipc_usr_priv.wait_queue);
+	ipc_cdev_priv.wait_queue_flag = (uint8_t)IPC_CDEV_WAKE_QUEUE;
+	wake_up_interruptible(&ipc_cdev_priv.wait_queue);
 
 	return IRQ_HANDLED;
 }
@@ -133,28 +133,28 @@ void ipc_os_unmap_intc(void *addr)
 }
 
 /*
- * ipc_usr_open() - open operation will respond to a open request
- *                  from user-space
+ * ipc_cdev_open() - open operation will respond to a open request
+ *                   from user-space
  */
-static int ipc_usr_open(struct inode *inode, struct file *file)
+static int ipc_cdev_open(struct inode *inode, struct file *file)
 {
-	if (ipc_usr_priv.dev_is_opened) {
+	if (ipc_cdev_priv.dev_is_opened) {
 		shm_dbg("File is already opened!\n");
 		return -EBUSY;
 	}
-	ipc_usr_priv.dev_is_opened++;
+	ipc_cdev_priv.dev_is_opened++;
 
 	shm_dbg("File is opened!\n");
 	return 0;
 }
 
 /*
- * ipc_usr_release() - release operation will respond to a close request
- *                     from user-space
+ * ipc_cdev_release() - release operation will respond to a close request
+ *                      from user-space
  */
-static int ipc_usr_release(struct inode *inode, struct file *file)
+static int ipc_cdev_release(struct inode *inode, struct file *file)
 {
-	ipc_usr_priv.dev_is_opened--;
+	ipc_cdev_priv.dev_is_opened--;
 	shm_dbg("File is closed!\n");
 	/* TODO: unregisted interrupt */
 
@@ -162,22 +162,22 @@ static int ipc_usr_release(struct inode *inode, struct file *file)
 }
 
 /*
- * ipc_usr_read() - read operation will respond to a read request
- *                  from user-space
+ * ipc_cdev_read() - read operation will respond to a read request
+ *                   from user-space
  */
-static ssize_t ipc_usr_read(struct file *file, char __user *user_buffer,
+static ssize_t ipc_cdev_read(struct file *file, char __user *user_buffer,
 						size_t size, loff_t *offset)
 {
 	shm_dbg("Wait queue for IRQ\n");
-	wait_event_interruptible(ipc_usr_priv.wait_queue,
-			ipc_usr_priv.wait_queue_flag != IPC_USE_SLEEP_QUEUE);
-	ipc_usr_priv.wait_queue_flag = (uint8_t)IPC_USE_SLEEP_QUEUE;
+	wait_event_interruptible(ipc_cdev_priv.wait_queue,
+			ipc_cdev_priv.wait_queue_flag != IPC_CDEV_SLEEP_QUEUE);
+	ipc_cdev_priv.wait_queue_flag = (uint8_t)IPC_CDEV_SLEEP_QUEUE;
 
 	return 0;
 }
 
 /* init hw and request irq from kernel space */
-static int ipc_usr_os_init(const uint8_t instance,
+static int ipc_cdev_os_init(const uint8_t instance,
 					const struct ipc_shm_cfg *cfg)
 {
 	int i, err;
@@ -191,7 +191,7 @@ static int ipc_usr_os_init(const uint8_t instance,
 	}
 
 	if (cfg->inter_core_rx_irq == IPC_IRQ_NONE) {
-		ipc_usr_priv.instance_id[instance].irq_num = IPC_IRQ_NONE;
+		ipc_cdev_priv.instance_id[instance].irq_num = IPC_IRQ_NONE;
 	} else {
 		/* get interrupt number from device tree */
 		mscm = of_find_compatible_node(NULL, NULL, DT_INTC_NODE_COMP);
@@ -199,57 +199,58 @@ static int ipc_usr_os_init(const uint8_t instance,
 			shm_err("Unable to find MSCM node in device tree\n");
 			return -ENXIO;
 		}
-		ipc_usr_priv.instance_id[instance].irq_num
+		ipc_cdev_priv.instance_id[instance].irq_num
 			= of_irq_get(mscm, ipc_hw_get_rx_irq(instance));
 		shm_dbg("Rx IRQ of instance %d = %d\n", instance,
-			ipc_usr_priv.instance_id[instance].irq_num);
+			ipc_cdev_priv.instance_id[instance].irq_num);
 		of_node_put(mscm); /* release refcount to mscm DT node */
 	}
 
 	/* check duplicate irq number */
 	for (i = 0; i < IPC_SHM_MAX_INSTANCES; i++) {
-		if (ipc_usr_priv.instance_id[instance].irq_num
-					== ipc_usr_priv.irq_num_init[i]) {
-			ipc_usr_priv.instance_id[instance].state
+		if (ipc_cdev_priv.instance_id[instance].irq_num
+					== ipc_cdev_priv.irq_num_init[i]) {
+			ipc_cdev_priv.instance_id[instance].state
 				= IPC_SHM_INSTANCE_ENABLED;
 			return 0;
 		}
 	}
-	ipc_usr_priv.irq_num_init[instance]
-		= ipc_usr_priv.instance_id[instance].irq_num;
+	ipc_cdev_priv.irq_num_init[instance]
+		= ipc_cdev_priv.instance_id[instance].irq_num;
 
-	if (ipc_usr_priv.instance_id[instance].irq_num != IPC_IRQ_NONE) {
+	if (ipc_cdev_priv.instance_id[instance].irq_num != IPC_IRQ_NONE) {
 		/* init rx interrupt */
-		err = request_irq(ipc_usr_priv.instance_id[instance].irq_num,
-				ipc_shm_hardirq, 0, DRIVER_NAME, &ipc_usr_priv);
+		err = request_irq(ipc_cdev_priv.instance_id[instance].irq_num,
+				ipc_shm_hardirq, 0, DRIVER_NAME,
+				&ipc_cdev_priv);
 		if (err) {
 			shm_err("Request interrupt %d failed\n",
-				ipc_usr_priv.instance_id[instance].irq_num);
+				ipc_cdev_priv.instance_id[instance].irq_num);
 			return -ENXIO;
 		}
 	}
 
-	ipc_usr_priv.instance_id[instance].state = IPC_SHM_INSTANCE_ENABLED;
+	ipc_cdev_priv.instance_id[instance].state = IPC_SHM_INSTANCE_ENABLED;
 	return 0;
 }
 
 /*
- * ipc_usr_ioctl() - ioctl operation will respond to a ioctl request
- *                   from user-space
+ * ipc_cdev_ioctl() - ioctl operation will respond to a ioctl request
+ *                    from user-space
  */
-static long ipc_usr_ioctl(struct file *file, unsigned int ioctl_cmd,
+static long ipc_cdev_ioctl(struct file *file, unsigned int ioctl_cmd,
 						unsigned long ioctl_arg)
 {
 	struct ipc_shm_cfg *tmp_cfg;
 	int err;
 
 	switch (ioctl_cmd) {
-	case IPC_USR_CMD_SET_INSTANCE:
-		ipc_usr_priv.target_instance = (uint8_t)ioctl_arg;
+	case IPC_CDEV_CMD_SET_INSTANCE:
+		ipc_cdev_priv.target_instance = (uint8_t)ioctl_arg;
 		shm_dbg("Set target instance %d\n",
-			ipc_usr_priv.target_instance);
+			ipc_cdev_priv.target_instance);
 		break;
-	case IPC_USR_CMD_INIT_INSTANCE:
+	case IPC_CDEV_CMD_INIT_INSTANCE:
 		tmp_cfg = (struct ipc_shm_cfg *)
 			kmalloc(sizeof(struct ipc_shm_cfg), GFP_KERNEL);
 		if (copy_from_user(tmp_cfg,
@@ -258,27 +259,27 @@ static long ipc_usr_ioctl(struct file *file, unsigned int ioctl_cmd,
 			shm_err("Fail to get struct \"ipc_shm_cfg\"\n");
 			return -EFAULT;
 		}
-		err = ipc_usr_os_init(ipc_usr_priv.target_instance, tmp_cfg);
+		err = ipc_cdev_os_init(ipc_cdev_priv.target_instance, tmp_cfg);
 		kfree(tmp_cfg);
 		if (err) {
 			shm_err("Initialize instance %d error\n",
-				ipc_usr_priv.target_instance);
+				ipc_cdev_priv.target_instance);
 			/* Free memory after initialized */
 			return -EINVAL;
 		}
 		shm_dbg("Initialized instance %d\n",
-			ipc_usr_priv.target_instance);
+			ipc_cdev_priv.target_instance);
 		/* Free memory after initialized */
 		break;
-	case IPC_USR_CMD_DISABLE_RX_IRQ:
+	case IPC_CDEV_CMD_DISABLE_RX_IRQ:
 		shm_dbg("Disable rx instance %ld\n", ioctl_arg);
 		ipc_hw_irq_disable((uint8_t)ioctl_arg);
 		break;
-	case IPC_USR_CMD_ENABLE_RX_IRQ:
+	case IPC_CDEV_CMD_ENABLE_RX_IRQ:
 		shm_dbg("Enable rx instance %ld\n", ioctl_arg);
 		ipc_hw_irq_enable((uint8_t)ioctl_arg);
 		break;
-	case IPC_USR_CMD_TRIGGER_TX_IRQ:
+	case IPC_CDEV_CMD_TRIGGER_TX_IRQ:
 		shm_dbg("Trigger tx instance %ld\n", ioctl_arg);
 		ipc_hw_irq_notify((uint8_t)ioctl_arg);
 		break;
@@ -290,20 +291,20 @@ static long ipc_usr_ioctl(struct file *file, unsigned int ioctl_cmd,
 }
 
 /* File operations */
-static const struct file_operations ipc_usr_fops = {
-	.open = ipc_usr_open,
-	.release = ipc_usr_release,
-	.read = ipc_usr_read,
-	.unlocked_ioctl = ipc_usr_ioctl,
+static const struct file_operations ipc_cdev_fops = {
+	.open = ipc_cdev_open,
+	.release = ipc_cdev_release,
+	.read = ipc_cdev_read,
+	.unlocked_ioctl = ipc_cdev_ioctl,
 };
 
-static int ipc_usr_init(void)
+static int ipc_cdev_init(void)
 {
 	int err;
 
 	/* Dynamic allocate device major number */
 	err = alloc_chrdev_region(
-			&ipc_usr_priv.dev_major_num,
+			&ipc_cdev_priv.dev_major_num,
 			0,
 			1,
 			DEVICE_NAME);
@@ -313,51 +314,54 @@ static int ipc_usr_init(void)
 		return err;
 	}
 	/* Create class and init character device */
-	ipc_usr_priv.ipc_class = class_create(THIS_MODULE, DEVICE_NAME);
-	cdev_init(&ipc_usr_priv.ipc_cdev, &ipc_usr_fops);
-	ipc_usr_priv.ipc_cdev.owner = THIS_MODULE;
-	cdev_add(&ipc_usr_priv.ipc_cdev, ipc_usr_priv.dev_major_num, 1);
+	ipc_cdev_priv.ipc_class = class_create(THIS_MODULE, DEVICE_NAME);
+	cdev_init(&ipc_cdev_priv.ipc_cdev, &ipc_cdev_fops);
+	ipc_cdev_priv.ipc_cdev.owner = THIS_MODULE;
+	cdev_add(&ipc_cdev_priv.ipc_cdev, ipc_cdev_priv.dev_major_num, 1);
 	/* Create device file in /dev with name is DEVICE_NAME */
-	device_create(ipc_usr_priv.ipc_class, NULL, ipc_usr_priv.dev_major_num,
-							NULL, DEVICE_NAME);
+	device_create(ipc_cdev_priv.ipc_class, NULL,
+			ipc_cdev_priv.dev_major_num,
+			NULL, DEVICE_NAME);
 	/* Initialize variable */
-	ipc_usr_priv.dev_is_opened = 0;
-	ipc_usr_priv.wait_queue_flag = (uint8_t)IPC_USE_SLEEP_QUEUE;
+	ipc_cdev_priv.dev_is_opened = 0;
+	ipc_cdev_priv.wait_queue_flag = (uint8_t)IPC_CDEV_SLEEP_QUEUE;
 	/* Initialize wait queue */
-	init_waitqueue_head(&ipc_usr_priv.wait_queue);
+	init_waitqueue_head(&ipc_cdev_priv.wait_queue);
 	shm_dbg("Device created!\n");
 
 	return 0;
 }
 
-static void ipc_usr_clean(void)
+static void ipc_cdev_clean(void)
 {
 	int i;
 
 	for (i = 0; i < IPC_SHM_MAX_INSTANCES; i++) {
-		if ((ipc_usr_priv.instance_id[i].state
+		if ((ipc_cdev_priv.instance_id[i].state
 			== IPC_SHM_INSTANCE_DISABLED)
-				|| (ipc_usr_priv.instance_id[i].irq_num
+				|| (ipc_cdev_priv.instance_id[i].irq_num
 					== IPC_IRQ_NONE))
 			continue;
 		/* disable notifications from remote */
 		ipc_hw_irq_disable(i);
+		ipc_cdev_priv.instance_id[i].state
+			= IPC_SHM_INSTANCE_DISABLED;
 		/* only free irq if irq number is requested */
-		if (ipc_usr_priv.irq_num_init[i] != 0) {
-			free_irq(ipc_usr_priv.instance_id[i].irq_num,
-						&ipc_usr_priv);
-			ipc_usr_priv.irq_num_init[i] = 0;
+		if (ipc_cdev_priv.irq_num_init[i] != 0) {
+			free_irq(ipc_cdev_priv.instance_id[i].irq_num,
+						&ipc_cdev_priv);
+			ipc_cdev_priv.irq_num_init[i] = 0;
 		}
 	}
-	cdev_del(&ipc_usr_priv.ipc_cdev);
-	device_destroy(ipc_usr_priv.ipc_class, ipc_usr_priv.dev_major_num);
-	class_destroy(ipc_usr_priv.ipc_class);
-	unregister_chrdev_region(ipc_usr_priv.dev_major_num, 1);
+	cdev_del(&ipc_cdev_priv.ipc_cdev);
+	device_destroy(ipc_cdev_priv.ipc_class, ipc_cdev_priv.dev_major_num);
+	class_destroy(ipc_cdev_priv.ipc_class);
+	unregister_chrdev_region(ipc_cdev_priv.dev_major_num, 1);
 	shm_dbg("Device deleted!\n");
 }
 
-module_init(ipc_usr_init)
-module_exit(ipc_usr_clean)
+module_init(ipc_cdev_init)
+module_exit(ipc_cdev_clean)
 
 MODULE_AUTHOR("NXP");
 MODULE_LICENSE("Dual BSD/GPL");

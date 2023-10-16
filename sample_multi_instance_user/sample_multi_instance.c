@@ -53,6 +53,8 @@ static int msg_sizes[IPC_SHM_MAX_POOLS] = {MAX_SAMPLE_MSG_LEN};
  * @last_rx_msg:	last received message
  */
 struct instance_id {
+	volatile int tx_count;
+	volatile int rx_count;
 	int num_channels;
 	char *ctrl_shm;
 	volatile int last_rx_no_msg;
@@ -98,7 +100,7 @@ static int init_ipc_shm(void)
 
 	for (i = 0; i < ipcf_shm_instances_cfg.num_instances; i++) {
 		app.id[i].num_channels
-			= ipcf_shm_instances_cfg.shm_cfg[0].num_channels;
+			= ipcf_shm_instances_cfg.shm_cfg[i].num_channels;
 
 		/* acquire control channel memory once */
 		app.id[i].ctrl_shm
@@ -197,6 +199,7 @@ void data_chan_rx_cb(void *arg, const uint8_t instance, int chan_id,
 	/* Note: without being copied locally */
 	app.id[instance].last_rx_no_msg
 		= strtol((char *)buf + strlen("#"), &endptr, 10);
+	app.id[instance].rx_count++;
 
 	/* release the buffer */
 	err = ipc_shm_release_buf(instance, chan_id, buf);
@@ -322,6 +325,45 @@ static int send_data_msg(const uint8_t instance, int msg_len, int msg_no,
 	return 0;
 }
 
+/**
+ * send_data_poll() - Send generated data message to remote peer for polling
+ * @msg_len: message length
+ * @msg_no: message sequence number to be written in the test message
+ * @chan_id: ipc channel to be used for remote CPU communication
+ *
+ * It uses a completion variable for synchronization with reply callback.
+ */
+static int send_data_poll(const uint8_t instance, int msg_len, int msg_no,
+		int chan_id)
+{
+	int err = 0;
+	char *buf = NULL;
+
+	buf = ipc_shm_acquire_buf(instance, chan_id, msg_len);
+	/* if the is no free buffer left wait */
+	while (buf == NULL) {
+		buf = ipc_shm_acquire_buf(instance, chan_id, msg_len);
+	}
+
+	/* write data to acquired buffer */
+	generate_msg(buf, msg_len, msg_no);
+
+	ipc_memcpy_fromio(app.id[instance].last_tx_msg, buf, msg_len);
+
+	sample_info("ch %d >> %d bytes: %s\n",
+		chan_id, msg_len, app.id[instance].last_tx_msg);
+
+	/* send data to remote peer */
+	err = ipc_shm_tx(instance, chan_id, buf, msg_len);
+	if (err) {
+		sample_err("tx failed for channel ID %d, size "
+			"%d, error code %d\n", 0, msg_len, err);
+		return err;
+	}
+
+	return 0;
+}
+
 /*
  * Send requested number of messages to remote peer, cycling through all data
  * channels and wait for an echo reply after each sent message.
@@ -351,6 +393,44 @@ static int run_demo(int num_msgs, uint8_t instance)
 					sem_wait(&app.sema);
 					return 0;
 				}
+			}
+		}
+	}
+
+	return 0;
+}
+
+/*
+ * Send requested number of messages to remote peer, cycling through all data
+ * channels then poll for the responds from remote.
+ */
+static int run_demo_poll(int num_msgs, uint8_t instance)
+{
+	int err, msg, ch;
+
+	/* signal number of messages to remote via control channel */
+	err = send_ctrl_msg(instance);
+	if (err)
+		return err;
+
+	/* send generated data messages */
+	msg = 0;
+	while (msg < num_msgs) {
+		for (ch = CTRL_CHAN_ID + 1;
+				ch < app.id[instance].num_channels;
+						ch++) {
+			err = send_data_poll(instance,
+				MAX_SAMPLE_MSG_LEN, msg, ch);
+			if (err)
+				return err;
+			app.id[instance].tx_count++;
+			if (++msg == num_msgs) {
+				while (app.id[instance].tx_count
+					!= app.id[instance].rx_count) {
+					(void)ipc_shm_poll_channels(
+						instance);
+				}
+				return 0;
 			}
 		}
 	}
@@ -406,7 +486,16 @@ int main(int argc, char *argv[])
 		if (!app.num_msgs)
 			break;
 
-		err = run_demo(app.num_msgs, app.instance);
+		if ((ipcf_shm_instances_cfg
+			.shm_cfg[app.instance]
+			.inter_core_tx_irq
+				== IPC_IRQ_NONE)
+			&& (ipcf_shm_instances_cfg
+				.shm_cfg[app.instance]
+				.inter_core_rx_irq == IPC_IRQ_NONE))
+			err = run_demo_poll(app.num_msgs, app.instance);
+		else
+			err = run_demo(app.num_msgs, app.instance);
 		if (err)
 			break;
 	}

@@ -118,8 +118,13 @@ Running the application
     echo 10 > /sys/kernel/ipc-shm-sample-instance1/ping
     dmesg -c
 
-7. Repeat previous step with different number of messages
+7. Send 10 ping messages to remote OS on instance 2 and display output from kernel log::
 
-8. Unload the modules::
+    echo 10 > /sys/kernel/ipc-shm-sample-instance2/ping
+    dmesg -c
+
+8. Repeat previous step with different number of messages
+
+9. Unload the modules::
 
     rmmod ipc-shm-sample-instance ipc-shm-dev

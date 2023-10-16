@@ -332,14 +332,17 @@ static int ipc_shm_uio_remove(struct platform_device *pdev)
 {
 	int i;
 
+	device_destroy(ipc_pdev_priv.cdev_class, ipc_pdev_priv.major);
 	class_destroy(ipc_pdev_priv.cdev_class);
 	cdev_del(&ipc_pdev_priv.cdev);
 	unregister_chrdev_region(ipc_pdev_priv.major, 1);
 	for (i = 0; i < IPC_SHM_MAX_INSTANCES; i++) {
 		if (ipc_pdev_priv.uio_id[i].state
-			== IPC_SHM_INSTANCE_ENABLED) {
+				== IPC_SHM_INSTANCE_ENABLED) {
 			ipc_pdev_priv.uio_id[i].state
 					= IPC_SHM_INSTANCE_DISABLED;
+			if (ipc_pdev_priv.irq_num_init[i] == IPC_IRQ_NONE)
+				continue;
 			uio_unregister_device(&ipc_pdev_priv.uio_id[i].info);
 		}
 	}

@@ -258,24 +258,24 @@ int ipc_os_init(const uint8_t instance, const struct ipc_shm_cfg *cfg,
 	shm_dbg("Created Rx softirq thread with priority=%d\n",
 		irq_thread_param.sched_priority);
 
-	err = ioctl(priv.ipc_usr_fd, IPC_USR_CMD_SET_INSTANCE, instance);
+	err = ioctl(priv.ipc_usr_fd, IPC_CDEV_CMD_SET_INSTANCE, instance);
 	if (err) {
 		shm_err("Failed to set target instance %d\n", instance);
 		goto err_unmap_remote_shm;
 	}
 
-	err = ioctl(priv.ipc_usr_fd, IPC_USR_CMD_INIT_INSTANCE,
+	err = ioctl(priv.ipc_usr_fd, IPC_CDEV_CMD_INIT_INSTANCE,
 			(struct ipc_shm_cfg *)cfg);
 	if (err) {
 		shm_err("Failed to initialize instance %d\n", instance);
 		goto err_unmap_remote_shm;
 	}
 
-	priv.id[instance].state = IPC_SHM_INSTANCE_ENABLED;
 	if (cfg->inter_core_rx_irq == IPC_IRQ_NONE)
 		priv.id[instance].irq_num = IPC_IRQ_NONE;
 	else
 		priv.id[instance].irq_num = 0;
+	priv.id[instance].state = IPC_SHM_INSTANCE_ENABLED;
 
 	shm_dbg("done\n");
 
@@ -382,7 +382,7 @@ int ipc_os_poll_channels(const uint8_t instance)
 void ipc_hw_irq_enable(const uint8_t instance)
 {
 	ioctl(priv.ipc_usr_fd,
-			IPC_USR_CMD_ENABLE_RX_IRQ, instance);
+			IPC_CDEV_CMD_ENABLE_RX_IRQ, instance);
 }
 
 /**
@@ -391,7 +391,7 @@ void ipc_hw_irq_enable(const uint8_t instance)
 void ipc_hw_irq_disable(const uint8_t instance)
 {
 	ioctl(priv.ipc_usr_fd,
-			IPC_USR_CMD_DISABLE_RX_IRQ, instance);
+			IPC_CDEV_CMD_DISABLE_RX_IRQ, instance);
 }
 
 /**
@@ -400,7 +400,7 @@ void ipc_hw_irq_disable(const uint8_t instance)
 void ipc_hw_irq_notify(const uint8_t instance)
 {
 	ioctl(priv.ipc_usr_fd,
-			IPC_USR_CMD_TRIGGER_TX_IRQ, instance);
+			IPC_CDEV_CMD_TRIGGER_TX_IRQ, instance);
 }
 
 int ipc_hw_init(const uint8_t instance, const struct ipc_shm_cfg *cfg)

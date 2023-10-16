@@ -316,11 +316,6 @@ int ipc_os_init(const uint8_t instance, const struct ipc_shm_cfg *cfg,
 		= ipc_os_priv.id[instance].remote_shm_map
 			+ ipc_os_priv.id[instance].remote_shm_offset;
 
-	if (cfg->inter_core_rx_irq == IPC_IRQ_NONE) {
-		ipc_os_priv.id[instance].irq_num = IPC_IRQ_NONE;
-		return 0;
-	}
-
 	ipc_os_priv.id[instance].irq_num = cfg->inter_core_rx_irq;
 	/* Write data to char dev */
 	data_cfg.instance = instance;
@@ -332,6 +327,11 @@ int ipc_os_init(const uint8_t instance, const struct ipc_shm_cfg *cfg,
 	if (err < 0) {
 		err = -EINVAL;
 		goto err_unmap_remote_shm;
+	}
+
+	if (cfg->inter_core_rx_irq == IPC_IRQ_NONE) {
+		ipc_os_priv.id[instance].state = IPC_SHM_INSTANCE_ENABLED;
+		return 0;
 	}
 
 	/* search for UIO device name */
@@ -423,16 +423,19 @@ void ipc_os_free(const uint8_t instance)
 	void *res;
 	int i;
 
-	/* disable hardirq */
-	ipc_hw_irq_disable(instance);
+	ipc_os_priv.id[instance].state = IPC_SHM_INSTANCE_DISABLED;
+	if (ipc_os_priv.id[instance].irq_num != IPC_IRQ_NONE) {
+		/* disable hardirq */
+		ipc_hw_irq_disable(instance);
 
-	shm_dbg("stopping irq thread\n");
+		shm_dbg("stopping irq thread\n");
 
-	/* stop irq thread */
-	pthread_cancel(ipc_os_priv.id[instance].irq_thread_id);
-	pthread_join(ipc_os_priv.id[instance].irq_thread_id, &res);
+		/* stop irq thread */
+		pthread_cancel(ipc_os_priv.id[instance].irq_thread_id);
+		pthread_join(ipc_os_priv.id[instance].irq_thread_id, &res);
 
-	close(ipc_os_priv.id[instance].uio_fd);
+		close(ipc_os_priv.id[instance].uio_fd);
+	}
 
 	/* unmap remote/local shm */
 	munmap(ipc_os_priv.id[instance].remote_shm_map,
@@ -445,10 +448,8 @@ void ipc_os_free(const uint8_t instance)
 	 * Close all file descriptors and cancel soft thread
 	 * only when all instances are disabled
 	 */
-	ipc_os_priv.id[instance].state = IPC_SHM_INSTANCE_DISABLED;
 	for (i = 0; i < IPC_SHM_MAX_INSTANCES; i++) {
 		if (ipc_os_priv.id[i].state == IPC_SHM_INSTANCE_ENABLED) {
-			close(ipc_os_priv.id[i].uio_fd);
 			return;
 		}
 	}

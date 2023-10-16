@@ -166,6 +166,12 @@ int ipc_os_init(const uint8_t instance, const struct ipc_shm_cfg *cfg,
 		goto err_release_remote_region;
 	}
 
+	/* save params */
+	priv.id[instance].shm_size = cfg->shm_size;
+	priv.id[instance].local_phys_shm = cfg->local_shm_addr;
+	priv.id[instance].remote_phys_shm = cfg->remote_shm_addr;
+	priv.rx_cb = rx_cb;
+
 	if (cfg->inter_core_rx_irq == IPC_IRQ_NONE) {
 		priv.id[instance].irq_num = IPC_IRQ_NONE;
 	} else {
@@ -186,6 +192,7 @@ int ipc_os_init(const uint8_t instance, const struct ipc_shm_cfg *cfg,
 	/* check duplicate irq number */
 	for (i = 0; i < IPC_SHM_MAX_INSTANCES; i++) {
 		if (priv.id[instance].irq_num == priv.irq_num_init[i]) {
+			priv.id[instance].state = IPC_SHM_INSTANCE_ENABLED;
 			return 0;
 		}
 	}
@@ -202,12 +209,7 @@ int ipc_os_init(const uint8_t instance, const struct ipc_shm_cfg *cfg,
 		}
 	}
 
-	/* save params */
-	priv.id[instance].shm_size = cfg->shm_size;
-	priv.id[instance].local_phys_shm = cfg->local_shm_addr;
-	priv.id[instance].remote_phys_shm = cfg->remote_shm_addr;
 	priv.id[instance].state = IPC_SHM_INSTANCE_ENABLED;
-	priv.rx_cb = rx_cb;
 
 	return 0;
 
@@ -228,6 +230,7 @@ err_release_local_region:
  */
 void ipc_os_free(const uint8_t instance)
 {
+	priv.id[instance].state = IPC_SHM_INSTANCE_DISABLED;
 	/* disable hardirq */
 	ipc_hw_irq_disable(instance);
 

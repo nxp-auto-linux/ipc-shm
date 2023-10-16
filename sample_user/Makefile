@@ -25,7 +25,7 @@ ifeq ($(filter-out $(PLATFORM_FLAVOR),$(PLATFORM_FLAVOR_LIST)),$(PLATFORM_FLAVOR
 endif
 IPCF_OS_LIST := uio cdev
 ifeq ($(filter-out $(IPCF_OS),$(IPCF_OS_LIST)),$(IPCF_OS_LIST))
-    $(error Set PLATFORM_FLAVOR variable to a supported platform: '$(IPCF_OS_LIST)')
+    $(error Set IPCF_OS variable to a supported platform: '$(IPCF_OS_LIST)')
 endif
 
 ifeq ($(PLATFORM_FLAVOR),s32g2)
