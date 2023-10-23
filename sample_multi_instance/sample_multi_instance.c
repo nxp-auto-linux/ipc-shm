@@ -41,31 +41,32 @@ MODULE_PARM_DESC(msg_sizes, "Sample message sizes");
 
 /**
  * struct ipc_sample_app - sample app private data
+ * @num_tx_msg:		number of transmitted messaged
+ * @num_rx_msg:		number of received messaged
  * @num_channels:	number of channels configured in this sample
  * @num_msgs:		number of messages to be sent to remote app
  * @ctrl_shm:		control channel local shared memory
  * @last_rx_no_msg:	last number of received message
- * @ipc_kobj:		sysfs kernel object
- * @ping_attr:		sysfs ping command attributes
+ * @reply_received:	completion variable used to sync
+ * @ipc_kobj_ins:	sysfs kernel object
+ * @ping_attr_ins:	sysfs ping command attributes
  * @local_virt_shm:	local shared memory virtual address
  */
 static struct ipc_sample_app {
-	volatile int num_tx_msg[SAMPLE_NUM_INST];
-	volatile int num_rx_msg[SAMPLE_NUM_INST];
+	volatile int num_tx_msg;
+	volatile int num_rx_msg;
 	int num_channels;
 	int num_msgs;
-	char *ctrl_shm[SAMPLE_NUM_INST];
+	char *ctrl_shm;
 	int last_rx_no_msg;
-	struct kobject *ipc_kobj_ins[SAMPLE_NUM_INST];
-	struct kobj_attribute ping_attr_ins[SAMPLE_NUM_INST];
+	struct completion reply_received;
+	struct kobject *ipc_kobj_ins;
+	struct kobj_attribute ping_attr_ins;
 	uintptr_t local_virt_shm;
-} app;
+} app[SAMPLE_NUM_INST];
 
 /* link with generated variables */
-const void *rx_cb_arg = &app;
-
-/* Completion variable used to sync send_msg func with shm_rx_cb */
-static DECLARE_COMPLETION(reply_received);
+const void *rx_cb_arg = app;
 
 /* Init IPC shared memory driver (see ipc-shm.h for API) */
 static int init_ipc_shm(void)
@@ -76,12 +77,13 @@ static int init_ipc_shm(void)
 	err = ipc_shm_init(&ipcf_shm_instances_cfg);
 	if (err)
 		return err;
-	app.num_channels = ipcf_shm_instances_cfg.shm_cfg[0].num_channels;
 
 	/* acquire control channel memory once */
 	for (i = 0; i < SAMPLE_NUM_INST; i++) {
-		app.ctrl_shm[i] = ipc_shm_unmanaged_acquire(i, CTRL_CHAN_ID);
-		if (!app.ctrl_shm[i]) {
+		app[i].num_channels
+			= ipcf_shm_instances_cfg.shm_cfg[i].num_channels;
+		app[i].ctrl_shm = ipc_shm_unmanaged_acquire(i, CTRL_CHAN_ID);
+		if (!app[i].ctrl_shm) {
 			sample_err("failed to get memory of control channel");
 			return -ENOMEM;
 		}
@@ -110,7 +112,7 @@ void data_chan_rx_cb(void *arg, const uint8_t instance, int chan_id,
 {
 	int err = 0;
 	struct ipc_sample_app *cb_arg_sample =
-			(struct ipc_sample_app *)(*((uintptr_t *)arg));
+		&((struct ipc_sample_app *)(*(uintptr_t *)arg))[instance];
 
 	WARN_ON(size > MAX_SAMPLE_MSG_LEN);
 	/* process the received data */
@@ -119,7 +121,7 @@ void data_chan_rx_cb(void *arg, const uint8_t instance, int chan_id,
 	/* consume received data: get number of message */
 	/* Note: without being copied locally */
 	cb_arg_sample->last_rx_no_msg = ipc_strtol((char *)buf + strlen("#"));
-	cb_arg_sample->num_rx_msg[instance]++;
+	cb_arg_sample->num_rx_msg++;
 
 	/* release the buffer */
 	err = ipc_shm_release_buf(instance, chan_id, buf);
@@ -129,7 +131,7 @@ void data_chan_rx_cb(void *arg, const uint8_t instance, int chan_id,
 	}
 
 	/* notify send_msg function a reply was received */
-	complete(&reply_received);
+	complete(&app[instance].reply_received);
 }
 
 /*
@@ -157,8 +159,8 @@ static int send_ctrl_msg(const uint8_t instance)
 	 * Use stack temp buffer because sprintf may do unaligned memory writes
 	 * in SRAM and A53 will complain about unaligned accesses.
 	 */
-	sprintf(tmp, "SENDING MESSAGES: %d", app.num_msgs);
-	strcpy(app.ctrl_shm[instance], tmp);
+	sprintf(tmp, "SENDING MESSAGES: %d", app[instance].num_msgs);
+	strscpy(app[instance].ctrl_shm, tmp, CTRL_CHAN_SIZE);
 
 	sample_info("INST%d ch %d >> %ld bytes: %s\n", instance, chan_id,
 		strlen(tmp), tmp);
@@ -190,7 +192,7 @@ static void generate_msg(char *s, int len, int msg_no)
 	 * in SRAM and A53 will complain about unaligned accesses.
 	 */
 	sprintf(tmp, "#%d HELLO WORLD! from KERNEL", msg_no);
-	strcpy(s, tmp);
+	strscpy(s, tmp, MAX_SAMPLE_MSG_LEN);
 }
 
 /**
@@ -229,17 +231,17 @@ static int send_data_msg(const uint8_t instance, int msg_len, int msg_no,
 	}
 
 	/* wait for echo reply from remote (signaled from Rx callback) */
-	err = wait_for_completion_interruptible(&reply_received);
+	err = wait_for_completion_interruptible(&app[instance].reply_received);
 	if (err == -ERESTARTSYS) {
 		sample_info("interrupted...\n");
 		return err;
 	}
 
 	/* check if received message not match with sent message */
-	if (app.last_rx_no_msg != msg_no) {
+	if (app[instance].last_rx_no_msg != msg_no) {
 		sample_err("last_rx_no_msg != msg_no\n");
 		sample_err(">> #%d\n", msg_no);
-		sample_err("<< #%d\n", app.last_rx_no_msg);
+		sample_err("<< #%d\n", app[instance].last_rx_no_msg);
 		return -EINVAL;
 	}
 
@@ -301,7 +303,9 @@ static int run_demo_ins0(int num_msgs)
 	/* send generated data messages */
 	msg = 0;
 	while (msg < num_msgs) {
-		for (ch = CTRL_CHAN_ID + 1; ch < app.num_channels; ch++) {
+		for (ch = CTRL_CHAN_ID + 1;
+				ch < app[INSTANCE_ID0].num_channels;
+					ch++) {
 			for (i = 0; i < msg_sizes_argc; i++) {
 				err = send_data_msg(INSTANCE_ID0, msg_sizes[i],
 					msg, ch);
@@ -337,7 +341,9 @@ static int run_demo_ins1(int num_msgs)
 	/* send generated data messages */
 	msg = 0;
 	while (msg < num_msgs) {
-		for (ch = CTRL_CHAN_ID + 1; ch < app.num_channels; ch++) {
+		for (ch = CTRL_CHAN_ID + 1;
+				ch < app[INSTANCE_ID1].num_channels;
+					ch++) {
 			for (i = 0; i < msg_sizes_argc; i++) {
 				err = send_data_msg(INSTANCE_ID1,
 						msg_sizes[i], msg, ch);
@@ -373,15 +379,17 @@ static int run_demo_poll(int num_msgs)
 	/* send generated data messages */
 	msg = 0;
 	while (msg < num_msgs) {
-		for (ch = CTRL_CHAN_ID + 1; ch < app.num_channels; ch++) {
+		for (ch = CTRL_CHAN_ID + 1;
+				ch < app[INSTANCE_ID2].num_channels;
+					ch++) {
 			err = send_data_poll(INSTANCE_ID2,
 				MAX_SAMPLE_MSG_LEN, msg, ch);
 			if (err)
 				return err;
-			app.num_tx_msg[INSTANCE_ID2]++;
+			app[INSTANCE_ID2].num_tx_msg++;
 			if (++msg == num_msgs) {
-				while (app.num_tx_msg[INSTANCE_ID2]
-					!= app.num_rx_msg[INSTANCE_ID2]) {
+				while (app[INSTANCE_ID2].num_tx_msg
+					!= app[INSTANCE_ID2].num_rx_msg) {
 					(void)ipc_shm_poll_channels(
 						INSTANCE_ID2);
 				}
@@ -403,8 +411,8 @@ static ssize_t ipc_sysfs_show_ins0(struct kobject *kobj,
 	int value = 0;
 
 	if (strcmp(attr->attr.name,
-			app.ping_attr_ins[INSTANCE_ID0].attr.name) == 0)
-		value = app.num_msgs;
+			app[INSTANCE_ID0].ping_attr_ins.attr.name) == 0)
+		value = app[INSTANCE_ID0].num_msgs;
 
 	return sprintf(buf, "%d\n", value);
 }
@@ -418,8 +426,8 @@ static ssize_t ipc_sysfs_show_ins1(struct kobject *kobj,
 	int value = 0;
 
 	if (strcmp(attr->attr.name,
-			app.ping_attr_ins[INSTANCE_ID1].attr.name) == 0)
-		value = app.num_msgs;
+			app[INSTANCE_ID1].ping_attr_ins.attr.name) == 0)
+		value = app[INSTANCE_ID1].num_msgs;
 
 	return sprintf(buf, "%d\n", value);
 }
@@ -433,8 +441,8 @@ static ssize_t ipc_sysfs_show_ins2(struct kobject *kobj,
 	int value = 0;
 
 	if (strcmp(attr->attr.name,
-			app.ping_attr_ins[INSTANCE_ID2].attr.name) == 0)
-		value = app.num_msgs;
+			app[INSTANCE_ID2].ping_attr_ins.attr.name) == 0)
+		value = app[INSTANCE_ID2].num_msgs;
 
 	return sprintf(buf, "%d\n", value);
 }
@@ -455,8 +463,8 @@ static ssize_t ipc_sysfs_store_ins0(struct kobject *kobj,
 		return err;
 
 	if (strcmp(attr->attr.name,
-			app.ping_attr_ins[INSTANCE_ID0].attr.name) == 0) {
-		app.num_msgs = value;
+			app[INSTANCE_ID0].ping_attr_ins.attr.name) == 0) {
+		app[INSTANCE_ID0].num_msgs = value;
 		run_demo_ins0(value);
 	}
 
@@ -478,8 +486,8 @@ static ssize_t ipc_sysfs_store_ins1(struct kobject *kobj,
 		return err;
 
 	if (strcmp(attr->attr.name,
-			app.ping_attr_ins[INSTANCE_ID1].attr.name) == 0) {
-		app.num_msgs = value;
+			app[INSTANCE_ID1].ping_attr_ins.attr.name) == 0) {
+		app[INSTANCE_ID1].num_msgs = value;
 		run_demo_ins1(value);
 	}
 
@@ -501,8 +509,8 @@ static ssize_t ipc_sysfs_store_ins2(struct kobject *kobj,
 		return err;
 
 	if (strcmp(attr->attr.name,
-			app.ping_attr_ins[INSTANCE_ID2].attr.name) == 0) {
-		app.num_msgs = value;
+			app[INSTANCE_ID2].ping_attr_ins.attr.name) == 0) {
+		app[INSTANCE_ID2].num_msgs = value;
 		run_demo_poll(value);
 	}
 
@@ -523,32 +531,32 @@ static int init_sysfs(void)
 	struct kobj_attribute ping_attr_ins2 =
 		__ATTR(ping, 0600, ipc_sysfs_show_ins2, ipc_sysfs_store_ins2);
 
-	app.ping_attr_ins[0] = ping_attr_ins0;
-	app.ping_attr_ins[1] = ping_attr_ins1;
-	app.ping_attr_ins[2] = ping_attr_ins2;
+	app[0].ping_attr_ins = ping_attr_ins0;
+	app[1].ping_attr_ins = ping_attr_ins1;
+	app[2].ping_attr_ins = ping_attr_ins2;
 
 	/* create ipc-sample folder in sys/kernel */
-	app.ipc_kobj_ins[0] = kobject_create_and_add("ipc-shm-sample-instance0",
+	app[0].ipc_kobj_ins = kobject_create_and_add("ipc-shm-sample-instance0",
 							kernel_kobj);
-	if (!app.ipc_kobj_ins[0])
+	if (!app[0].ipc_kobj_ins)
 		return -ENOMEM;
-	app.ipc_kobj_ins[1] = kobject_create_and_add("ipc-shm-sample-instance1",
+	app[1].ipc_kobj_ins = kobject_create_and_add("ipc-shm-sample-instance1",
 							kernel_kobj);
-	if (!app.ipc_kobj_ins[1])
+	if (!app[1].ipc_kobj_ins)
 		return -ENOMEM;
-	app.ipc_kobj_ins[2] = kobject_create_and_add("ipc-shm-sample-instance2",
+	app[2].ipc_kobj_ins = kobject_create_and_add("ipc-shm-sample-instance2",
 							kernel_kobj);
-	if (!app.ipc_kobj_ins[2])
+	if (!app[2].ipc_kobj_ins)
 		return -ENOMEM;
 
 	/* create sysfs file for ipc sample ping command */
 	for (i = 0; i < SAMPLE_NUM_INST; i++) {
-		err = sysfs_create_file(app.ipc_kobj_ins[i],
-						&app.ping_attr_ins[i].attr);
+		err = sysfs_create_file(app[i].ipc_kobj_ins,
+						&app[i].ping_attr_ins.attr);
 		if (err) {
 			sample_err("INST%d creates sysfs "
 					"file failed error %d\n", i, err);
-			kobject_put(app.ipc_kobj_ins[i]);
+			kobject_put(app[i].ipc_kobj_ins);
 			return err;
 		}
 	}
@@ -561,12 +569,13 @@ static void free_sysfs(void)
 	int i = 0;
 
 	for (i = 0; i < SAMPLE_NUM_INST; i++)
-		kobject_put(app.ipc_kobj_ins[i]);
+		kobject_put(app[i].ipc_kobj_ins);
 }
 
 static int __init sample_mod_init(void)
 {
 	int err = 0;
+	int i = 0;
 
 	sample_dbg("module version "MODULE_VER" init\n");
 
@@ -574,6 +583,11 @@ static int __init sample_mod_init(void)
 	err = init_ipc_shm();
 	if (err)
 		return err;
+
+	/* Init completion */
+	for (i = 0; i < SAMPLE_NUM_INST; i++) {
+		init_completion(&app[i].reply_received);
+	}
 
 	/* init sample sysfs UI */
 	err = init_sysfs();
@@ -606,9 +620,10 @@ static void __exit sample_mod_exit(void)
 			sample_info("Unable to reserve local shm region\n");
 			return;
 		}
-		app.local_virt_shm = (uintptr_t)ioremap(local_addr, shm_size);
-		memset_io((void *)app.local_virt_shm, 0, shm_size);
-		iounmap((void *)app.local_virt_shm);
+		app[i].local_virt_shm
+			= (uintptr_t)ioremap(local_addr, shm_size);
+		memset_io((void *)app[i].local_virt_shm, 0, shm_size);
+		iounmap((void *)app[i].local_virt_shm);
 		release_mem_region((phys_addr_t) local_addr, shm_size);
 	}
 }

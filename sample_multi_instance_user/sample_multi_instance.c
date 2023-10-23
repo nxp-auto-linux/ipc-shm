@@ -46,6 +46,8 @@ static int msg_sizes[IPC_SHM_MAX_POOLS] = {MAX_SAMPLE_MSG_LEN};
 
 /**
  * struct instance_id - sample app private data of an instance
+ * @num_tx_msg:		number of transmitted messaged
+ * @num_rx_msg:		number of received messaged
  * @num_channels:	number of channels configured in this sample
  * @ctrl_shm:		control channel local shared memory
  * @last_rx_no_msg:	last number of received message
@@ -406,7 +408,7 @@ static int run_demo(int num_msgs, uint8_t instance)
  */
 static int run_demo_poll(int num_msgs, uint8_t instance)
 {
-	int err, msg, ch;
+	int i, err, msg, ch;
 
 	/* signal number of messages to remote via control channel */
 	err = send_ctrl_msg(instance);
@@ -430,6 +432,9 @@ static int run_demo_poll(int num_msgs, uint8_t instance)
 					(void)ipc_shm_poll_channels(
 						instance);
 				}
+				/* Release all sema post by cb */
+				for (i = 0; i <= num_msgs; i++)
+					sem_wait(&app.sema);
 				return 0;
 			}
 		}
