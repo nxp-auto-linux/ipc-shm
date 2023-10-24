@@ -23,7 +23,7 @@ messages.
 
 Prerequisites
 =============
- - EVB board for supported processors: S32G274A, S32R45, S32G399A
+ - EVB board for supported processors (see platform **Release Notes**)
  - NXP Automotive Linux BSP
 
 Building the application
@@ -32,20 +32,19 @@ Building the application
 Building with Yocto
 -------------------
 1. Follow the steps for building NXP Auto Linux BSP with Yocto::
+
    Linux BSP User Manual from Flexera catalog
 
-* user must change the branch release/**IPCF_RELEASE_NAME** and modify in
-  build/sources/meta-alb/recipes-kernel/ipc-shm/ipc-shm.bb::
+2. Use the branch release/**IPCF_RELEASE_NAME** and after creating the build
+   directory in the SDK root (with "source nxp-setup-alb.sh -m <machine>"),
+   modify in <builddirectory>/conf/local.conf::
 
-    - BRANCH ?= "${RELEASE_BASE}"
-    + BRANCH ?= "release/**IPCF_RELEASE_NAME**"
-
-    - SRCREV = "xxxxxxxxxx"
-    + SRCREV = "${AUTOREV}"
+    + BRANCH:pn-ipc-shm="release/**IPCF_RELEASE_NAME**"
+    + SRCREV:pn-ipc-shm="${AUTOREV}"
 
   where **IPCF_RELEASE_NAME** is the name of Inter-Platform Communication
-  Framework release from Flexera catalog and "xxxxxxxxxx" is the commit ID
-  which must be replaced with "${AUTOREV}"
+  Framework release from Flexera catalog and replace the git hash with 
+  "${AUTOREV}".
 
 * enable User-space I/O driver in case of using UIO driver, e.g.::
 
@@ -59,10 +58,10 @@ Building with Yocto
 * use image fsl-image-auto with any of the following machines supported for IPCF:
   s32g274aevb, s32r45xevb, s32g399aevb.
 
-Note: use image **fsl-image-auto** with any of machine supported or
+Note: - use image **fsl-image-auto** with any of machine supported or
       add the following line in conf/local.conf file:
       *IMAGE_INSTALL_append_pn-fsl-image-auto = " ipc-shm"*
-  
+
 Building manually
 -----------------
 1. Get NXP Auto Linux kernel and IPCF driver from GitHub::
@@ -80,14 +79,14 @@ Note: use the release branch: release/**IPCF_RELEASE_NAME**
 
     export CROSS_COMPILE=/<toolchain-path>/aarch64-linux-gnu-
     export ARCH=arm64
-    make -C ./linux s32gen1_defconfig
+    make -C ./linux s32cc_defconfig
     make -C ./linux
 
 3. Build IPCF-ShM driver modules providing kernel source location, e.g.::
 
     make -C ./ipc-shm PLATFORM_FLAVOR=[PLATFORM] KERNELDIR=$PWD/linux modules
 
-    User must specific the platform::
+    User must specify the platform::
 
         PLATFORM_FLAVOR=s32g2
         PLATFORM_FLAVOR=s32r45
@@ -132,7 +131,7 @@ Notes:
   IPC UIO/IPC CDEV kernel module must be located in the same directory as provided
   via IPC_UIO_MODULE_DIR/IPC_CDEV_MODULE_DIR when building the sample.
 
-2. Boot Linux: for silicon, see section "How to boot" from Auto Linux BSP user
+2. Boot Linux: for silicone, see section "How to boot" from Auto Linux BSP user
    manual.
 
 3. Run sample and then specify the number of ping messages to be exchanged with

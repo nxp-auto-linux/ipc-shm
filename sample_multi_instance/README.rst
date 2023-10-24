@@ -26,7 +26,7 @@ Application).
 
 Prerequisites
 =============
- - EVB board for supported processors
+ - EVB board for supported processors (see platform **Release Notes**)
  - NXP Automotive Linux BSP
 
 Building the application
@@ -43,20 +43,18 @@ Building with Yocto
 
    Linux BSP User Manual from Flexera catalog
 
-2. Use the branch release/**IPCF_RELEASE_NAME** and modify in
-   build/sources/meta-alb/recipes-kernel/ipc-shm/ipc-shm.bb::
+2. Use the branch release/**IPCF_RELEASE_NAME** and after creating the build
+   directory in the SDK root (with "source nxp-setup-alb.sh -m <machine>"),
+   modify in <builddirectory>/conf/local.conf::
 
-    - BRANCH ?= "${RELEASE_BASE}"
-    + BRANCH ?= "release/**IPCF_RELEASE_NAME**"
-
-    - SRCREV = "xxxxxxxxxx"
-    + SRCREV = "${AUTOREV}"
+    + BRANCH:pn-ipc-shm="release/**IPCF_RELEASE_NAME**"
+    + SRCREV:pn-ipc-shm="${AUTOREV}"
 
   where **IPCF_RELEASE_NAME** is the name of Inter-Platform Communication
-  Framework release from Flexera catalog and replace the line with SRCREV
-  with SRCREV = "${AUTOREV}".
+  Framework release from Flexera catalog and replace the git hash with 
+  "${AUTOREV}".
 
-Note: use image **fsl-image-auto** with any of machine supported or
+Note: - use image **fsl-image-auto** with any of machine supported or
       add the following line in conf/local.conf file:
       *IMAGE_INSTALL_append_pn-fsl-image-auto = " ipc-shm"*
 
@@ -77,14 +75,14 @@ Note: use the release branch: release/**IPCF_RELEASE_NAME**
 
     export CROSS_COMPILE=/<toolchain-path>/aarch64-linux-gnu-
     export ARCH=arm64
-    make -C ./linux s32gen1_defconfig
+    make -C ./linux s32cc_defconfig
     make -C ./linux
 
 3. Build IPCF driver and sample modules providing kernel source location, e.g.::
 
-    make -C ./ipc-shm/sample PLATFORM_FLAVOR=[PLATFORM] KERNELDIR=$PWD/linux modules
+    make -C ./ipc-shm/sample_multi_instance PLATFORM_FLAVOR=[PLATFORM] KERNELDIR=$PWD/linux modules
 
-    User must specific the platform::
+    User must specify the platform::
 
         PLATFORM_FLAVOR=s32g2
         PLATFORM_FLAVOR=s32r45
@@ -94,8 +92,8 @@ Note: use the release branch: release/**IPCF_RELEASE_NAME**
 
 Running the application
 =======================
-1. If sample was built manually, copy ipc-shm-dev.ko and ipc-shm-sample_multi_instance.ko
-   in rootfs
+1. If the sample was built manually, copy ipc-shm-dev.ko and 
+   ipc-shm-sample_multi_instance.ko in rootfs.
 
 2. Boot Linux: see section "How to boot" from Auto Linux BSP user manual.
 
@@ -127,4 +125,4 @@ Running the application
 
 9. Unload the modules::
 
-    rmmod ipc-shm-sample-instance ipc-shm-dev
+    rmmod ipc-shm-sample_multi_instance ipc-shm-dev
