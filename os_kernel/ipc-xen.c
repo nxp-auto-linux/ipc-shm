@@ -1,6 +1,6 @@
 /* SPDX-License-Identifier: BSD-3-Clause */
 /*
- * Copyright 2018-2023 NXP
+ * Copyright 2023 NXP
  */
 #include <linux/ioport.h>
 #include <linux/io.h>
@@ -10,21 +10,11 @@
 #include <linux/version.h>
 
 #include "ipc-os.h"
+#include "ipc-xen.h"
 #include "ipc-hw.h"
 #include "ipc-shm.h"
 
 #define DRIVER_VERSION	"0.1"
-
-/* Device tree MSCM node compatible property (search key) */
-#if defined(PLATFORM_FLAVOR_s32g2) || defined(PLATFORM_FLAVOR_s32g3) || \
-	defined(PLATFORM_FLAVOR_s32r45)
-	#define DT_INTC_NODE_COMP "nxp,s32cc-mscm"
-#elif defined(PLATFORM_FLAVOR_s32v234)
-	#define DT_INTC_NODE_COMP "fsl,s32v234-mscm"
-#else
-	#error "Platform not supported"
-#endif
-
 
 /**
  * struct ipc_os_priv_instance - OS specific private data each instance
@@ -65,6 +55,59 @@ static DECLARE_TASKLET(ipc_shm_rx_tasklet, ipc_shm_softirq, 0);
 static DECLARE_TASKLET_OLD(ipc_shm_rx_tasklet, ipc_shm_softirq);
 #endif
 
+int ipc_hw_init(const uint8_t instance, const struct ipc_shm_cfg *cfg)
+{
+	(void)instance;
+	(void)cfg;
+
+	/* TBD */
+	return 0;
+}
+
+void ipc_hw_free(const uint8_t instance)
+{
+	(void)instance;
+
+	/* TBD */
+}
+
+int ipc_hw_get_rx_irq(const uint8_t instance)
+{
+	(void)instance;
+
+	/* TBD */
+	return 0;
+}
+
+
+void ipc_hw_irq_enable(const uint8_t instance)
+{
+	(void)instance;
+
+	/* TBD */
+}
+
+void ipc_hw_irq_disable(const uint8_t instance)
+{
+	(void)instance;
+
+	/* TBD */
+}
+
+void ipc_hw_irq_notify(const uint8_t instance)
+{
+	(void)instance;
+
+	/* TBD */
+}
+
+void ipc_hw_irq_clear(const uint8_t instance)
+{
+	(void)instance;
+
+	/* TBD */
+}
+
 /* sotfirq routine for deferred interrupt handling */
 static void ipc_shm_softirq(unsigned long arg)
 {
@@ -77,15 +120,17 @@ static void ipc_shm_softirq(unsigned long arg)
 					|| (priv.id[i].irq_num == IPC_IRQ_NONE))
 			continue;
 
-		/* call upper layer callback until work is done */
-		do {
-			work = priv.rx_cb(i, budget);
-			/* work not done, yield and wait for reschedule */
-			tasklet_schedule(&ipc_shm_rx_tasklet);
-		} while (work >= budget);
+		/* Do the budgeted work */
+		work = priv.rx_cb(i, budget);
 
-		/* work done, re-enable irq */
-		ipc_hw_irq_enable(i);
+		/* If we used the full budget, schedule again.
+		 * We don't know how much work remains until we do the work.
+		 * The next tasklet will check for more work
+		 */
+		if (work >= budget)
+			tasklet_schedule(&ipc_shm_rx_tasklet);
+		else
+			ipc_hw_irq_enable(i);
 	}
 }
 
@@ -122,7 +167,6 @@ static irqreturn_t ipc_shm_hardirq(int irq, void *dev)
 int ipc_os_init(const uint8_t instance, const struct ipc_shm_cfg *cfg,
 		int (*rx_cb)(const uint8_t, int))
 {
-	struct device_node *mscm = NULL;
 	struct resource *res;
 	int err;
 	int i;
@@ -174,18 +218,7 @@ int ipc_os_init(const uint8_t instance, const struct ipc_shm_cfg *cfg,
 	if (cfg->inter_core_rx_irq == IPC_IRQ_NONE) {
 		priv.id[instance].irq_num = IPC_IRQ_NONE;
 	} else {
-		/* get interrupt number from device tree */
-		mscm = of_find_compatible_node(NULL, NULL, DT_INTC_NODE_COMP);
-		if (!mscm) {
-			shm_err("Unable to find MSCM node in device tree\n");
-			err = -ENXIO;
-			goto err_unmap_remote_shm;
-		}
-		priv.id[instance].irq_num
-			= of_irq_get(mscm, ipc_hw_get_rx_irq(instance));
-		shm_dbg("Rx IRQ of instance %d = %d\n",
-			instance, priv.id[instance].irq_num);
-		of_node_put(mscm); /* release refcount to mscm DT node */
+		/* IRQ TBD */
 	}
 
 	/* check duplicate irq number */
@@ -198,14 +231,7 @@ int ipc_os_init(const uint8_t instance, const struct ipc_shm_cfg *cfg,
 	priv.irq_num_init[instance] = priv.id[instance].irq_num;
 
 	if (priv.id[instance].irq_num != IPC_IRQ_NONE) {
-		/* init rx interrupt */
-		err = request_irq(priv.id[instance].irq_num, ipc_shm_hardirq,
-							0, DRIVER_NAME, &priv);
-		if (err) {
-			shm_err("Request interrupt %d failed\n",
-						priv.id[instance].irq_num);
-			goto err_unmap_remote_shm;
-		}
+		/* IRQ TBD */
 	}
 
 	priv.id[instance].state = IPC_SHM_INSTANCE_ENABLED;
@@ -273,27 +299,8 @@ uintptr_t ipc_os_get_remote_shm(const uint8_t instance)
  */
 void *ipc_os_map_intc(void)
 {
-	struct device_node *node = NULL;
-	struct resource res;
-	int err;
-
-	/* get DT node */
-	node = of_find_compatible_node(NULL, NULL, DT_INTC_NODE_COMP);
-	if (!node) {
-		shm_err("Unable to find MSCM node in device tree\n");
-		return NULL;
-	}
-
-	/* get base address from DT node */
-	err = of_address_to_resource(node, 0, &res);
-	of_node_put(node);
-	if (err) {
-		shm_err("Unable to read regs address from DT MSCM node\n");
-		return NULL;
-	}
-
-	/* map configuration register space */
-	return ioremap(res.start, resource_size(&res));
+	/* TBD */
+	return (void *)0;
 }
 
 /**

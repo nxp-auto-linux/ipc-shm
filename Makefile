@@ -6,15 +6,17 @@
 MODULE_NAME := ipc-shm-dev
 CDEV_MODULE_NAME := ipc-shm-cdev
 UIO_MODULE_NAME := ipc-shm-uio
+XEN_MODULE_NAME := ipc-shm-xen
 PLATFORM_FLAVOR ?= UNDEFINED
 EXTRA_CFLAGS ?=
 
 ifneq ($(KERNELRELEASE),)
 # kbuild part of makefile
 
-obj-m := $(MODULE_NAME).o $(CDEV_MODULE_NAME).o $(UIO_MODULE_NAME).o
+obj-m := $(MODULE_NAME).o $(CDEV_MODULE_NAME).o $(UIO_MODULE_NAME).o $(XEN_MODULE_NAME).o
 
 $(MODULE_NAME)-y := ipc-shm.o ipc-queue.o os_kernel/ipc-os.o
+$(XEN_MODULE_NAME)-y := ipc-shm.o ipc-queue.o os_kernel/ipc-xen.o
 
 $(CDEV_MODULE_NAME)-y := os_kernel/ipc-cdev.o
 $(UIO_MODULE_NAME)-y := os_kernel/ipc-uio.o
@@ -38,7 +40,7 @@ ccflags-y += -I$(src) -I$(src)/hw -I$(src)/hw/$(PLATFORM_HW) -I$(src)/os_kernel
 ccflags-y += -DPLATFORM_FLAVOR_$(PLATFORM_FLAVOR)
 ccflags-y += $(EXTRA_CFLAGS)
 # # For debug
-# ccflags-y +=  -DDEBUG
+ccflags-y +=
 
 else
 # normal part of makefile
