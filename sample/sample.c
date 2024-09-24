@@ -247,7 +247,10 @@ static int send_ctrl_msg(const uint8_t instance)
 	 * in SRAM and A53 will complain about unaligned accesses.
 	 */
 	sprintf(tmp, "SENDING MESSAGES: %d", app.num_msgs);
-	strcpy(app.ctrl_shm, tmp);
+
+	char *src = tmp;
+	char *dst = app.ctrl_shm;
+	while((*dst++ = *src++) != '\0');
 
 	sample_info("ch %d >> %ld bytes: %s\n", chan_id, strlen(tmp), tmp);
 
@@ -278,7 +281,10 @@ static void generate_msg(char *s, int len, int msg_no)
 	 * in SRAM and A53 will complain about unaligned accesses.
 	 */
 	sprintf(tmp, "#%d HELLO WORLD! from KERNEL", msg_no);
-	strcpy(s, tmp);
+
+	char *src = tmp;
+	char *dst = s;
+	while((*dst++ = *src++) != '\0');
 }
 
 /**
