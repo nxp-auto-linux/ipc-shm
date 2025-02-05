@@ -1,6 +1,6 @@
 # SPDX-License-Identifier:	BSD-3-Clause
 #
-# Copyright 2023 NXP
+# Copyright 2023,2025 NXP
 #
 
 # The following variables must be defined by caller:
@@ -13,40 +13,31 @@ EXTRA_CFLAGS ?=
 EXTRA_LDFLAGS ?=
 .DEFAULT_GOAL := all
 PLATFORM_FLAVOR ?= s32g2
-IPCF_OS ?= uio
 
 ifeq ($(CROSS_COMPILE),)
 $(error CROSS_COMPILE is not set!)
 endif
 
-PLATFORM_FLAVOR_LIST := s32g2 s32g3 s32r45 s32v234
+PLATFORM_FLAVOR_LIST := s32g2 s32g3 s32r45 s32v234 s32n7
 ifeq ($(filter-out $(PLATFORM_FLAVOR),$(PLATFORM_FLAVOR_LIST)),$(PLATFORM_FLAVOR_LIST))
     $(error Set PLATFORM_FLAVOR variable to a supported platform: '$(PLATFORM_FLAVOR_LIST)')
 endif
-IPCF_OS_LIST := uio cdev
-ifeq ($(filter-out $(IPCF_OS),$(IPCF_OS_LIST)),$(IPCF_OS_LIST))
-    $(error Set IPCF_OS variable to a supported platform: '$(IPCF_OS_LIST)')
-endif
 
 ifeq ($(PLATFORM_FLAVOR),s32g2)
-ccflags-y += -DPLATFORM_FLAVOR_s32g2
-endif
-ifeq ($(PLATFORM_FLAVOR),s32r45)
-ccflags-y += -DPLATFORM_FLAVOR_s32r45
-endif
-ifeq ($(PLATFORM_FLAVOR),s32g3)
-ccflags-y += -DPLATFORM_FLAVOR_s32g3
+CFLAGS += -DPLATFORM_FLAVOR_s32g2
+else ifeq ($(PLATFORM_FLAVOR),s32r45)
+CFLAGS += -DPLATFORM_FLAVOR_s32r45
+else ifeq ($(PLATFORM_FLAVOR),s32g3)
+CFLAGS += -DPLATFORM_FLAVOR_s32g3
+else ifeq ($(PLATFORM_FLAVOR),s32n7)
+CFLAGS += -DPLATFORM_FLAVOR_s32n7
 endif
 
 CC := $(CROSS_COMPILE)gcc
 RM := rm -rf
 
-elf_name := ipc-shm-sample_$(IPCF_OS).elf
-ifeq ($(IPCF_OS), uio)
+elf_name := ipc-shm-sample_uio.elf
 libipc_dir ?= $(shell pwd)/../os_uio
-else
-libipc_dir ?= $(shell pwd)/../os_cdev
-endif
 
 CFLAGS += -Wall -g -I$(libipc_dir)/.. -DCONFIG_SOC_$(PLATFORM)
 # For debug
@@ -71,7 +62,7 @@ $(elf_name): $(objs) libipc
 	@echo ' '
 
 libipc:
-	$(MAKE) -C $(libipc_dir)
+	$(MAKE) -C $(libipc_dir) PLATFORM_FLAVOR=$(PLATFORM_FLAVOR)
 
 all: $(elf_name)
 

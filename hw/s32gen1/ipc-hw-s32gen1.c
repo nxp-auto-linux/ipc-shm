@@ -1,6 +1,6 @@
 /* SPDX-License-Identifier: BSD-3-Clause */
 /*
- * Copyright 2018-2019,2021,2023-2024 NXP
+ * Copyright 2018-2019,2021,2023-2025 NXP
  */
 #include <linux/io.h>
 
@@ -63,9 +63,7 @@ int8_t ipc_hw_init(const uint8_t instance, const struct ipc_shm_cfg *cfg)
 	/* map MSCM hardware peripheral block registers */
 	void *addr = ipc_os_map_intc();
 
-	return _ipc_hw_init(instance, cfg->inter_core_tx_irq,
-			cfg->inter_core_rx_irq, &cfg->remote_core,
-			&cfg->local_core, addr);
+	return _ipc_hw_init(instance, cfg, addr);
 }
 
 /**
@@ -73,22 +71,21 @@ int8_t ipc_hw_init(const uint8_t instance, const struct ipc_shm_cfg *cfg)
  *
  * Low level variant of ipc_hw_init() used by UIO device implementation.
  */
-int8_t _ipc_hw_init(const uint8_t instance, int tx_irq, int rx_irq,
-		 const struct ipc_shm_remote_core *remote_core,
-		 const struct ipc_shm_local_core *local_core, void *mscm_addr)
+int8_t _ipc_hw_init(const uint8_t instance,
+	const struct ipc_shm_cfg *cfg, void *periph_addr)
 {
 	int remote_core_idx;
 	int local_core_idx;
 	uint32_t ircpcfg_mask;
 
-	if (!mscm_addr)
+	if (!periph_addr)
 		return -EINVAL;
 
-	ipc_hw_priv[instance].ipc_mscm = (struct ipc_mscm_regs *)mscm_addr;
+	ipc_hw_priv[instance].ipc_mscm = (struct ipc_mscm_regs *)periph_addr;
 
-	switch (local_core->type) {
+	switch (cfg->local_core.type) {
 	case IPC_CORE_A53:
-		switch (local_core->index) {
+		switch (cfg->local_core.index) {
 		case IPC_CORE_INDEX_0:
 			local_core_idx = IPC_A53_0;
 			break;
@@ -113,15 +110,15 @@ int8_t _ipc_hw_init(const uint8_t instance, int tx_irq, int rx_irq,
 	}
 
 	/* check trusted cores mask contains the targeted and other A53 cores */
-	if ((!local_core->trusted)
-		|| (local_core->trusted & ~IPC_MSCM_IRCPCFG_A53_TR)
-		|| ((0x01uL << local_core_idx) & ~local_core->trusted)) {
+	if ((!cfg->local_core.trusted)
+		|| (cfg->local_core.trusted & ~IPC_MSCM_IRCPCFG_A53_TR)
+		|| ((0x01uL << local_core_idx) & ~cfg->local_core.trusted)) {
 		return -EINVAL;
 	}
 
-	switch (remote_core->type) {
+	switch (cfg->remote_core.type) {
 	case IPC_CORE_A53:
-		switch (remote_core->index) {
+		switch (cfg->remote_core.index) {
 		case IPC_CORE_INDEX_0:
 			remote_core_idx = IPC_A53_0;
 			break;
@@ -139,7 +136,7 @@ int8_t _ipc_hw_init(const uint8_t instance, int tx_irq, int rx_irq,
 		}
 		break;
 	case IPC_CORE_M7:
-		switch (remote_core->index) {
+		switch (cfg->remote_core.index) {
 		case IPC_CORE_INDEX_0:
 			remote_core_idx = IPC_M7_0;
 			break;
@@ -160,8 +157,8 @@ int8_t _ipc_hw_init(const uint8_t instance, int tx_irq, int rx_irq,
 		return -EINVAL;
 	}
 
-	if (((tx_irq != IPC_IRQ_NONE)
-			&& (tx_irq == rx_irq))
+	if (((cfg->inter_core_tx_irq != IPC_IRQ_NONE)
+			&& (cfg->inter_core_tx_irq == cfg->inter_core_rx_irq))
 		|| (remote_core_idx
 			== readl(
 				&(ipc_hw_priv[instance].ipc_mscm->CPXNUM)))
@@ -169,7 +166,7 @@ int8_t _ipc_hw_init(const uint8_t instance, int tx_irq, int rx_irq,
 		return -EINVAL;
 	}
 
-	switch (tx_irq) {
+	switch (cfg->inter_core_tx_irq) {
 	case IPC_IRQ_NONE:
 		break;
 	case 0:
@@ -185,7 +182,7 @@ int8_t _ipc_hw_init(const uint8_t instance, int tx_irq, int rx_irq,
 		return -EINVAL;
 	}
 
-	switch (rx_irq) {
+	switch (cfg->inter_core_rx_irq) {
 	case IPC_IRQ_NONE:
 		break;
 	case 0:
@@ -204,8 +201,8 @@ int8_t _ipc_hw_init(const uint8_t instance, int tx_irq, int rx_irq,
 		return -EINVAL;
 	}
 
-	ipc_hw_priv[instance].mscm_tx_irq = tx_irq;
-	ipc_hw_priv[instance].mscm_rx_irq = rx_irq;
+	ipc_hw_priv[instance].mscm_tx_irq = cfg->inter_core_tx_irq;
+	ipc_hw_priv[instance].mscm_rx_irq = cfg->inter_core_rx_irq;
 	ipc_hw_priv[instance].remote_core = remote_core_idx;
 	ipc_hw_priv[instance].local_core = local_core_idx;
 	/*
@@ -222,7 +219,7 @@ int8_t _ipc_hw_init(const uint8_t instance, int tx_irq, int rx_irq,
 	if (ircpcfg_mask & IPC_MSCM_IRCPCFG_LOCK)
 		return -EACCES;
 
-	writel(ircpcfg_mask | local_core->trusted,
+	writel(ircpcfg_mask | cfg->local_core.trusted,
 		&(ipc_hw_priv[instance].ipc_mscm->IRCPCFG));
 
 	return 0;

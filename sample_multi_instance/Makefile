@@ -1,6 +1,6 @@
 # SPDX-License-Identifier:	BSD-3-Clause
 #
-# Copyright 2021-2023 NXP
+# Copyright 2021-2023,2025 NXP
 #
 
 MODULE_NAME := ipc-shm-sample_multi_instance
@@ -14,6 +14,8 @@ $(MODULE_NAME)-y := sample_multi_instance.o
 
 ifeq ($(PLATFORM_FLAVOR),UNDEFINED)
 $(error "PLATFORM_FLAVOR is UNDEFINED")
+else ifeq ($(PLATFORM_FLAVOR),s32n7)
+PLATFORM_HW := s32n7
 else ifeq ($(PLATFORM_FLAVOR),s32v234)
 PLATFORM_HW := s32v234
 else ifeq ($(PLATFORM_FLAVOR),s32g3)

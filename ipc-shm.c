@@ -1,6 +1,6 @@
 /* SPDX-License-Identifier: BSD-3-Clause */
 /*
- * Copyright 2018-2024 NXP
+ * Copyright 2018-2025 NXP
  */
 #include "ipc-os.h"
 #include "ipc-hw.h"
@@ -893,7 +893,7 @@ int8_t ipc_shm_init_instance(uint8_t instance, const struct ipc_shm_cfg *cfg)
 	ipc_hw_irq_enable(instance);
 
 	ipc_shm_priv_data[instance].global->state = IPC_SHM_STATE_READY;
-	shm_dbg("ipc shm initialized\n");
+	shm_dbg("Instance %d initialized\n", instance);
 
 	return 0;
 }

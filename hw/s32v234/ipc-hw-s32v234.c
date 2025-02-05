@@ -1,6 +1,6 @@
 /* SPDX-License-Identifier: BSD-3-Clause */
 /*
- * Copyright 2018-2019,2021,2023 NXP
+ * Copyright 2018-2019,2021,2023,2025 NXP
  */
 #include <linux/io.h>
 
@@ -55,9 +55,7 @@ int ipc_hw_init(const uint8_t instance, const struct ipc_shm_cfg *cfg)
 	/* map MSCM hardware peripheral block */
 	void *addr = ipc_os_map_intc();
 
-	return _ipc_hw_init(instance, cfg->inter_core_tx_irq,
-			cfg->inter_core_rx_irq, &cfg->remote_core,
-			&cfg->local_core, addr);
+	return _ipc_hw_init(instance, cfg, addr);
 }
 
 /**
@@ -65,32 +63,33 @@ int ipc_hw_init(const uint8_t instance, const struct ipc_shm_cfg *cfg)
  *
  * Low level variant of ipc_hw_init() used by UIO device implementation.
  */
-int _ipc_hw_init(const uint8_t instance, int tx_irq, int rx_irq,
-		 const struct ipc_shm_remote_core *remote_core,
-		 const struct ipc_shm_local_core *local_core, void *mscm_addr)
+int _ipc_hw_init(const uint8_t instance,
+		const struct ipc_shm_cfg *cfg, void *periph_addr)
 {
 	(void)local_core; /* unused */
 
-	if (!mscm_addr)
+	if (!periph_addr)
 		return -EINVAL;
 
-	priv.mscm = (struct mscm_regs *)mscm_addr;
+	priv.mscm = (struct mscm_regs *)periph_addr;
 
 	/* only M4 core is supported */
-	if (remote_core->type != IPC_CORE_DEFAULT
-		&& remote_core->type != IPC_CORE_M4) {
+	if (cfg->remote_core->type != IPC_CORE_DEFAULT
+		&& cfg->remote_core->type != IPC_CORE_M4) {
 		return -EINVAL;
 	}
 
-	if (((tx_irq != IPC_IRQ_NONE)
-			&& ((tx_irq < IRQ_ID_MIN) || (tx_irq > IRQ_ID_MAX)))
-		|| (rx_irq < IRQ_ID_MIN) || (rx_irq > IRQ_ID_MAX)
-		|| (rx_irq == tx_irq)) {
+	if (((cfg->inter_core_tx_irq != IPC_IRQ_NONE)
+			&& ((cfg->inter_core_tx_irq < IRQ_ID_MIN)
+				|| (cfg->inter_core_tx_irq > IRQ_ID_MAX)))
+			|| (cfg->inter_core_rx_irq < IRQ_ID_MIN)
+			|| (cfg->inter_core_rx_irq > IRQ_ID_MAX)
+			|| (cfg->inter_core_rx_irq == cfg->inter_core_tx_irq)) {
 		return -EINVAL;
 	}
 
-	priv.mscm_tx_irq = tx_irq;
-	priv.mscm_rx_irq = rx_irq;
+	priv.mscm_tx_irq = cfg->inter_core_tx_irq;
+	priv.mscm_rx_irq = cfg->inter_core_rx_irq;
 	priv.remote_core = DEFAULT_REMOTE_CORE;
 
 	/*

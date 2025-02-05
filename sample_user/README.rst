@@ -4,7 +4,7 @@
 IPCF Shared Memory User-space Sample Application for Linux
 ==========================================================
 
-:Copyright: 2023 NXP
+:Copyright: 2023,2025 NXP
 
 Overview
 ========
@@ -91,30 +91,22 @@ Note: use the release branch: release/**IPCF_RELEASE_NAME**
         PLATFORM_FLAVOR=s32g2
         PLATFORM_FLAVOR=s32r45
         PLATFORM_FLAVOR=s32g3
+        PLATFORM_FLAVOR=s32n7
 
 4. Build sample application with IPCF-ShM library, providing the location of the
-   IPC UIO (if using UIO driver) or IPC CDEV (if using character device driver)
-   kernel module in the target board rootfs and the platform name, e.g.::
+   IPC UIO kernel module in the target board rootfs and the platform name, e.g.::
 
     If using UIO driver::
       make -C ./ipc-shm/sample_user \
             PLATFORM_FLAVOR=[PLATFORM] \
-            IPCF_OS=uio \
             IPC_UIO_MODULE_DIR="/lib/modules/<kernel-release>/extra"
 
-    If using character device driver::
-      make -C ./ipc-shm/sample_user \
-            PLATFORM_FLAVOR=[PLATFORM] \
-            IPCF_OS=cdev \
-            IPC_CDEV_MODULE_DIR="/lib/modules/<kernel-release>/extra"
-
-    User must specific the platform and IPCF kernel driver::
+    User must specific the platform::
 
         PLATFORM_FLAVOR=s32g2
         PLATFORM_FLAVOR=s32r45
         PLATFORM_FLAVOR=s32g3
-        IPCF_OS=cdev
-        IPCF_OS=uio
+        PLATFORM_FLAVOR=s32n7
   
     where <kernel-release> can be obtained executing ``uname -r`` in the target board
 
@@ -122,14 +114,13 @@ Note: use the release branch: release/**IPCF_RELEASE_NAME**
 
 Running the application
 =======================
-1. Copy ipc-shm-sample_uio.elf or ipc-shm-sample_cdev.elf to the target board rootfs.
-   In case of building the sample manually, also copy IPC UIO kernel module (ipc-shm-uio.ko)
-   or IPC CDEV kernel module (ipc-shm-cdev.ko) to the directory provided during
-   compilation via IPC_UIO_MODULE_DIR/IPC_CDEV_MODULE_DIR.
+1. Copy ipc-shm-sample_uio.elf to the target board rootfs. In case of building
+   the sample manually, also copy IPC UIO kernel module (ipc-shm-uio.ko) to the
+   directory provided during compilation via IPC_UIO_MODULE_DIR.
 
 Notes:
-  IPC UIO/IPC CDEV kernel module must be located in the same directory as provided
-  via IPC_UIO_MODULE_DIR/IPC_CDEV_MODULE_DIR when building the sample.
+  IPC UIO kernel module must be located in the same directory as provided
+  via IPC_UIO_MODULE_DIR when building the sample.
 
 2. Boot Linux: for silicone, see section "How to boot" from Auto Linux BSP user
    manual.
@@ -138,8 +129,6 @@ Notes:
    peer when prompted::
 
     ./ipc-shm-sample_uio.elf
-    or
-    ./ipc-shm-sample_cdev.elf
 
     Input number of messages to send:
 

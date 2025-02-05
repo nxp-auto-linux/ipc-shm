@@ -4,7 +4,7 @@
 IPCF Shared Memory Driver for Linux
 ===================================
 
-:Copyright: 2018-2021,2023 NXP
+:Copyright: 2018-2021,2023,2025 NXP
 
 Overview
 ========
@@ -27,13 +27,14 @@ The supported processors are listed in the sample application documentation.
 
 Configuration notes
 ===================
-There are five hardware-related parameters that can be configured at the driver
-API level: TX and RX inter-core interrupt IDs, local core ID, remote core ID and
-trusted cores.
+In platforms that support MSCM core-to-core directed interrupt, there are five
+hardware-related parameters that can be configured at the driver API level:
+TX and RX inter-core interrupt IDs, local core ID, remote core ID and trusted
+cores.
 
 The interrupt IDs are MSCM core-to-core directed interrupt IDs. Valid values are
-in range [0..2] for S32xx, [0..11] for S32G3xx and [0..3] for S32V234. The TX and RX
-interrupt IDs must be different.
+in range [0..2] for S32xx, [0..11] for S32G3xx and [0..3] for S32V234. The TX
+and RX interrupt IDs must be different.
 
 Note: the interrupt ID expected in the driver configuration is different from
 the corresponding processor exception number (used to register the interrupt
@@ -69,11 +70,40 @@ Note: the local core ID and trusted cores configuration is only applicable to
 S32xx platforms running Linux. For other platforms or Operating Systems, the
 local core ID configuration is not used.
 
+In platforms that support MRU interrupt, there are four hardware-related
+parameters that can be configured at the driver API level: TX and RX inter-core
+interrupt types, MRU configuration for transmitting, and MRU configuration for
+receiving.
+
+The TX/RX interrupt types valid values are IPC_IRQ_NONE when disabling interrupt,
+or IPC_IRQ_MRU when using MRU interrupt.
+
+When using MRU interrupt, MRU configuration need to be configured. The MRU
+configuration contains 4 parameters: MRU types, subsytem ID, MRU ID, and MRU
+channel ID.
+
+MRU types valid values for S32N79 are: IPC_MRU_APS_INSTANCE, IPC_MRU_FSS_INSTANCE,
+IPC_MRU_RTU_INSTANCE, IPC_MRU_RCU_C_INSTANCE, IPC_MRU_RCU_H_INSTANCE,
+and IPC_MRU_RCU_L_INSTANCE, which indicate the Subsystem types the MRU located.
+
+Subsystem ID values in range [IPC_SUBSYSTEM_0..IPC_SUBSYSTEM_7], which
+indicate the subsystem index the MRU located. The valid values depend on the
+subsystem types.
+
+MRU ID is the MRU index used used for transmitting/receiving. Values in range
+[IPC_MRU_0..IPC_MRU_15], valid values depend on MRU types and subsystem ID
+
+MRU channel ID is the MRU channel index used for transmitting/receiving. Values
+in range [IPC_MRU_CHANNEL_0..IPC_MRU_CHANNEL_15], valid values depend on MRU
+types, subsystem ID, and MRU ID
+
+Note: Please see the Reference Manual of S32N79 for Subsystem IDs, MRU IDs, and
+MRU channel IDs supported
+
 If using Linux IPCF Shared Memory User-space Driver, the user-space static library
-(libipc-shm) will automatically insert the IPCF UIO/CDEV kernel module at initialization.
+(libipc-shm) will automatically insert the IPCF UIO kernel module at initialization.
 The path to the kernel module in the target board rootfs can be overwritten
-at compile time by setting IPC_UIO_MODULE_DIR (for using uio driver) or
-IPC_CDEV_MODULE_DIR (for using character driver) variable from the caller.
+at compile time by setting IPC_UIO_MODULE_DIR variable from the caller.
 
 If using Linux IPCF Shared Memory XEN Driver, the IPC_USE_XEN=YES should be added
 at compile time.

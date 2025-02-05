@@ -1,6 +1,6 @@
 /* SPDX-License-Identifier: BSD-3-Clause */
 /*
- * Copyright 2018,2021,2024 NXP
+ * Copyright 2018,2021,2024-2025 NXP
  */
 #ifndef IPC_OS_H
 #define IPC_OS_H
@@ -29,7 +29,13 @@ int8_t ipc_os_init(const uint8_t instance, const struct ipc_shm_cfg *cfg,
 void ipc_os_free(const uint8_t instance);
 uintptr_t ipc_os_get_local_shm(const uint8_t instance);
 uintptr_t ipc_os_get_remote_shm(const uint8_t instance);
+
+#ifndef PLATFORM_FLAVOR_s32n7
 void *ipc_os_map_intc(void);
+#else
+void *ipc_os_mru_map_intc(uint8_t mru_instance,
+	uint8_t subsystem_idx, uint8_t mru_id);
+#endif
 void ipc_os_unmap_intc(void *addr);
 int8_t ipc_os_poll_channels(const uint8_t instance);
 

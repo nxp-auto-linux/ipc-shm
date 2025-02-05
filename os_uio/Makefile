@@ -1,12 +1,22 @@
 # SPDX-License-Identifier:	BSD-3-Clause
 #
-# Copyright 2023 NXP
+# Copyright 2023,2025 NXP
 #
 MAKEFLAGS += --warn-undefined-variables
 EXTRA_CFLAGS ?=
 
 ifeq ($(CROSS_COMPILE),)
 $(error CROSS_COMPILE is not set!)
+endif
+
+ifeq ($(PLATFORM_FLAVOR),s32g2)
+CFLAGS += -DPLATFORM_FLAVOR_s32g2
+else ifeq ($(PLATFORM_FLAVOR),s32r45)
+CFLAGS += -DPLATFORM_FLAVOR_s32r45
+else ifeq ($(PLATFORM_FLAVOR),s32g3)
+CFLAGS += -DPLATFORM_FLAVOR_s32g3
+else ifeq ($(PLATFORM_FLAVOR),s32n7)
+CFLAGS += -DPLATFORM_FLAVOR_s32n7
 endif
 
 # IPC_UIO_MODULE_DIR needed for automatically inserting kernel module

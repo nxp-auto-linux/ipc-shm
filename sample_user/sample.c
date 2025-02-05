@@ -1,6 +1,6 @@
 /* SPDX-License-Identifier: BSD-3-Clause */
 /*
- * Copyright 2019-2024 NXP
+ * Copyright 2019-2025 NXP
  */
 #include <errno.h>
 #include <stdint.h>
@@ -22,7 +22,11 @@
 #define CTRL_CHAN_ID 0
 #define CTRL_CHAN_SIZE 64
 #define MAX_SAMPLE_MSG_LEN 32
+#if !defined(PLATFORM_FLAVOR_s32n7)
 #define L_BUF_LEN 4096
+#else
+#define L_BUF_LEN 128
+#endif
 #define IPC_SHM_SIZE 0x100000
 
 /* convenience wrappers for printing messages */

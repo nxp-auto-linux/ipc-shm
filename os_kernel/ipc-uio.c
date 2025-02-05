@@ -1,6 +1,6 @@
 /* SPDX-License-Identifier: BSD-3-Clause */
 /*
- * Copyright 2019,2021-2024 NXP
+ * Copyright 2019,2021-2025 NXP
  */
 #include <linux/module.h>
 #include <linux/platform_device.h>
@@ -14,6 +14,14 @@
 #include "ipc-hw.h"
 #include "ipc-uio.h"
 
+#if defined(PLATFORM_FLAVOR_s32n7)
+	#include <linux/io.h>
+	#include <linux/of_address.h>
+	#include <linux/of_irq.h>
+
+	#define DT_INTC_NODE_COMP     "nxp,s32n79-mru"
+	#define IPCF_MAX_COMP_STR 32u
+#endif
 #define IPC_CDEV_NAME		"ipc-cdev-uio"
 #define IPC_UIO_NAME		"ipc-shm-uio"
 #define IPC_UIO_VERSION		"2.0"
@@ -50,10 +58,18 @@ struct ipc_uio_priv_type {
  * @uio_id:          IPCF SHM UIO device data for each instance
  */
 struct ipc_pdev_priv_type {
+#if defined(PLATFORM_FLAVOR_s32n7)
+	uint8_t dev_created;
+	char mru_node_name[IPCF_MAX_COMP_STR];
+#endif
 	dev_t major;
 	int irq_num_init[IPC_SHM_MAX_INSTANCES];
 	struct platform_device *ipc_pdev;
+#if !defined(PLATFORM_FLAVOR_s32n7)
 	void __iomem *pdev_reg;
+#else
+	void __iomem *pdev_reg[IPC_SHM_MAX_INSTANCES];
+#endif
 	struct class *cdev_class;
 	struct cdev cdev;
 	struct ipc_uio_priv_type uio_id[IPC_SHM_MAX_INSTANCES];
@@ -124,6 +140,43 @@ static irqreturn_t ipc_shm_uio_handler(int irq, struct uio_info *dev_info)
 	return IRQ_HANDLED;
 }
 
+#if defined(PLATFORM_FLAVOR_s32n7)
+static int8_t get_irq_number(const uint8_t instance,
+	const struct ipc_shm_cfg *cfg, int *irq_num)
+{
+	struct device_node *compatible_node = NULL;
+	uint8_t subsystem_id = cfg->mru_rx.subsystem_id;
+	uint8_t mru_id = cfg->mru_rx.mru_id;
+
+	/* Get the node name */
+	snprintf(ipc_pdev_priv.mru_node_name, IPCF_MAX_COMP_STR,
+			"aps%d_mru%d", subsystem_id, mru_id);
+
+	for_each_compatible_node(compatible_node, NULL, DT_INTC_NODE_COMP) {
+		if (of_node_name_eq(compatible_node,
+				ipc_pdev_priv.mru_node_name)) {
+			shm_dbg("Get node with name is %s\n",
+				ipc_pdev_priv.mru_node_name);
+
+			*irq_num = of_irq_get(
+				compatible_node, ipc_hw_get_rx_irq(instance));
+			if (*irq_num <= 0) {
+				shm_err("Unable decode node's IRQ\n");
+				of_node_put(compatible_node);
+				return -EINVAL;
+			}
+			shm_dbg("Rx IRQ of instance %d = %d\n",
+				instance, *irq_num);
+
+			/* release refcount to interrupt DT node */
+			of_node_put(compatible_node);
+		}
+	}
+
+	return 0;
+}
+#endif
+
 /**
  * ipc_uio_init() - Initialize an UIO and ipcf hw
  * @ipc_uio_cdev_data:    Chrdev private data from user space
@@ -137,7 +190,7 @@ static int ipc_uio_init(struct ipc_uio_cdev_data *data)
 
 	err = sprintf(ipc_pdev_priv.uio_id[instance].uio_name,
 			"instance_%d", instance);
-	/* init MSCM HW for MSI inter-core interrupts */
+	/* init Peripheral HW for inter-core interrupts */
 	err = ipc_hw_init(instance, cfg);
 	if (err)
 		return err;
@@ -145,12 +198,21 @@ static int ipc_uio_init(struct ipc_uio_cdev_data *data)
 	if (cfg->inter_core_rx_irq == IPC_IRQ_NONE)
 		return 0;
 	/* get Linux IRQ number */
-	irq = platform_get_irq(ipc_pdev_priv.ipc_pdev, cfg->inter_core_rx_irq);
+#if !defined(PLATFORM_FLAVOR_s32n7)
+	irq = platform_get_irq(ipc_pdev_priv.ipc_pdev,
+		ipc_hw_get_rx_irq(instance));
 	if (irq < 0) {
 		shm_dbg("Failed to get IRQ\n");
 		return irq;
 	}
 	shm_dbg("GIC Rx IRQ = %d\n", irq);
+#else
+	err = get_irq_number(instance, cfg, &irq);
+	if (err) {
+		shm_dbg("Failed to get IRQ get_irq_number\n");
+		return err;
+	}
+#endif
 
 	/* check duplicate irq number */
 	for (i = 0; i < IPC_SHM_MAX_INSTANCES; i++) {
@@ -288,6 +350,11 @@ static int ipc_shm_uio_probe(struct platform_device *pdev)
 	int i;
 	struct resource *res;
 
+#if defined(PLATFORM_FLAVOR_s32n7)
+	if (ipc_pdev_priv.dev_created == 1)
+		return 0;
+#endif
+
 	for (i = 0; i < IPC_SHM_MAX_INSTANCES; i++) {
 		ipc_pdev_priv.uio_id[i].irq_num = IPC_IRQ_NONE;
 		ipc_pdev_priv.irq_num_init[i] = IPC_IRQ_NONE;
@@ -296,6 +363,7 @@ static int ipc_shm_uio_probe(struct platform_device *pdev)
 	platform_set_drvdata(pdev, ipc_pdev_priv.uio_id);
 	ipc_pdev_priv.ipc_pdev = pdev;
 
+#if !defined(PLATFORM_FLAVOR_s32n7)
 	/* map MSCM register configuration space */
 	res = platform_get_resource(ipc_pdev_priv.ipc_pdev, IORESOURCE_MEM, 0);
 	ipc_pdev_priv.pdev_reg = devm_ioremap_resource(
@@ -304,6 +372,10 @@ static int ipc_shm_uio_probe(struct platform_device *pdev)
 		shm_err("Failed to map MSCM register space\n");
 		return -ENOMEM;
 	}
+#else
+	/* Surpress warning of unused variable */
+	(void)res;
+#endif
 
 	/* Create a chrdev to initial user-kernel communication */
 	/* Dynamic allocate device major number */
@@ -339,6 +411,10 @@ static int ipc_shm_uio_probe(struct platform_device *pdev)
 	shm_dbg("%s registered with major %d\n",
 		IPC_CDEV_NAME, MAJOR(ipc_pdev_priv.major));
 
+#if defined(PLATFORM_FLAVOR_s32n7)
+	ipc_pdev_priv.dev_created = 1;
+#endif
+
 	shm_dbg("device ready\n");
 
 	return 0;
@@ -358,6 +434,10 @@ static void ipc_shm_uio_remove(struct platform_device *pdev)
 {
 	int i;
 
+#if defined(PLATFORM_FLAVOR_s32n7)
+	if (ipc_pdev_priv.dev_created == 0)
+		return;
+#endif
 	device_destroy(ipc_pdev_priv.cdev_class, ipc_pdev_priv.major);
 	class_destroy(ipc_pdev_priv.cdev_class);
 	cdev_del(&ipc_pdev_priv.cdev);
@@ -372,22 +452,94 @@ static void ipc_shm_uio_remove(struct platform_device *pdev)
 		}
 	}
 
+#if defined(PLATFORM_FLAVOR_s32n7)
+	ipc_pdev_priv.dev_created = 0;
+#endif
 	shm_dbg("device removed\n");
 }
 
+#if !defined(PLATFORM_FLAVOR_s32n7)
 void *ipc_os_map_intc(void)
 {
 	return ipc_pdev_priv.pdev_reg;
 }
+#else
+/**
+ * ipc_os_mru_map_intc() - I/O memory map interrupt controller register space
+ *
+ * I/O memory map the inter-core interrupts HW block (Mru HW block)
+ */
+void *ipc_os_mru_map_intc(uint8_t mru_instance,
+	uint8_t subsystem_id, uint8_t mru_id)
+{
+	struct device_node *node = NULL;
+	struct resource res;
+	void *peripheral_addr = NULL;
+	int err;
+
+	/* get DT node */
+	switch (mru_instance) {
+	case (uint8_t)IPC_MRU_APS_INSTANCE:
+		snprintf(ipc_pdev_priv.mru_node_name, IPCF_MAX_COMP_STR,
+			"aps%d_mru%d", subsystem_id, mru_id);
+		break;
+	case (uint8_t)IPC_MRU_FSS_INSTANCE:
+		snprintf(ipc_pdev_priv.mru_node_name, IPCF_MAX_COMP_STR,
+			"fss_mru%d", mru_id);
+		break;
+	case (uint8_t)IPC_MRU_RTU_INSTANCE:
+		snprintf(ipc_pdev_priv.mru_node_name, IPCF_MAX_COMP_STR,
+			"rtu%d_mru%d", subsystem_id, mru_id);
+		break;
+	case (uint8_t)IPC_MRU_RCU_C_INSTANCE:
+		snprintf(ipc_pdev_priv.mru_node_name, IPCF_MAX_COMP_STR,
+			"rcu_mru%d", mru_id);
+		break;
+	case (uint8_t)IPC_MRU_RCU_L_INSTANCE:
+		snprintf(ipc_pdev_priv.mru_node_name, IPCF_MAX_COMP_STR,
+			"rcu_mru_l_%d", mru_id);
+		break;
+	case (uint8_t)IPC_MRU_RCU_H_INSTANCE:
+		snprintf(ipc_pdev_priv.mru_node_name, IPCF_MAX_COMP_STR,
+			"rcu_mru_h_%d", mru_id);
+		break;
+	default:
+		return NULL;
+	}
+
+	for_each_compatible_node(node, NULL, DT_INTC_NODE_COMP) {
+		if (of_node_name_eq(node, ipc_pdev_priv.mru_node_name)) {
+			/* get base address from DT node */
+			err = of_address_to_resource(node, 0, &res);
+			of_node_put(node);
+			if (err) {
+				shm_err("Unable to read regs address "
+					"from DT interrupt node %s\n",
+					ipc_pdev_priv.mru_node_name);
+				return NULL;
+			}
+
+			peripheral_addr = ioremap(
+				res.start, resource_size(&res));
+		}
+	}
+	of_node_put(node);
+	/* map configuration register space */
+	return peripheral_addr;
+}
+#endif
 
 void ipc_os_unmap_intc(void *addr)
 {
-	/* Dummy implementation. Not used by UIO. */
+#if defined(PLATFORM_FLAVOR_s32n7)
+	iounmap(addr);
+#endif
 }
 
 static const struct of_device_id ipc_shm_ids[] = {
 	{ .compatible = "fsl,s32v234-mscm", },
 	{ .compatible = "nxp,s32cc-mscm", },
+	{ .compatible = "nxp,s32n79-mru", },
 	{}
 };
 

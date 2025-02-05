@@ -1,0 +1,126 @@
+/* SPDX-License-Identifier: BSD-3-Clause */
+/*
+ * Copyright 2025 NXP
+ */
+
+#include "ipcf_Ip_Cfg.h"
+
+/* Pools must be sorted in ascending order by buffer size */
+static struct ipc_shm_pool_cfg ipcf_shm_cfg_buf_pools0[3] = {
+	{
+		.num_bufs = 5,
+		.buf_size = 32,
+	},
+	{
+		.num_bufs = 5,
+		.buf_size = 64,
+	},
+	{
+		.num_bufs = 5,
+		.buf_size = 128,
+	},
+};
+/* Pools must be sorted in ascending order by buffer size */
+static struct ipc_shm_pool_cfg ipcf_shm_cfg_buf_pools1[3] = {
+	{
+		.num_bufs = 5,
+		.buf_size = 32,
+	},
+	{
+		.num_bufs = 5,
+		.buf_size = 64,
+	},
+	{
+		.num_bufs = 5,
+		.buf_size = 128,
+	},
+};
+
+static struct ipc_shm_channel_cfg ipcf_shm_cfg_channels[3] = {
+	{
+		.type = IPC_SHM_UNMANAGED,
+		.ch = {
+			.unmanaged = {
+				.size = 64,
+				.rx_cb = ctrl_chan_rx_cb,
+				.cb_arg = &rx_cb_arg,
+			},
+		},
+	},
+	{
+		.type = IPC_SHM_MANAGED,
+		.ch = {
+			.managed = {
+				.num_pools = 3,
+				.pools = ipcf_shm_cfg_buf_pools0,
+				.rx_cb = data_chan_rx_cb,
+				.cb_arg = &rx_cb_arg,
+			},
+		},
+	},
+	{
+		.type = IPC_SHM_MANAGED,
+		.ch = {
+			.managed = {
+				.num_pools = 3,
+				.pools = ipcf_shm_cfg_buf_pools1,
+				.rx_cb = data_chan_rx_cb,
+				.cb_arg = &rx_cb_arg,
+			},
+		},
+	},
+};
+
+/* ipc shm configuration */
+struct ipc_shm_cfg ipcf_shm_cfg_instances[] = {
+	{
+		.local_shm_addr  = 0x24808000,
+		.remote_shm_addr = 0x24800000,
+		.inter_core_tx_irq = IPC_IRQ_MRU,
+		.inter_core_rx_irq = IPC_IRQ_MRU,
+		.mru_tx = {
+			.mru_instance = IPC_MRU_RTU_INSTANCE,
+			.subsystem_id = IPC_SUBSYSTEM_0,
+			.mru_id = IPC_MRU_0,
+			.mru_channel_id = IPC_MRU_CHANNEL_0
+		},
+		.mru_rx = {
+			.mru_instance = IPC_MRU_APS_INSTANCE,
+			.subsystem_id = IPC_SUBSYSTEM_0,
+			.mru_id = IPC_MRU_0,
+			.mru_channel_id = IPC_MRU_CHANNEL_0
+		},
+		.shm_size  = 0x1000,
+		.num_channels = 3,
+		.channels = ipcf_shm_cfg_channels,
+	},
+	{
+		.local_shm_addr  = 0x24809000,
+		.remote_shm_addr = 0x24801000,
+		.inter_core_tx_irq = IPC_IRQ_NONE,
+		.inter_core_rx_irq = IPC_IRQ_MRU,
+		.mru_rx = {
+			.mru_instance = IPC_MRU_APS_INSTANCE,
+			.subsystem_id = IPC_SUBSYSTEM_0,
+			.mru_id = IPC_MRU_1,
+			.mru_channel_id = IPC_MRU_CHANNEL_0
+		},
+		.shm_size  = 0x1000,
+		.num_channels = 3,
+		.channels = ipcf_shm_cfg_channels,
+	},
+	{
+		.local_shm_addr  = 0x2480A000,
+		.remote_shm_addr = 0x24802000,
+		.inter_core_tx_irq = IPC_IRQ_NONE,
+		.inter_core_rx_irq = IPC_IRQ_NONE,
+		.shm_size  = 0x1000,
+		.num_channels = 3,
+		.channels = ipcf_shm_cfg_channels,
+	},
+};
+
+struct ipc_shm_instances_cfg ipcf_shm_instances_cfg = {
+	.num_instances = 3u,
+	.shm_cfg = ipcf_shm_cfg_instances,
+};
