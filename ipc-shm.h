@@ -1,6 +1,6 @@
 /* SPDX-License-Identifier: BSD-3-Clause */
 /*
- * Copyright 2018-2024 NXP
+ * Copyright 2018-2025 NXP
  */
 #ifndef IPC_SHM_H
 #define IPC_SHM_H
@@ -14,7 +14,9 @@
  * @instance: instance id
  * @cfg:      ipc-shm instance configuration
  *
- * Return IPC_SHM_E_OK on success, error code otherwise
+ * Return:
+ * * %0		- on success
+ * * %Error code otherwise
  */
 int8_t ipc_shm_init_instance(uint8_t instance, const struct ipc_shm_cfg *cfg);
 
@@ -24,8 +26,10 @@ int8_t ipc_shm_init_instance(uint8_t instance, const struct ipc_shm_cfg *cfg);
  *
  * Function is non-reentrant.
  *
- * Return: 0 on success (all instances were initialized with success or
- * have been previously initialized), error code otherwise
+ * Return:
+ * * %0		- on success (all instances were initialized with success or
+ *   have been previously initialized)
+ * * %Error code otherwise
  */
 int8_t ipc_shm_init(const struct ipc_shm_instances_cfg *cfg);
 
@@ -55,7 +59,9 @@ void ipc_shm_free(void);
  * Function used only for managed channels where buffer management is enabled.
  * Function is thread-safe for different channels but not for the same channel.
  *
- * Return: pointer to the buffer base address or NULL if buffer not found
+ * Return:
+ * * %NULL					- buffer not found
+ * * %Pointer to the buffer base address	- on success
  */
 void *ipc_shm_acquire_buf(const uint8_t instance, uint8_t chan_id,
 				uint32_t mem_size);
@@ -69,7 +75,9 @@ void *ipc_shm_acquire_buf(const uint8_t instance, uint8_t chan_id,
  * Function used only for managed channels where buffer management is enabled.
  * Function is thread-safe for different channels but not for the same channel.
  *
- * Return: 0 on success, error code otherwise
+ * * %0		- on success
+ * * %-EINVAL	- Invalid instance, channel or buffer
+ * * %-ENOMEM	- Cannot release buffer
  */
 int8_t ipc_shm_release_buf(const uint8_t instance, uint8_t chan_id,
 				const void *buf);
@@ -84,7 +92,8 @@ int8_t ipc_shm_release_buf(const uint8_t instance, uint8_t chan_id,
  * Function used only for managed channels where buffer management is enabled.
  * Function is thread-safe for different channels but not for the same channel.
  *
- * Return: 0 on success, error code otherwise
+ * * %0		- on success
+ * * %-EINVAL	- Invalid instance, channel or buffer
  */
 int8_t ipc_shm_tx(const uint8_t instance, int chan_id, void *buf,
 			uint32_t size);
@@ -98,7 +107,9 @@ int8_t ipc_shm_tx(const uint8_t instance, int chan_id, void *buf,
  * once after the channel is initialized. There is no release function needed.
  * Function is thread-safe for different channels but not for the same channel.
  *
- * Return: pointer to the channel memory or NULL if invalid channel
+ * Return:
+ * * %NULL				- invalid channel
+ * * %Pointer to the channel memory	- on success
  */
 void *ipc_shm_unmanaged_acquire(const uint8_t instance, uint8_t chan_id);
 
@@ -112,7 +123,9 @@ void *ipc_shm_unmanaged_acquire(const uint8_t instance, uint8_t chan_id);
  * is available in channel memory.
  * Function is thread-safe for different channels but not for the same channel.
  *
- * Return: 0 on success, error code otherwise
+ * Return:
+ * * %0		- on success
+ * * %-EINVAL	- Invalid instance, channel or buffer
  */
 int8_t ipc_shm_unmanaged_tx(const uint8_t instance, uint8_t chan_id);
 
@@ -124,7 +137,10 @@ int8_t ipc_shm_unmanaged_tx(const uint8_t instance, uint8_t chan_id);
  * messages. It should be invoked at least before the first transmit operation.
  * Function is thread-safe.
  *
- * Return: 0 if remote is initialized, error code otherwise
+ * Return:
+ * * %0		- remote is initialized
+ * * %-EINVAL	- Invalid instance
+ * * %-EAGAIN	- Remote is not ready
  */
 int8_t ipc_shm_is_remote_ready(const uint8_t instance);
 
@@ -136,7 +152,11 @@ int8_t ipc_shm_is_remote_ready(const uint8_t instance);
  * channels are treated equally and no channel is starving.
  * Function is thread-safe for different instances but not for same instance.
  *
- * Return: number of messages processed, error code otherwise
+ * Return:
+ * * %Number of messages processed	- on success
+ * * %-EINVAL		- Invalid instance
+ * * %-EOPNOTSUPP	- instance is not configuring for polling
+ * * %-EAGAIN		- Remote is not ready
  */
 int8_t ipc_shm_poll_channels(const uint8_t instance);
 

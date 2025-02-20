@@ -1,6 +1,6 @@
 /* SPDX-License-Identifier: BSD-3-Clause */
 /*
- * Copyright 2023-2024 NXP
+ * Copyright 2023-2025 NXP
  */
 #ifndef IPC_OS_H
 #define IPC_OS_H
@@ -29,12 +29,46 @@
 /* forward declarations */
 struct ipc_shm_cfg;
 
-/* function declarations */
+
+/**
+ * ipc_shm_os_init() - OS specific initialization code
+ * @instance:	instance id
+ * @cfg:	configuration parameters
+ * @rx_cb:	Rx callback to be called from Rx softirq
+ *
+ * Return:
+ * * %0		- on success
+ * * %-EINVAL	- Invalid parameters
+ * * %-ENODEV	- Cannot open/load module
+ * * %-ENOMEM	- Cannot map memory
+ * * %-ENOENT	- Cannot get the UIO name
+ */
 int8_t ipc_os_init(const uint8_t instance, const struct ipc_shm_cfg *cfg,
 		uint32_t (*rx_cb)(const uint8_t, int));
+
+/**
+ * ipc_os_free() - free OS specific resources
+ */
 void ipc_os_free(const uint8_t instance);
+
+/**
+ * ipc_os_get_local_shm() - get local shared mem address
+ */
 uintptr_t ipc_os_get_local_shm(const uint8_t instance);
+
+/**
+ * ipc_os_get_remote_shm() - get remote shared mem address
+ */
 uintptr_t ipc_os_get_remote_shm(const uint8_t instance);
+
+/**
+ * ipc_os_poll_channels() - invoke rx callback configured at initialization
+ *
+ * Return:
+ * * %Number of messages processed	- on success
+ * * %-EINVAL		- Invalid instance
+ * * %-EOPNOTSUPP	- instance is not configuring for polling
+ */
 int8_t ipc_os_poll_channels(const uint8_t instance);
 
 #endif /* IPC_OS_H */

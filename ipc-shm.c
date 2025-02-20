@@ -289,7 +289,9 @@ static int8_t ipc_check_mchan_integrity(struct ipc_managed_channel *mchan)
  * @chan_id:  channel id
  * @budget:   available work budget (number of messages to be processed)
  *
- * Return:	work done
+ * Return:
+ * * %Number of processed messages	- on mananged
+ * * %Budget				- on unmanaged channel
  */
 static uint32_t ipc_channel_rx(const uint8_t instance, uint8_t chan_id,
 		uint32_t budget)
@@ -356,9 +358,10 @@ static uint32_t ipc_channel_rx(const uint8_t instance, uint8_t chan_id,
  *
  * This function return the state of instance.
  *
- * Return: IPC_SHM_INSTANCE_FREE if instance is free,
- *     IPC_SHM_INSTANCE_USED otherwise or
- *     IPC_SHM_INSTANCE_ERROR if there is errors
+ * Return:
+ * * %IPC_SHM_INSTANCE_FREE	- Instance is free
+ * * %IPC_SHM_INSTANCE_USED	- Instance is initialized
+ * * %IPC_SHM_INSTANCE_ERROR	- Invalid instance
  */
 static enum ipc_shm_instance_state ipc_instance_is_free(const uint8_t instance)
 {
@@ -382,7 +385,8 @@ static enum ipc_shm_instance_state ipc_instance_is_free(const uint8_t instance)
  * This function handles all channels using a fair handling algorithm: all
  * channels are treated equally and no channel is starving.
  *
- * Return:	work done
+ * Return:
+ * * %Number of processed messages
  */
 static uint32_t ipc_shm_rx(const uint8_t instance, int budget)
 {
@@ -431,7 +435,11 @@ static uint32_t ipc_shm_rx(const uint8_t instance, int budget)
  * Since the shared memory configuration is symmetric and remote base address
  * is known, local IPC can compute the remote BD info.
  *
- * Return: 0 for success, error code otherwise
+ * Return:
+ * * %0		- on success
+ * * %-EINVAL	- when input parameters, read or write indexes are invalid
+ * * %-EAGAIN	- when remote is initializing the corresponding queue
+ * * %-ENOMEM	- when pool doesn't fit in shared-memory
  */
 static int8_t ipc_buf_pool_init(const uint8_t instance, uint8_t chan_id,
 		uint16_t pool_id, struct ipc_shm_pool_addr *mng_pool,
@@ -516,7 +524,9 @@ static int8_t ipc_buf_pool_init(const uint8_t instance, uint8_t chan_id,
  * @chan_id:  channel id
  * @cfg:      managed channel configuration
  *
- * Return: total buffers, 0 if error
+ * Return:
+ * * %Total buffers	- on success
+ * * %0			- if the total buffer are invalid
  */
 static uint32_t ipc_get_total_buf_per_chan(const uint8_t instance,
 		uint8_t chan_id, const struct ipc_shm_managed_cfg *cfg)
@@ -679,7 +689,10 @@ static int8_t unmanaged_channel_init(const uint8_t instance, int chan_id,
  * @remote_shm: remote channel shared memory address
  * @cfg:	channel configuration parameters
  *
- * Return: 0 for success, error code otherwise
+ * Return:
+ * * %0		- on success
+ * * %-EINVAL	- when input parameters are invalid
+ * * %-EAGAIN	- when remote is initializing the corresponding queue
  */
 static int ipc_shm_init_channels(const uint8_t instance, int chan_id,
 		uintptr_t local_shm, uintptr_t remote_shm,
@@ -1024,7 +1037,9 @@ int8_t ipc_shm_init(const struct ipc_shm_instances_cfg *cfg)
  * @buf:	buffer pointer
  * @remote:	flag telling if buffer is from remote OS
  *
- * Return: pool index on success, -EINVAL otherwise
+ * Return:
+ * * %Pool index	- on success
+ * * %-EINVAL		- Invalid buffer
  */
 static int16_t find_pool_for_buf(struct ipc_managed_channel *chan,
 						uintptr_t buf, uint8_t remote)

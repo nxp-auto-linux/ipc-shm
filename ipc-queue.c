@@ -1,22 +1,12 @@
 /* SPDX-License-Identifier: BSD-3-Clause */
 /*
- * Copyright 2018-2019,2022-2024 NXP
+ * Copyright 2018-2019,2022-2025 NXP
  */
 
 #include "ipc-os.h"
 #include "ipc-shm.h"
 #include "ipc-queue.h"
 
-/**
- * ipc_queue_pop() - removes element from queue
- * @queue:	[IN] queue pointer
- * @buf:	[OUT] pointer where to copy the removed element
- *
- * Element is removed from pop ring that is mapped in remote shared memory and
- * it corresponds to the remote push ring.
- *
- * Return:	0 on success, error code otherwise
- */
 int8_t ipc_queue_pop(struct ipc_queue *queue, void *buf)
 {
 	uint32_t write; /* cache write index for thread-safety */
@@ -54,16 +44,6 @@ int8_t ipc_queue_pop(struct ipc_queue *queue, void *buf)
 	return 0;
 }
 
-/**
- * ipc_queue_push() - pushes element into the queue
- * @queue:	[IN] queue pointer
- * @buf:	[IN] pointer to element to be pushed into the queue
- *
- * Element is pushed into the push ring that is mapped in local shared memory
- * and corresponds to the remote pop ring.
- *
- * Return:	0 on success, error code otherwise
- */
 int8_t ipc_queue_push(struct ipc_queue *queue, const void *buf)
 {
 	uint32_t write; /* cache write index for thread-safety */
@@ -104,7 +84,9 @@ int8_t ipc_queue_push(struct ipc_queue *queue, const void *buf)
  * @queue:                  [IN] queue pointer
  * @queue_type:             [IN] indicate queue of channel or pool buffer
  *
- * Return: 0 on success, error code otherwise
+ * * %0		- on success
+ * * %-EINVAL	- when input parameters, read or write indexes are invalid
+ * * %-EAGAIN	- when remote is initializing the corresponding queue
  */
 static int8_t ipc_queue_sync_index(struct ipc_queue *queue,
 					enum ipc_shm_queue_type queue_type)
@@ -135,21 +117,6 @@ static int8_t ipc_queue_sync_index(struct ipc_queue *queue,
 	return 0;
 }
 
-/**
- * ipc_queue_init() - initializes queue and maps push/pop rings in memory
- * @queue:		[IN] queue pointer
- * @elem_num:		[IN] number of elements in queue
- * @elem_size:		[IN] element size in bytes (8-byte multiple)
- * @push_ring_addr:	[IN] local addr where to map the push buffer ring
- * @pop_ring_addr:	[IN] remote addr where to map the pop buffer ring
- *
- * Element size must be 8-byte multiple to ensure memory alignment.
- *
- * Queue will add one additional sentinel element to its size for lock-free
- * single-producer - single-consumer thread-safety.
- *
- * Return: 0 on success, error code otherwise
- */
 int8_t ipc_queue_init(struct ipc_queue *queue,
 			struct ipc_queue_data queue_data)
 {
@@ -179,7 +146,6 @@ int8_t ipc_queue_init(struct ipc_queue *queue,
 	return ipc_queue_sync_index(queue, queue_data.queue_type);
 }
 
-
 void ipc_queue_free(struct ipc_queue *queue)
 {
 	/* Clear push ring sentinel and data */
@@ -201,14 +167,6 @@ void ipc_queue_free(struct ipc_queue *queue)
 	queue->push_ring = NULL;
 }
 
-/**
- * ipc_queue_check_integrity() - check if the sentinel was not overwritten
- * @queue:	[IN] queue pointer
- *
- * Check if the sentinel was not overwritten
- *
- * Return:	0 on success, error code otherwise
- */
 int8_t ipc_queue_check_integrity(struct ipc_queue *queue)
 {
 	if ((IPC_QUEUE_INIT_DONE == queue->pop_ring->sentinel) &&

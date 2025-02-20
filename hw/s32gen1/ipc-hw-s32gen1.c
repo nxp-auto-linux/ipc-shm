@@ -54,9 +54,11 @@ int ipc_hw_get_rx_irq(const uint8_t instance)
  * If the value IPC_CORE_DEFAULT is passed as local_core or remote_core, the
  * default value defined for the selected platform will be used instead.
  *
- * Return: 0 for success, -EINVAL for either inter core interrupt invalid or
- *         invalid remote core, -ENOMEM for failing to map MSCM address space,
- *         -EACCES for failing to access MSCM registers
+ * Return:
+ * * %0		- on Success
+ * * %-EINVAL	- either inter core interrupt invalid or invalid core
+ * * %-ENOMEM	- failing to map MSCM address space
+ * * %-EACCES	- failing to access MSCM registers
  */
 int8_t ipc_hw_init(const uint8_t instance, const struct ipc_shm_cfg *cfg)
 {

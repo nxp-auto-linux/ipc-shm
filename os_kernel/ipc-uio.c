@@ -180,7 +180,10 @@ static int8_t get_irq_number(const uint8_t instance,
 /**
  * ipc_uio_init() - Initialize an UIO and ipcf hw
  * @ipc_uio_cdev_data:    Chrdev private data from user space
- * Return: 0 on Success, error code otherwise
+ *
+ * Return:
+ * * %0				- on success
+ * * %Negative error code	- On error
  */
 static int ipc_uio_init(struct ipc_uio_cdev_data *data)
 {

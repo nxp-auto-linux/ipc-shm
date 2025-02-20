@@ -24,19 +24,68 @@
 struct ipc_shm_cfg;
 
 /* function declarations */
+/**
+ * ipc_shm_os_init() - OS specific initialization code
+ * @instance:	 instance id
+ * @cfg:         configuration parameters
+ * @rx_cb:	rx callback to be called from rx softirq
+ *
+ * Return:
+ * * %0				- on success
+ * * %Negative error code	- On error
+ */
 int8_t ipc_os_init(const uint8_t instance, const struct ipc_shm_cfg *cfg,
 		uint32_t (*rx_cb)(const uint8_t, int));
+
+/**
+ * ipc_os_free() - free OS specific resources
+ */
 void ipc_os_free(const uint8_t instance);
+
+/**
+ * ipc_os_get_local_shm() - get local shared mem address
+ */
 uintptr_t ipc_os_get_local_shm(const uint8_t instance);
+
+/**
+ * ipc_os_get_remote_shm() - get remote shared mem address
+ */
 uintptr_t ipc_os_get_remote_shm(const uint8_t instance);
 
+
 #ifndef PLATFORM_FLAVOR_s32n7
+/**
+ * ipc_os_map_intc() - I/O memory map interrupt controller register space
+ *
+ * I/O memory map the inter-core interrupts HW block (MSCM for ARM processors)
+ * or Mru HW block
+ */
 void *ipc_os_map_intc(void);
 #else
+/**
+ * ipc_os_mru_map_intc() - I/O memory map interrupt controller register space
+ *
+ * I/O memory map the inter-core interrupts HW block (Mru HW block)
+ */
 void *ipc_os_mru_map_intc(uint8_t mru_instance,
 	uint8_t subsystem_idx, uint8_t mru_id);
 #endif
+
+/**
+ * ipc_os_unmap_intc() - I/O memory unmap interrupt controller register space
+ */
 void ipc_os_unmap_intc(void *addr);
+
+/**
+ * ipc_os_poll_channels() - invoke rx callback configured at initialization
+ *
+ * Not implemented for Linux.
+ *
+ * Return:
+ * * %Number of messages processed	- on success
+ * * %-EINVAL		- Invalid instance
+ * * %-EOPNOTSUPP	- instance is not configuring for polling
+ */
 int8_t ipc_os_poll_channels(const uint8_t instance);
 
 #endif /* IPC_OS_H */

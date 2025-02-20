@@ -77,7 +77,9 @@ int ipc_hw_get_rx_irq(const uint8_t instance)
  * @instance: instance id
  * @cfg:      configuration parameters
  *
- * Return: 0 on Success, -EINVAL on Error
+ * Return:
+ * * %0		- on Success
+ * * %-EINVAL	- on Error
  */
 static int8_t ipc_hw_rtu_tx_mru(const uint8_t instance,
 	const struct ipc_shm_cfg *cfg)
@@ -133,7 +135,9 @@ static int8_t ipc_hw_rtu_tx_mru(const uint8_t instance,
  * @instance: instance id
  * @cfg:      configuration parameters
  *
- * Return: 0 on Success, -EINVAL on Error
+ * Return:
+ * * %0		- on Success
+ * * %-EINVAL	- on Error
  */
 static int8_t ipc_hw_aps_tx_mru(const uint8_t instance,
 	const struct ipc_shm_cfg *cfg)
@@ -181,7 +185,9 @@ static int8_t ipc_hw_aps_tx_mru(const uint8_t instance,
  * @instance: instance id
  * @cfg:      configuration parameters
  *
- * Return: 0 on Success, -EINVAL on Error
+ * Return:
+ * * %0		- on Success
+ * * %-EINVAL	- on Error
  */
 static int8_t ipc_hw_fss_tx_mru(const uint8_t instance,
 	const struct ipc_shm_cfg *cfg)
@@ -253,7 +259,9 @@ static int8_t ipc_hw_fss_tx_mru(const uint8_t instance,
  * @instance: instance id
  * @cfg:      configuration parameters
  *
- * Return: 0 on Success, -EINVAL on Error
+ * Return:
+ * * %0		- on Success
+ * * %-EINVAL	- on Error
  */
 static int8_t ipc_hw_rcu_tx_mru(const uint8_t instance,
 	const struct ipc_shm_cfg *cfg)
@@ -323,6 +331,10 @@ static int8_t ipc_hw_rcu_tx_mru(const uint8_t instance,
  *
  * @instance: instance id
  * @cfg:      configuration parameters
+ *
+ * Return:
+ * * %0		- on Success
+ * * %-EINVAL	- on Error
  */
 static int8_t ipc_hw_tx_mru_init(const uint8_t instance,
 	const struct ipc_shm_cfg *cfg)
@@ -380,6 +392,10 @@ static int8_t ipc_hw_tx_mru_init(const uint8_t instance,
  *
  * @instance: instance id
  * @cfg:      configuration parameters
+ *
+ * Return:
+ * * %0		- on Success
+ * * %-EINVAL	- on Error
  */
 static int8_t ipc_hw_rx_mru_init(const uint8_t instance,
 	const struct ipc_shm_cfg *cfg)
@@ -447,6 +463,10 @@ static int8_t ipc_hw_rx_mru_init(const uint8_t instance,
  *
  * @instance: instance id
  * @cfg:      configuration parameters
+ *
+ * Return:
+ * * %0		- on Success
+ * * %-EINVAL	- on Error
  */
 int8_t ipc_hw_init(const uint8_t instance, const struct ipc_shm_cfg *cfg)
 {

@@ -1,6 +1,6 @@
 /* SPDX-License-Identifier: BSD-3-Clause */
 /*
- * Copyright 2018-2019,2023-2024 NXP
+ * Copyright 2018-2019,2023-2025 NXP
  */
 #ifndef IPC_QUEUE_H
 #define IPC_QUEUE_H
@@ -76,7 +76,10 @@ struct ipc_queue_data {
  * Queue will add one additional sentinel element to its size for lock-free
  * single-producer - single-consumer thread-safety.
  *
- * Return: IPC_SHM_E_OK on success, error code otherwise
+ * Return:
+ * * %0		- on success
+ * * %-EINVAL	- when input parameters are invalid
+ * * %-EAGAIN	- when remote is initializing the corresponding queue
  */
 int8_t ipc_queue_init(struct ipc_queue *queue,
 			struct ipc_queue_data queue_data);
@@ -97,7 +100,10 @@ void ipc_queue_free(struct ipc_queue *queue);
  * Element is pushed into the push ring that is mapped in local shared memory
  * and corresponds to the remote pop ring.
  *
- * Return:	IPC_SHM_E_OK on success, error code otherwise
+ * Return:
+ * * %0		- on success
+ * * %-EINVAL	- when input parameters, read or write indexes are invalid
+ * * %-ENOMEM	- when queue is full
  */
 int8_t ipc_queue_push(struct ipc_queue *queue, const void *buf);
 
@@ -109,7 +115,10 @@ int8_t ipc_queue_push(struct ipc_queue *queue, const void *buf);
  * Element is removed from pop ring that is mapped in remote shared memory and
  * it corresponds to the remote push ring.
  *
- * Return:	IPC_SHM_E_OK on success, error code otherwise
+ * Return:
+ * * %0		- on success
+ * * %-EINVAL	- when input parameters, read or write indexes are invalid
+ * * %-ENOBUFS	- when queue is empty
  */
 int8_t ipc_queue_pop(struct ipc_queue *queue, void *buf);
 
@@ -119,7 +128,8 @@ int8_t ipc_queue_pop(struct ipc_queue *queue, void *buf);
  *
  * Check if the sentinel was not overwritten
  *
- * Return: IPC_SHM_E_OK on success, error code otherwise
+ * * %0		- on success
+ * * %-EINVAL	- when local or remote queue sentinal is invalid
  */
 int8_t ipc_queue_check_integrity(struct ipc_queue *queue);
 
