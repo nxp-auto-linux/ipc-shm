@@ -17,7 +17,7 @@
 
 /* Device tree MSCM node compatible property (search key) */
 #if defined(PLATFORM_FLAVOR_s32g2) || defined(PLATFORM_FLAVOR_s32g3) || \
-	defined(PLATFORM_FLAVOR_s32r45)
+	defined(PLATFORM_FLAVOR_s32r45) || defined(PLATFORM_FLAVOR_s32r47)
 	#define DT_INTC_NODE_COMP "nxp,s32cc-mscm"
 #elif defined(PLATFORM_FLAVOR_s32n7)
 	#define DT_INTC_NODE_COMP     "nxp,s32n79-mru"

@@ -92,6 +92,7 @@ Note: use the release branch: release/**IPCF_RELEASE_NAME**
         PLATFORM_FLAVOR=s32r45
         PLATFORM_FLAVOR=s32g3
         PLATFORM_FLAVOR=s32n7
+        PLATFORM_FLAVOR=s32r47
 
 4. Build sample application with IPCF-ShM library, providing the location of the
    IPC UIO kernel module in the target board rootfs and the platform name, e.g.::

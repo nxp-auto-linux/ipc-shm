@@ -14,6 +14,8 @@ $(MODULE_NAME)-y := sample.o
 
 ifeq ($(PLATFORM_FLAVOR),UNDEFINED)
 $(error "PLATFORM_FLAVOR is UNDEFINED")
+else ifeq ($(PLATFORM_FLAVOR),s32r47)
+PLATFORM_HW := s32r47
 else ifeq ($(PLATFORM_FLAVOR),s32n7)
 PLATFORM_HW := s32n7
 else ifeq ($(PLATFORM_FLAVOR),s32g3)

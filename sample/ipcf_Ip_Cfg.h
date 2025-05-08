@@ -1,6 +1,6 @@
 /* SPDX-License-Identifier: BSD-3-Clause */
 /*
- * Copyright 2023-2024 NXP
+ * Copyright 2023-2025 NXP
  */
 
 #ifndef IPCF_IP_CFG_H
@@ -8,7 +8,6 @@
 
 #include <linux/module.h>
 #include "ipc-shm.h"
-#include "ipc-hw-platform.h"
 
 /* callbacks for channels  - must be implemented by application*/
 /* arguments for callbacks - must be implemented by application*/

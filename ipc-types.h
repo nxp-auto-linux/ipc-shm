@@ -231,6 +231,7 @@ enum ipc_shm_core_type {
 	IPC_CORE_R52,
 	IPC_CORE_M33,
 	IPC_CORE_BBE32,
+	IPC_CORE_KQ8,
 };
 
 /**

@@ -4,7 +4,7 @@
 IPCF Shared Memory Sample Application for Linux
 ===============================================
 
-:Copyright: 2018-2022,2023 NXP
+:Copyright: 2018-2022,2023,2025 NXP
 
 Overview
 ========
@@ -86,6 +86,8 @@ Note: use the release branch: release/**IPCF_RELEASE_NAME**
         PLATFORM_FLAVOR=s32g2
         PLATFORM_FLAVOR=s32r45
         PLATFORM_FLAVOR=s32g3
+        PLATFORM_FLAVOR=s32n7
+        PLATFORM_FLAVOR=s32r47
 
 .. _run-shm-linux:
 
