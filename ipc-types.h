@@ -6,59 +6,65 @@
 #define IPC_TYPES_H
 
 /* Maximum value of standard type */
-#define IPC_UINT16_MAX                  (0xFFFFu)
+#define IPC_UINT16_MAX                      (0xFFFFu)
 
 /* Maximum number of total buffers per channel */
-#define IPC_SHM_MAX_BUFS_PER_CHANNEL    (IPC_UINT16_MAX - 1u)
+#define IPC_SHM_MAX_BUFS_PER_CHANNEL        (IPC_UINT16_MAX - 1u)
 
 /* Maximum unmanaged channel size */
-#define IPC_SHM_MAX_UMNG_SIZE           (IPC_UINT16_MAX)
+#define IPC_SHM_MAX_UMNG_SIZE               (IPC_UINT16_MAX)
 
 /* magic number to indicate the queue is initializing */
-#define IPC_QUEUE_INIT_IN_PROGRESS           0x54494E4946435049ULL
+#define IPC_QUEUE_INIT_IN_PROGRESS          (0x54494E4946435049ULL)
 
 /* magic number to indicate the queue integrity */
-#define IPC_QUEUE_INIT_DONE                  0x474E495246435049ULL
+#define IPC_QUEUE_INIT_DONE                 (0x474E495246435049ULL)
 
 #if defined(PLATFORM_FLAVOR_s32n7)
+
 /*
  * Used when using MRU driver
  */
-#define IPC_IRQ_MRU -2
+#define IPC_IRQ_MRU                         (-2)
 #endif
 
 /*
  * Used when polling is desired on either transmit or receive path
  */
-#define IPC_IRQ_NONE -1
+#define IPC_IRQ_NONE                        (-1)
 
 /*
  * Maximum number of shared memory channels that can be configured
  */
 #ifndef IPC_SHM_MAX_CHANNELS
-#define IPC_SHM_MAX_CHANNELS 8U
+#define IPC_SHM_MAX_CHANNELS                (8U)
 #endif
 
 /*
  * Maximum number of buffer pools that can be configured for a managed channel
  */
 #ifndef IPC_SHM_MAX_POOLS
-#define IPC_SHM_MAX_POOLS 4U
+#define IPC_SHM_MAX_POOLS                   (4U)
 #endif
 
 /*
  * Maximum number of buffers per pool
  */
 #ifndef IPC_SHM_MAX_BUFS_PER_POOL
-#define IPC_SHM_MAX_BUFS_PER_POOL 4096U
+#define IPC_SHM_MAX_BUFS_PER_POOL           (4096U)
 #endif
 
 /*
  * Maximum number of instances
  */
 #ifndef IPC_SHM_MAX_INSTANCES
-#define IPC_SHM_MAX_INSTANCES	4u
+#define IPC_SHM_MAX_INSTANCES               (4u)
 #endif
+
+/*
+ * The index of status byte in SCMI channel
+ */
+#define IPC_SCMI_CHANNEL_STATUS_IDX         (1u)
 
 #ifdef PLATFORM_FLAVOR_s32n7
 
@@ -191,6 +197,7 @@ typedef enum {
  * and no buffer management is done by ipc-shm device.
  */
 enum ipc_shm_channel_type {
+	IPC_SHM_SCMI,
 	IPC_SHM_MANAGED,
 	IPC_SHM_UNMANAGED
 };
@@ -296,16 +303,43 @@ struct ipc_shm_unmanaged_cfg {
 };
 
 /**
+ * struct ipc_shm_scmi_cfg - scmi channel parameters
+ * @scmi_addr:      scmi memory physical address
+ * @scmi_size:      channel memory size
+ * @rx_cb:          receive callback
+ * @cb_arg:         optional receive callback argument
+ */
+struct ipc_shm_scmi_cfg {
+	volatile uintptr_t scmi_addr;
+	uint32_t scmi_size;
+	void (*rx_cb)(void *cb_arg, const uint8_t instance, uint8_t chan_id,
+			void *buf);
+	void *cb_arg;
+};
+
+/**
+ * enum ipc_scmi_channel_status_type - IPC SCMI channel status
+ * @IPC_SCMI_CHANNEL_BUSY:    SCMI channel is busy (0)
+ * @IPC_SCMI_CHANNEL_FREE:    SCMI channel is free (1)
+ */
+enum ipc_scmi_channel_status_type {
+	IPC_SCMI_CHANNEL_BUSY = 0,
+	IPC_SCMI_CHANNEL_FREE
+};
+
+/**
  * struct ipc_shm_channel_cfg - channel parameters
  * @type:	channel type from &enum ipc_shm_channel_type
  * @ch.managed:     managed channel parameters
  * @ch.unmanaged:   unmanaged channel parameters
+ * @ch.scmi:        scmi channel parameters
  */
 struct ipc_shm_channel_cfg {
 	enum ipc_shm_channel_type type;
 	union {
 		struct ipc_shm_managed_cfg managed;
 		struct ipc_shm_unmanaged_cfg unmanaged;
+		struct ipc_shm_scmi_cfg scmi;
 	} ch;
 };
 
@@ -342,8 +376,6 @@ struct ipc_shm_local_core {
 	uint32_t trusted;
 };
 #else
-
-
 /**
  * struct IPC_MRU_Type - MRU configuration parameters
  * @mru_instance:   MRU instance type where MRU located
@@ -352,7 +384,6 @@ struct ipc_shm_local_core {
  * @mru_channel_id: MRU channel used in configuration
  *
  */
-
 typedef struct {
 	IPC_MRU_INSTANCE_ENUM_Type    mru_instance;
 	IPC_SUBSYSTEM_INDEX_ENUM_Type subsystem_id;

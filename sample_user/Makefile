@@ -41,7 +41,7 @@ RM := rm -rf
 elf_name := ipc-shm-sample_uio.elf
 libipc_dir ?= $(shell pwd)/../os_uio
 
-CFLAGS += -Wall -g -I$(libipc_dir)/.. -DCONFIG_SOC_$(PLATFORM)
+CFLAGS += -Wall -g -I$(libipc_dir)/.. -I$(libipc_dir) -DCONFIG_SOC_$(PLATFORM)
 # For debug
 # CFLAGS += -DDEBUG
 CFLAGS += $(EXTRA_CFLAGS)

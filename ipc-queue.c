@@ -167,6 +167,38 @@ void ipc_queue_free(struct ipc_queue *queue)
 	queue->push_ring = NULL;
 }
 
+int8_t ipc_queue_not_empty(const struct ipc_queue *queue, bool *not_empty)
+{
+	uint32_t write; /* cache write index for thread-safety */
+	uint32_t read; /* cache read index for thread-safety */
+
+	*not_empty = false;
+
+	if (queue == NULL)
+		return -EINVAL;
+
+	if ((queue->push_ring == NULL) || (queue->pop_ring == NULL))
+		return -EINVAL;
+
+	write = queue->push_ring->read;
+	read = queue->pop_ring->write;
+
+	/* Check if read and write are valid value */
+	if ((read >= queue->elem_num) || (write >= queue->elem_num))
+		return -EINVAL;
+
+	/* check if queue is empty */
+	if (read != write) {
+		/* pointers are different, there something in the queue */
+		*not_empty = true;
+	} else {
+		/* pointers are equal, queue is empty */
+		*not_empty = false;
+	}
+
+	return 0;
+}
+
 int8_t ipc_queue_check_integrity(struct ipc_queue *queue)
 {
 	if ((IPC_QUEUE_INIT_DONE == queue->pop_ring->sentinel) &&

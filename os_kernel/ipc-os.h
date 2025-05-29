@@ -31,8 +31,8 @@ struct ipc_shm_cfg;
  * @rx_cb:	rx callback to be called from rx softirq
  *
  * Return:
- * * %0				- on success
- * * %Negative error code	- On error
+ * * %0                   - on success
+ * * %Negative error code - On error
  */
 int8_t ipc_os_init(const uint8_t instance, const struct ipc_shm_cfg *cfg,
 		uint32_t (*rx_cb)(const uint8_t, int));
@@ -52,6 +52,11 @@ uintptr_t ipc_os_get_local_shm(const uint8_t instance);
  */
 uintptr_t ipc_os_get_remote_shm(const uint8_t instance);
 
+/* ipc_os_ioremap() - I/O memory map for a physical address */
+uintptr_t ipc_os_ioremap(uintptr_t phys_addr, uint32_t size);
+
+/* ipc_os_ioremap() - I/O memory unmap for a physical address */
+void ipc_os_iounmap(uintptr_t phys_addr, uintptr_t vir_addr, uint32_t size);
 
 #ifndef PLATFORM_FLAVOR_s32n7
 /**

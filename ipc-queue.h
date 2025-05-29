@@ -134,6 +134,23 @@ int8_t ipc_queue_pop(struct ipc_queue *queue, void *buf);
 int8_t ipc_queue_check_integrity(struct ipc_queue *queue);
 
 /**
+ * ipc_queue_not_empty() - check if a queue has data
+ * @queue:          [IN] queue pointer
+ * @not_empty:      [OUT] pointer that indicates if the queue is empty or not
+ *                  empty
+ *                  true   if channel has non processed messages
+ *                  false  if the channel has no messages
+ *
+ * Check if a queue has data (it is not empty)
+ *
+ * Return:
+ * * %0 - On success
+ * * %-EINVAL  - Invalid queue push/pop ring or invalid queue element
+ *   configuration
+ */
+int8_t ipc_queue_not_empty(const struct ipc_queue *queue, bool *not_empty);
+
+/**
  * ipc_queue_mem_size() - return queue footprint in local mapped memory
  * @queue:	[IN] queue pointer
  *

@@ -25,11 +25,6 @@
 
 #define RX_SOFTIRQ_POLICY	SCHED_FIFO
 
-/*
- * Maximum number of instances
- */
-#define IPC_SHM_MAX_INSTANCES	4u
-
 /* system call wrappers for loading and unloading kernel modules */
 #define finit_module(fd, param_values, flags) \
 	syscall(__NR_finit_module, fd, param_values, flags)
@@ -387,8 +382,16 @@ err_unmap_local_shm:
 		ipc_os_priv.id[instance].local_shm_offset
 			+ ipc_os_priv.id[instance].shm_size);
 err_close_mem_dev:
+	for (i = 0; i < IPC_SHM_MAX_INSTANCES; i++) {
+		if (ipc_os_priv.id[i].state == IPC_SHM_INSTANCE_ENABLED)
+			goto err_close_ipc_shm_uio;
+	}
 	close(ipc_os_priv.dev_mem_fd);
 err_close_ipc_cdev_uio:
+	for (i = 0; i < IPC_SHM_MAX_INSTANCES; i++) {
+		if (ipc_os_priv.id[i].state == IPC_SHM_INSTANCE_ENABLED)
+			goto err_close_ipc_shm_uio;
+	}
 	close(ipc_os_priv.ipc_cdev_fd);
 err_close_ipc_shm_uio:
 	ipc_os_priv.id[instance].state = IPC_SHM_INSTANCE_DISABLED;
@@ -465,6 +468,48 @@ uintptr_t ipc_os_get_local_shm(const uint8_t instance)
 uintptr_t ipc_os_get_remote_shm(const uint8_t instance)
 {
 	return (uintptr_t)ipc_os_priv.id[instance].remote_virt_shm;
+}
+
+
+uintptr_t ipc_os_ioremap(uintptr_t phys_addr, uint32_t size)
+{
+	void *vir_addr;
+	void *virt_memmap;
+	size_t addr_offset;
+	size_t page_size = sysconf(_SC_PAGE_SIZE);
+	off_t page_phys_addr;
+
+	if (-1 == ipc_os_priv.dev_mem_fd)
+		return (uintptr_t)NULL;
+
+	page_phys_addr = (phys_addr / page_size) * page_size;
+	addr_offset = phys_addr - page_phys_addr;
+	virt_memmap = mmap(NULL, addr_offset + size,
+		PROT_READ | PROT_WRITE, MAP_SHARED,
+		ipc_os_priv.dev_mem_fd, page_phys_addr);
+	if (MAP_FAILED == virt_memmap) {
+		shm_err("Can't map memory: %lx\n", phys_addr);
+		return (uintptr_t)NULL;
+	}
+	vir_addr = virt_memmap + addr_offset;
+
+	return (uintptr_t)vir_addr;
+}
+
+void ipc_os_iounmap(uintptr_t phys_addr, uintptr_t vir_addr, uint32_t size)
+{
+	/* Unmap memory */
+	void *virt_memmap;
+	size_t addr_offset;
+	size_t page_size = sysconf(_SC_PAGE_SIZE);
+	off_t page_phys_addr;
+
+	page_phys_addr = (phys_addr / page_size) * page_size;
+	addr_offset = phys_addr - page_phys_addr;
+
+	virt_memmap = (void *)(vir_addr - addr_offset);
+
+	munmap(virt_memmap, addr_offset + size);
 }
 
 int8_t ipc_os_poll_channels(const uint8_t instance)

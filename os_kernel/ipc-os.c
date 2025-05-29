@@ -266,11 +266,11 @@ int8_t ipc_os_init(const uint8_t instance, const struct ipc_shm_cfg *cfg,
 	return 0;
 
 err_unmap_remote_shm:
-	iounmap((void *)cfg->remote_shm_addr);
+	iounmap((void *)priv.id[instance].remote_virt_shm);
 err_release_remote_region:
 	release_mem_region((phys_addr_t)cfg->remote_shm_addr, cfg->shm_size);
 err_unmap_local_shm:
-	iounmap((void *)cfg->local_shm_addr);
+	iounmap((void *)priv.id[instance].local_virt_shm);
 err_release_local_region:
 	release_mem_region((phys_addr_t)cfg->local_shm_addr, cfg->shm_size);
 
@@ -321,6 +321,35 @@ uintptr_t ipc_os_get_local_shm(const uint8_t instance)
 uintptr_t ipc_os_get_remote_shm(const uint8_t instance)
 {
 	return priv.id[instance].remote_virt_shm;
+}
+
+uintptr_t ipc_os_ioremap(uintptr_t phys_addr, uint32_t size)
+{
+	struct resource *res;
+	uintptr_t virt_mem;
+
+	/* request and map target physical memory */
+	res = request_mem_region((phys_addr_t)phys_addr, size,
+		DRIVER_NAME" remote");
+	if (!res) {
+		shm_err("Unable to reserve target memory region\n");
+		return (uintptr_t)NULL;
+	}
+
+	virt_mem = (uintptr_t)ioremap(phys_addr, size);
+	if (!virt_mem) {
+		release_mem_region((phys_addr_t)phys_addr, size);
+		return (uintptr_t)NULL;
+	}
+
+	return virt_mem;
+}
+
+void ipc_os_iounmap(uintptr_t phys_addr, uintptr_t vir_addr, uint32_t size)
+{
+	/* Unmap and release memory */
+	iounmap((void *)vir_addr);
+	release_mem_region((phys_addr_t)phys_addr, size);
 }
 
 #if !defined(PLATFORM_FLAVOR_s32n7)
@@ -453,6 +482,12 @@ EXPORT_SYMBOL(ipc_shm_unmanaged_acquire);
 EXPORT_SYMBOL(ipc_shm_unmanaged_tx);
 EXPORT_SYMBOL(ipc_shm_is_remote_ready);
 EXPORT_SYMBOL(ipc_shm_poll_channels);
+EXPORT_SYMBOL(ipc_shm_free_scmi_channel);
+EXPORT_SYMBOL(ipc_shm_is_channel_not_empty);
+EXPORT_SYMBOL(ipc_shm_get_message_from_channel);
+EXPORT_SYMBOL(ipc_shm_get_channel_type);
+EXPORT_SYMBOL(ipc_shm_scmi_tx);
+EXPORT_SYMBOL(ipc_shm_acquire_scmi);
 
 module_init(shm_mod_init);
 module_exit(shm_mod_exit);

@@ -146,6 +146,23 @@ struct ipc_unmanaged_channel {
 };
 
 /**
+ * struct ipc_shm_scmi_cfg - scmi channel parameters
+ * @scmi_virt_addr: scmi memory virtual address
+ * @scmi_phys_addr: scmi memory physical address
+ * @scmi_size:      channel memory size
+ * @rx_cb:          receive callback
+ * @cb_arg:         optional receive callback argument
+ */
+struct ipc_scmi_channel {
+	volatile uintptr_t scmi_virt_addr;
+	volatile uintptr_t scmi_phys_addr;
+	uint32_t scmi_size;
+	void (*rx_cb)(void *cb_arg, const uint8_t instance, uint8_t chan_id,
+			void *buf);
+	void *cb_arg;
+};
+
+/**
  * struct ipc_shm_channel - ipc channel private data
  * @id:   channel id
  * @type: channel type (see ipc_shm_channel_type)
@@ -157,6 +174,7 @@ struct ipc_shm_channel {
 	union {
 		struct ipc_managed_channel mng;
 		struct ipc_unmanaged_channel umng;
+		struct ipc_scmi_channel scmi;
 	} ch;
 };
 
@@ -183,6 +201,7 @@ struct ipc_shm_priv {
 	uint8_t num_channels;
 	struct ipc_shm_channel channels[IPC_SHM_MAX_CHANNELS];
 	struct ipc_shm_global *global;
+	struct ipc_shm_cfg *shm_cfg_addr;
 };
 
 /* ipc shm private data */
@@ -242,6 +261,20 @@ static inline struct ipc_unmanaged_channel *get_unmanaged_chan(
 	return &chan->ch.umng;
 }
 
+/* get scmi channel with validation */
+static inline struct ipc_scmi_channel *get_scmi_chan(
+		const uint8_t instance, uint8_t chan_id)
+{
+	struct ipc_shm_channel *chan = get_channel(instance, chan_id);
+
+	if ((chan == NULL) || (chan->type != IPC_SHM_SCMI)) {
+		shm_err("Invalid channel type for this operation\n");
+		return NULL;
+	}
+
+	return &chan->ch.scmi;
+}
+
 /* check integrity of uchan: the boundaries have not been altered */
 static int8_t ipc_check_uchan_integrity(
 		const struct ipc_unmanaged_channel *uchan)
@@ -290,8 +323,8 @@ static int8_t ipc_check_mchan_integrity(struct ipc_managed_channel *mchan)
  * @budget:   available work budget (number of messages to be processed)
  *
  * Return:
- * * %Number of processed messages	- on mananged
- * * %Budget				- on unmanaged channel
+ * * %Number of processed messages  - on mananged
+ * * %Budget                        - on unmanaged channel
  */
 static uint32_t ipc_channel_rx(const uint8_t instance, uint8_t chan_id,
 		uint32_t budget)
@@ -299,12 +332,33 @@ static uint32_t ipc_channel_rx(const uint8_t instance, uint8_t chan_id,
 	struct ipc_shm_channel *chan = get_channel_priv(instance, chan_id);
 	struct ipc_managed_channel *mchan = &chan->ch.mng;
 	struct ipc_unmanaged_channel *uchan = &chan->ch.umng;
+	struct ipc_scmi_channel *scmi_chan = &chan->ch.scmi;
 	struct ipc_shm_pool *pool;
 	struct ipc_shm_bd bd;
 	uintptr_t buf_addr;
 	uint32_t remote_tx_count;
-	int err;
-	int work = 0;
+	int8_t result;
+	uint32_t work = 0;
+	enum ipc_scmi_channel_status_type status = IPC_SCMI_CHANNEL_FREE;
+	volatile uint32_t *scmi_buf = NULL;
+
+
+	if (chan->type == IPC_SHM_SCMI) {
+		/* scmi channels: call Rx callback if channel status is BUSY*/
+		scmi_buf = (volatile uint32_t *)scmi_chan->scmi_virt_addr;
+		if (scmi_buf == NULL)
+			return 0;
+
+		status = (enum ipc_scmi_channel_status_type)(
+				scmi_buf[IPC_SCMI_CHANNEL_STATUS_IDX] & 0x1U);
+		if (status != IPC_SCMI_CHANNEL_BUSY)
+			return 0;
+
+		scmi_chan->rx_cb(scmi_chan->cb_arg, instance, chan->id,
+					(void *) scmi_chan->scmi_virt_addr);
+		return budget;
+
+	}
 
 	/* unmanaged channels: call Rx callback if channel Tx counter changed */
 	if (chan->type == IPC_SHM_UNMANAGED) {
@@ -330,8 +384,8 @@ static uint32_t ipc_channel_rx(const uint8_t instance, uint8_t chan_id,
 
 	/* managed channels: process incoming BDs in the limit of budget */
 	while (work < budget) {
-		err = ipc_queue_pop(&mchan->bd_queue, &bd);
-		if (err != 0) {
+		result = ipc_queue_pop(&mchan->bd_queue, &bd);
+		if (result != 0) {
 			return work;
 		}
 		pool = &mchan->pools[bd.pool_id];
@@ -359,9 +413,9 @@ static uint32_t ipc_channel_rx(const uint8_t instance, uint8_t chan_id,
  * This function return the state of instance.
  *
  * Return:
- * * %IPC_SHM_INSTANCE_FREE	- Instance is free
- * * %IPC_SHM_INSTANCE_USED	- Instance is initialized
- * * %IPC_SHM_INSTANCE_ERROR	- Invalid instance
+ * * %IPC_SHM_INSTANCE_FREE   - Instance is free
+ * * %IPC_SHM_INSTANCE_USED   - Instance is initialized
+ * * %IPC_SHM_INSTANCE_ERROR  - Invalid instance
  */
 static enum ipc_shm_instance_state ipc_instance_is_free(const uint8_t instance)
 {
@@ -681,6 +735,35 @@ static int8_t unmanaged_channel_init(const uint8_t instance, int chan_id,
 	return 0;
 }
 
+static int8_t scmi_channel_init(const uint8_t instance, uint8_t chan_id,
+		const struct ipc_shm_scmi_cfg *cfg)
+{
+	struct ipc_scmi_channel *chan
+		= &ipc_shm_priv_data[instance].channels[chan_id].ch.scmi;
+	uint32_t *scmi_buf = NULL;
+
+	if ((uintptr_t)NULL == cfg->scmi_addr)
+		return -EINVAL;
+
+	/* save scmi channel parameters TBD mapping */
+	chan->scmi_phys_addr = cfg->scmi_addr;
+	chan->scmi_size = cfg->scmi_size;
+	chan->rx_cb = cfg->rx_cb;
+	chan->cb_arg = cfg->cb_arg;
+
+	chan->scmi_virt_addr = ipc_os_ioremap(chan->scmi_phys_addr,
+		chan->scmi_size);
+	if ((uintptr_t)NULL == chan->scmi_virt_addr)
+		return -EINVAL;
+
+	/* Set scmi status to free */
+	scmi_buf = (uint32_t *)chan->scmi_virt_addr;
+	scmi_buf[IPC_SCMI_CHANNEL_STATUS_IDX]
+		= IPC_SCMI_CHANNEL_FREE & 0x1U;
+
+	return 0;
+}
+
 /**
  * ipc_shm_init_channels() - initialize shared memory IPC channels
  * @instance:	instance id
@@ -716,6 +799,8 @@ static int ipc_shm_init_channels(const uint8_t instance, int chan_id,
 	} else if (cfg->type == IPC_SHM_UNMANAGED) {
 		err = unmanaged_channel_init(instance, chan_id, local_shm,
 				remote_shm, &cfg->ch.unmanaged);
+	} else if (cfg->type == IPC_SHM_SCMI) {
+		err = scmi_channel_init(instance, chan_id, &cfg->ch.scmi);
 	} else {
 		shm_err("Invalid channel type\n");
 		err = -EINVAL;
@@ -776,6 +861,7 @@ static void ipc_shm_free_channel(const uint8_t instance, uint8_t chan_id,
 {
 	struct ipc_unmanaged_channel *uchan = NULL;
 	struct ipc_managed_channel *mchan = NULL;
+	struct ipc_scmi_channel *scmi = NULL;
 
 	if (chan_type == IPC_SHM_MANAGED) {
 		mchan = &ipc_shm_priv_data[instance].channels[chan_id].ch.mng;
@@ -792,7 +878,18 @@ static void ipc_shm_free_channel(const uint8_t instance, uint8_t chan_id,
 			uchan->local_mem->remote_tx_count = 0;
 			uchan->local_mem = NULL;
 		}
+	} else if (chan_type == IPC_SHM_SCMI) {
+		scmi = &ipc_shm_priv_data[instance].channels[chan_id].ch.scmi;
+		if (scmi->scmi_virt_addr != (uintptr_t)NULL) {
+			ipc_os_iounmap(scmi->scmi_phys_addr,
+						scmi->scmi_virt_addr,
+						scmi->scmi_size);
+			scmi->scmi_phys_addr = (uintptr_t)NULL;
+			scmi->scmi_size = 0;
+		}
 	} else {
+		/* Not any kind of channel above */
+		return;
 	}
 }
 
@@ -805,10 +902,11 @@ static uint32_t get_chan_memmap_size(const uint8_t instance, int chan_id)
 	int pool_id;
 
 	/* unmanaged channels: control structure size + channel memory size */
-	if (chan->type == IPC_SHM_UNMANAGED) {
+	if (chan->type == IPC_SHM_UNMANAGED)
 		return (uint32_t)(sizeof(struct ipc_channel_umem) +
 			chan->ch.umng.size);
-	}
+	else if (chan->type == IPC_SHM_SCMI)
+		return 0;
 
 	/* managed channels: size of BD queue + size of buf pools */
 	mchan = get_managed_chan(instance, chan_id);
@@ -821,7 +919,7 @@ static uint32_t get_chan_memmap_size(const uint8_t instance, int chan_id)
 }
 
 /* Initialize only one instance shared memory device */
-int8_t ipc_shm_init_instance(uint8_t instance, const struct ipc_shm_cfg *cfg)
+int8_t ipc_shm_init_instance(uint8_t instance)
 {
 	uintptr_t local_chan_shm;
 	uintptr_t remote_chan_shm;
@@ -830,6 +928,7 @@ int8_t ipc_shm_init_instance(uint8_t instance, const struct ipc_shm_cfg *cfg)
 	uint8_t chan_id;
 	uint32_t chan_offset = (uint32_t)sizeof(struct ipc_shm_global);
 	int err;
+	struct ipc_shm_cfg *cfg = ipc_shm_priv_data[instance].shm_cfg_addr;
 
 	if (ipc_instance_is_free(instance) == IPC_SHM_INSTANCE_USED)
 		return -EINVAL;
@@ -1003,6 +1102,22 @@ void *ipc_shm_acquire_buf(const uint8_t instance,
 	return (void *)buf_addr;
 }
 
+void *ipc_shm_acquire_scmi(const uint8_t instance, uint8_t chan_id)
+{
+	const struct ipc_scmi_channel *chan;
+
+	/* need to check if local instance is valid to be used */
+	/* no need to check if remote instance is ready */
+	if (ipc_instance_is_free(instance) != IPC_SHM_INSTANCE_USED)
+		return NULL;
+
+	chan = get_scmi_chan(instance, chan_id);
+	if (chan == NULL)
+		return NULL;
+
+	return (void *)chan->scmi_virt_addr;
+}
+
 int8_t ipc_shm_init(const struct ipc_shm_instances_cfg *cfg)
 {
 	uint8_t instance_id = 0;
@@ -1023,8 +1138,12 @@ int8_t ipc_shm_init(const struct ipc_shm_instances_cfg *cfg)
 		if (ipc_instance_is_free(instance_id) == IPC_SHM_INSTANCE_USED)
 			continue;
 
-		err = ipc_shm_init_instance(instance_id,
-						&cfg->shm_cfg[instance_id]);
+		ipc_shm_priv_data[instance_id].shm_cfg_addr
+			= &(cfg->shm_cfg[instance_id]);
+
+#ifndef IPC_SHM_NOT_ENABLED_AT_INIT
+		err = ipc_shm_init_instance(instance_id);
+#endif
 		if (err != 0)
 			return err;
 	}
@@ -1231,4 +1350,201 @@ int8_t ipc_shm_poll_channels(const uint8_t instance)
 		return -EAGAIN;
 
 	return ipc_os_poll_channels(instance);
+}
+
+static int8_t ipc_set_scmi_channel_status(const uint8_t instance,
+	const uint8_t chan_id, enum ipc_scmi_channel_status_type status)
+{
+	const struct ipc_scmi_channel *chan;
+	volatile uint32_t *scmi_buf = NULL;
+
+	chan = get_scmi_chan(instance, chan_id);
+	if (chan == NULL)
+		return -EINVAL;
+
+	scmi_buf = (volatile uint32_t *)chan->scmi_virt_addr;
+	if (scmi_buf == NULL)
+		return -EINVAL;
+
+	/* set the scmi channel status */
+	scmi_buf[IPC_SCMI_CHANNEL_STATUS_IDX] = (uint32_t)status & 0x1U;
+
+	return 0;
+}
+
+int8_t ipc_shm_free_scmi_channel(const uint8_t instance, const uint8_t chan_id)
+{
+	/* Free the scmi and return free status */
+	return ipc_set_scmi_channel_status(instance, chan_id,
+		IPC_SCMI_CHANNEL_FREE);
+}
+
+int8_t ipc_shm_scmi_tx(const uint8_t instance, uint8_t chan_id)
+{
+	/*
+	 * Ideally channel must be free by now unless OS timeout last
+	 * request and platform continued to process the same, wait
+	 * until it releases the shared memory, otherwise we may endup
+	 * overwriting its response with new message payload or vice-versa
+	 */
+	if (0 != ipc_set_scmi_channel_status(
+			instance, chan_id, IPC_SCMI_CHANNEL_BUSY))
+		return -EINVAL;
+
+	ipc_hw_irq_notify(instance);
+
+	return 0;
+}
+
+static enum ipc_scmi_channel_status_type ipc_get_scmi_channel_status(
+	const uint8_t instance, const uint8_t chan_id)
+{
+	enum ipc_scmi_channel_status_type status = IPC_SCMI_CHANNEL_BUSY;
+	const struct ipc_scmi_channel *chan = get_scmi_chan(instance, chan_id);
+	volatile uint32_t *scmi_buf = NULL;
+
+	scmi_buf = (volatile uint32_t *)chan->scmi_virt_addr;
+	if (scmi_buf != NULL) {
+		status = (enum ipc_scmi_channel_status_type)(
+			scmi_buf[IPC_SCMI_CHANNEL_STATUS_IDX] & 0x1);
+	}
+
+	return status;
+}
+
+int8_t ipc_shm_is_channel_not_empty(const uint8_t instance, uint8_t chan_id,
+	bool *not_empty)
+{
+	struct ipc_shm_channel *chan = get_channel(instance, chan_id);
+	struct ipc_managed_channel *mchan;
+	struct ipc_unmanaged_channel *uchan;
+	uint32_t remote_tx_count;
+	enum ipc_scmi_channel_status_type status = IPC_SCMI_CHANNEL_FREE;
+
+	if ((NULL == not_empty) || (NULL == chan)
+			|| (IPC_SHM_INSTANCE_USED
+				!= ipc_instance_is_free(instance)))
+		return -EINVAL;
+	/* Initialize *not_empty with false since it might be mistakenly passed
+	 * as true by the API caller. This would lead to it not properly being
+	 * set false by this API in case no if-else branch is valid
+	 */
+	*not_empty = false;
+	mchan = &chan->ch.mng;
+	uchan = &chan->ch.umng;
+
+
+	/* Get status of scmi channel */
+	if (IPC_SHM_SCMI == chan->type) {
+		status = ipc_get_scmi_channel_status(instance, chan_id);
+		if (status == IPC_SCMI_CHANNEL_BUSY)
+			*not_empty = true;
+		return 0;
+	}
+
+	if (IPC_SHM_UNMANAGED == chan->type) {
+		/* call unmanaged Rx callback if channel Tx counter changed */
+		if (0 != ipc_check_uchan_integrity(uchan))
+			return -EINVAL;
+
+		remote_tx_count = uchan->remote_mem->tx_count;
+
+		/* call Rx cb if remote Tx counter changed */
+		if (remote_tx_count != uchan->local_mem->remote_tx_count)
+			*not_empty = true;
+
+		return 0;
+	}
+
+	return ipc_queue_not_empty(&mchan->bd_queue, not_empty);
+}
+
+int8_t ipc_shm_get_message_from_channel(uint8_t instance, uint8_t chan_id,
+	void **msg_buffer)
+{
+	struct ipc_shm_channel *chan = get_channel(instance, chan_id);
+	struct ipc_managed_channel *mchan;
+	struct ipc_unmanaged_channel *uchan;
+	struct ipc_scmi_channel *scmi_chan;
+	struct ipc_shm_pool *pool;
+	uint32_t remote_tx_count;
+	enum ipc_scmi_channel_status_type status = IPC_SCMI_CHANNEL_FREE;
+	int8_t result = 0;
+	struct ipc_shm_bd bd;
+	uintptr_t buf_addr;
+	uint32_t buf_offset;
+
+	if ((chan == NULL) || (IPC_SHM_INSTANCE_USED
+			!= ipc_instance_is_free(instance)))
+		return -EINVAL;
+
+	mchan = &chan->ch.mng;
+	uchan = &chan->ch.umng;
+	scmi_chan = &chan->ch.scmi;
+
+	/* Get scmi virtual address */
+	if (chan->type == IPC_SHM_SCMI) {
+		status = ipc_get_scmi_channel_status(instance, chan_id);
+		if (IPC_SCMI_CHANNEL_BUSY != status)
+			return -EINVAL;
+
+		*msg_buffer = (void *)scmi_chan->scmi_virt_addr;
+
+		return 0;
+	}
+
+	if (chan->type == IPC_SHM_UNMANAGED) {
+		/* Update buffer and counter if channel Tx counter changed */
+		if (0 != ipc_check_uchan_integrity(uchan))
+			return -EINVAL;
+
+		remote_tx_count = uchan->remote_mem->tx_count;
+
+		/* Check if there are pending message */
+		if (remote_tx_count == uchan->local_mem->remote_tx_count)
+			return -EINVAL;
+
+		/* save new remote Tx counter and update the buffer*/
+		uchan->local_mem->remote_tx_count = remote_tx_count;
+		*msg_buffer = (void *)uchan->remote_mem->mem;
+
+		return 0;
+	}
+
+	/* managed channels: process incoming BDs */
+	result = ipc_queue_pop(&mchan->bd_queue, (uint8_t *) &bd);
+
+	if (result != 0)
+		return -EINVAL;
+
+	pool = &mchan->pools[bd.pool_id];
+	buf_offset = pool->buf_size * bd.buf_id;
+	buf_addr = pool->remote_pool_addr + buf_offset;
+
+	/* check if buf_addr is valid */
+	if ((buf_addr >= ipc_os_get_remote_shm(instance)) &&
+			((buf_addr + pool->buf_size)
+				<= (ipc_os_get_remote_shm(instance) +
+				ipc_shm_priv_data[instance].shm_size))) {
+		*msg_buffer = (void *)buf_addr;
+		return 0;
+	}
+
+	return -EINVAL;
+}
+
+int8_t ipc_shm_get_channel_type(const uint8_t instance, uint8_t chan_id,
+	enum ipc_shm_channel_type *chan_type)
+{
+	const struct ipc_shm_channel *chan = get_channel(instance, chan_id);
+
+	if ((chan_type == NULL) || (chan == NULL)
+			|| (IPC_SHM_INSTANCE_USED
+				!= ipc_instance_is_free(instance)))
+		return -EINVAL;
+
+	/* read the channel type for the dedicated channel */
+	*chan_type = chan->type;
+
+	return 0;
 }

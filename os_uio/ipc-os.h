@@ -61,6 +61,12 @@ uintptr_t ipc_os_get_local_shm(const uint8_t instance);
  */
 uintptr_t ipc_os_get_remote_shm(const uint8_t instance);
 
+/* ipc_os_ioremap() - I/O memory map for a physical address */
+uintptr_t ipc_os_ioremap(uintptr_t phys_addr, uint32_t size);
+
+/* ipc_os_ioremap() - I/O memory unmap for a physical address */
+void ipc_os_iounmap(uintptr_t phys_addr, uintptr_t vir_addr, uint32_t size);
+
 /**
  * ipc_os_poll_channels() - invoke rx callback configured at initialization
  *

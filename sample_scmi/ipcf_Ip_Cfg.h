@@ -1,0 +1,23 @@
+/* SPDX-License-Identifier: BSD-3-Clause */
+/*
+ * Copyright 2025 NXP
+ */
+
+#ifndef IPCF_IP_CFG_H
+#define IPCF_IP_CFG_H
+
+#include <linux/module.h>
+#include "ipc-shm.h"
+
+/* callbacks for channels  - must be implemented by application*/
+/* arguments for callbacks - must be implemented by application*/
+
+void scmi_chan_rx_cb(void *arg, const uint8_t instance, uint8_t chan_id,
+		void *buf);
+
+extern const void *rx_cb_arg;
+
+/* ipc shm configuration for all instances */
+extern struct ipc_shm_instances_cfg ipcf_shm_instances_cfg;
+
+#endif /* IPCF_IP_CFG_H */
