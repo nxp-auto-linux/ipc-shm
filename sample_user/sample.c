@@ -30,7 +30,6 @@
 #define IPC_SHM_SIZE 0x100000
 
 /* convenience wrappers for printing messages */
-#define pr_fmt(fmt) "ipc-shm-us-app: %s(): "fmt
 #define sample_err(fmt, ...) printf(pr_fmt(fmt), __func__, ##__VA_ARGS__)
 #define sample_info(fmt, ...) printf("ipc-shm-us-app: "fmt, ##__VA_ARGS__)
 #ifdef DEBUG
@@ -61,7 +60,6 @@ static int msg_sizes_count = 1;
  * @last_tx_msg:	last transmitted message
  * @last_rx_msg:	last received message
  * @local_virt_shm:	local shared memory virtual address
- * @mem_fd:		MEM device file descriptor
  * @local_shm_offset:	local ShM offset in mapped page
  * @local_shm_map:	local ShM mapped page address
  * @sema:		binary semaphore for sync send_msg func with shm_rx_cb
@@ -75,7 +73,6 @@ static struct ipc_sample_app {
 	char last_tx_msg[L_BUF_LEN];
 	char last_rx_msg[L_BUF_LEN];
 	int *local_virt_shm;
-	int mem_fd;
 	size_t local_shm_offset;
 	int *local_shm_map;
 	sem_t sema;
@@ -365,11 +362,6 @@ int main(int argc, char *argv[])
 {
 	int err = 0;
 	struct sigaction sig_action;
-	size_t page_size = sysconf(_SC_PAGE_SIZE);
-	off_t page_phys_addr;
-	uintptr_t local_shm_addr;
-	uint32_t shm_size;
-	char tmp[IPC_SHM_SIZE] = {0};
 
 	app.instance = 0;
 	sem_init(&app.sema, 0, 0);
@@ -397,23 +389,6 @@ int main(int argc, char *argv[])
 	}
 
 	ipc_shm_free();
-	// printf("%s %d\n", __func__, __LINE__);
-	/* Clear memory to re-init driver */
-	local_shm_addr = ipcf_shm_instances_cfg.shm_cfg[0].local_shm_addr;
-	shm_size = ipcf_shm_instances_cfg.shm_cfg[0].shm_size;
-	page_phys_addr = (local_shm_addr / page_size) * page_size;
-	app.local_shm_offset = local_shm_addr - page_phys_addr;
-	app.mem_fd = open(IPC_SHM_DEV_MEM_NAME, O_RDWR);
-
-	app.local_shm_map = mmap(NULL, app.local_shm_offset + shm_size,
-				  PROT_READ | PROT_WRITE, MAP_SHARED,
-				  app.mem_fd, page_phys_addr);
-
-	app.local_virt_shm = app.local_shm_map + app.local_shm_offset;
-
-	memcpy(app.local_virt_shm, tmp, shm_size);
-	munmap(app.local_shm_map, app.local_shm_offset + shm_size);
-	close(app.mem_fd);
 
 	sem_destroy(&app.sema);
 

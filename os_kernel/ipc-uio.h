@@ -1,9 +1,15 @@
 /* SPDX-License-Identifier: BSD-3-Clause */
 /*
- * Copyright 2019,2023-2024 NXP
+ * Copyright 2019,2023-2025 NXP
  */
 #ifndef IPC_UIO_H
 #define IPC_UIO_H
+
+#ifdef __KERNEL__
+#include <linux/ioctl.h>
+#else
+#include <sys/ioctl.h>
+#endif
 
 /* UIO command */
 /* disable Rx inter-core interrupt */
@@ -15,18 +21,23 @@
 /* trigger Tx inter-core interrupt */
 #define IPC_UIO_TRIGGER_CMD		(0x0003)
 
-#define IPC_UIO_INIT			(0xF1)
-#define IPC_UIO_FREE			(0xF2)
+#ifndef IPC_IOCTL_MAGIC
+#define IPC_IOCTL_MAGIC       (0xA6)
+#endif /* IPC_IOCTL_MAGIC */
+
+#define IPC_IOC_INIT        _IOW(IPC_IOCTL_MAGIC, 1, struct ipc_uio_cdev_data)
+#define IPC_IOC_FREE        _IOW(IPC_IOCTL_MAGIC, 2, struct ipc_uio_cdev_data)
+#define IPC_IOC_MMAP_LOCAL  _IOW(IPC_IOCTL_MAGIC, 3, struct ipc_uio_cdev_data)
+#define IPC_IOC_MMAP_REMOTE _IOW(IPC_IOCTL_MAGIC, 4, struct ipc_uio_cdev_data)
+#define IPC_IOC_MMAP_SCMI   _IOW(IPC_IOCTL_MAGIC, 5, struct ipc_uio_cdev_data)
 
 /**
  * struct ipc_uio_cdev_data - store data about init/free
  *                            that write to kernel space
- * @cmd:      command send to char driver to initialize or free instance
  * @instance: target instance
  * @cfg:      instance's configuration
  */
 struct ipc_uio_cdev_data {
-	uint8_t cmd;
 	uint8_t instance;
 	struct ipc_shm_cfg cfg;
 };

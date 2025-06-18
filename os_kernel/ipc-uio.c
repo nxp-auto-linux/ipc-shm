@@ -8,6 +8,7 @@
 #include <linux/uio_driver.h>
 #include <linux/cdev.h>
 #include <linux/version.h>
+#include <linux/mm.h>
 
 #include "ipc-shm.h"
 #include "ipc-os.h"
@@ -49,8 +50,12 @@ struct ipc_uio_priv_type {
 
 /**
  * struct ipc_pdev_priv_type - IPCF SHM platform device data
+ * @dev_created:     checking if device is created
+ * @mru_node_name:   store name of the MRU node in device tree
  * @major:           chrdev major number which is allocated dynamically
  * @irq_num_init:    interrupt index for each instance
+ * @cmd:             most recent ioctl command
+ * @phys_addr:       most recent physical address from ioctl
  * @ipc_pdev:        Linux platform device capabilities
  * @pdev_reg:        Platform device register
  * @cdev_class:      class use to create device file in /dev
@@ -64,6 +69,8 @@ struct ipc_pdev_priv_type {
 #endif
 	dev_t major;
 	int irq_num_init[IPC_SHM_MAX_INSTANCES];
+	uint32_t cmd;
+	uintptr_t phys_addr;
 	struct platform_device *ipc_pdev;
 #if !defined(PLATFORM_FLAVOR_s32n7)
 	void __iomem *pdev_reg;
@@ -303,39 +310,80 @@ static int ipc_cdev_release(struct inode *inode, struct file *filp)
 }
 
 /**
- * ipc_cdev_write() - write operation will respond to a write request
+ * ipc_cdev_ioctl() - ioctl operation will respond to a ioctl request
  *                    from user-space
  */
-static ssize_t ipc_cdev_write(struct file *file, const char __user *user_buffer,
-					size_t size, loff_t *offset)
+static long ipc_cdev_ioctl(struct file *file, unsigned int cmd,
+	unsigned long arg)
 {
-	int err;
 	struct ipc_uio_cdev_data data;
 
-	/* read data from user buffer to my_data->buffer */
-	if (copy_from_user(&data, user_buffer,
-			sizeof(struct ipc_uio_cdev_data)))
-		return -EFAULT;
+	ipc_pdev_priv.cmd = cmd;
 
-	if (data.instance >= IPC_SHM_MAX_INSTANCES)
+	switch (ipc_pdev_priv.cmd) {
+	case IPC_IOC_INIT:
+		if (copy_from_user(&data, (void __user *)arg, sizeof(data)))
+			return -EFAULT;
+		if (data.instance >= IPC_SHM_MAX_INSTANCES)
+			return -EINVAL;
+		ipc_pdev_priv.uio_id[data.instance].data = data;
+		return ipc_uio_init(&ipc_pdev_priv.uio_id[data.instance].data);
+	case IPC_IOC_FREE:
+		if (copy_from_user(&data, (void __user *)arg, sizeof(data)))
+			return -EFAULT;
+		if (data.instance >= IPC_SHM_MAX_INSTANCES)
+			return -EINVAL;
+		ipc_pdev_priv.uio_id[data.instance].data = data;
+		return ipc_uio_free(&ipc_pdev_priv.uio_id[data.instance].data);
+	case IPC_IOC_MMAP_LOCAL:
+	case IPC_IOC_MMAP_REMOTE:
+	case IPC_IOC_MMAP_SCMI:
+		/* Prepare the physical address for mmap */
+		ipc_pdev_priv.phys_addr = (uintptr_t)arg;
+		return 0;
+	default:
 		return -EINVAL;
-
-	ipc_pdev_priv.uio_id[data.instance].data = data;
-	if (data.cmd == IPC_UIO_INIT) {
-		err = ipc_uio_init(&ipc_pdev_priv.uio_id[data.instance].data);
-		if (err) {
-			shm_err("Failed to initialized UIO device\n");
-			return err;
-		}
-	} else if (data.cmd == IPC_UIO_FREE) {
-		err = ipc_uio_free(&ipc_pdev_priv.uio_id[data.instance].data);
-		if (err) {
-			shm_err("Failed to free UIO device\n");
-			return err;
-		}
 	}
 
-	return sizeof(struct ipc_uio_cdev_data);
+	return 0;
+}
+
+/**
+ * ipc_cdev_mmap() -  mmap operation will respond to a mmap request
+ *                    from user-space
+ */
+static int ipc_cdev_mmap(struct file *file, struct vm_area_struct *vma)
+{
+	unsigned long size = vma->vm_end - vma->vm_start;
+	unsigned long start = vma->vm_start;
+	unsigned long offset = 0;
+	unsigned long phys_addr = ipc_pdev_priv.phys_addr;
+	unsigned long pfn = 0;
+
+	if ((IPC_IOC_MMAP_LOCAL != ipc_pdev_priv.cmd)
+			&& (IPC_IOC_MMAP_REMOTE != ipc_pdev_priv.cmd)
+			&& (IPC_IOC_MMAP_SCMI != ipc_pdev_priv.cmd)) {
+		shm_err("Invalid command for mmap operation");
+		return -EINVAL;
+	}
+
+	/* Disable cache */
+	vma->vm_page_prot = pgprot_noncached(vma->vm_page_prot);
+	/* Map each page individually */
+	while (offset < size) {
+		pfn = (phys_addr + offset) >> PAGE_SHIFT;
+		if (remap_pfn_range(vma, start + offset, pfn, PAGE_SIZE,
+				vma->vm_page_prot)) {
+			shm_err("Failed to map page at offset 0x%lx\n", offset);
+			return -EINVAL;
+		}
+		offset += PAGE_SIZE;
+	}
+
+
+	shm_dbg("Mapped physical memory %p to user space\n",
+		(void *)ipc_pdev_priv.phys_addr);
+	return 0;
 }
 
 /* File operations */
@@ -343,7 +391,8 @@ static const struct file_operations ipc_cdev_fops = {
 	.owner = THIS_MODULE,
 	.open = ipc_cdev_open,
 	.release = ipc_cdev_release,
-	.write = ipc_cdev_write,
+	.unlocked_ioctl = ipc_cdev_ioctl,
+	.mmap = ipc_cdev_mmap
 };
 
 /* Platform driver probe methods */

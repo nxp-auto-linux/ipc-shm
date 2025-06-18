@@ -205,7 +205,7 @@ int8_t ipc_shm_poll_channels(const uint8_t instance);
  * @instance:        instance id
  * @chan_id:         channel index
  *
- * This function releases the scmi channel. The caller should release the 
+ * This function releases the scmi channel. The caller should release the
  * channel before populating the information in the shared memory area or can
  * be used in case of a timeout.
  * Function is thread-safe for different instances but not for same instance.
@@ -217,10 +217,11 @@ int8_t ipc_shm_poll_channels(const uint8_t instance);
 int8_t ipc_shm_free_scmi_channel(const uint8_t instance, const uint8_t chan_id);
 
 /**
- * ipc_shm_is_channel_not_empty() - check if a channel has not processed messages
+ * ipc_shm_is_channel_not_empty() - check if a channel has not processed
+ *                                  messages
  * @instance:       instance id
  * @chan_id:        channel index
- * @not_empty:      [OUT] pointer that indicates if the channel is empty or not empty
+ * @not_empty:      [OUT] pointer that indicates if the channel is empty or not
  *                  TRUE   if channel has non processed messages
  *                  FALSE  if the channel has no messages
  *
@@ -232,11 +233,14 @@ int8_t ipc_shm_is_channel_not_empty(const uint8_t instance, uint8_t chan_id,
 			bool *not_empty);
 
 /**
- * ipc_shm_get_message_from_channel() - retrieve a message from a channel to msg_buffer
+ * ipc_shm_get_message_from_channel() - retrieve a message from a channel to
+ *                                      msg_buffer
+ *
  * If the channel is managed, get the message from the first queue
  * If the channel is unmanaged, read from the shm directly
  * If the channel is scmi, get the message from the associated queue
  * The messages wil be mark as release/free, because will be copy in msg_buffer.
+ *
  * @instance:   [IN] instance id
  * @chan_id:    [IN] channel id
  * @msg_buffer: [OUT] pointer to output message buffer

@@ -42,7 +42,7 @@ IPC_SHM_DEV_PATH ?= $(PWD)/..
 ccflags-y +=
 
 # additional module symbols dependency
-EXTRA_SYMBOLS=${IPC_SHM_DEV_PATH}/Module.symvers
+EXTRA_SYMBOLS=$(IPC_SHM_DEV_PATH)/Module.symvers
 
 # The following parameters must be passed from the caller,
 # e.g. build system (Yocto), command line:

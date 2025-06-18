@@ -9,13 +9,13 @@
 #include <pthread.h>
 #include <stdlib.h>
 #include <dirent.h>
+#include <sys/ioctl.h>
 
 #include "ipc-os.h"
 #include "ipc-hw.h"
 #include "ipc-shm.h"
 #include "ipc-uio.h"
 
-#define IPC_UIO_DEV_MEM_NAME    "/dev/mem"
 #define IPC_UIO_CDEV_NAME       "/dev/ipc-cdev-uio"
 #define IPC_SHM_UIO_BUF_LEN     255
 #define IPC_SHM_UIO_DIR         "/sys/class/uio"
@@ -30,11 +30,6 @@
 	syscall(__NR_finit_module, fd, param_values, flags)
 #define delete_module(name, flags) \
 	syscall(__NR_delete_module, name, flags)
-
-enum ipc_status {
-	IPC_STATUS_CLEAR = 0,
-	IPC_STATUS_SET = 1,
-};
 
 /**
  * struct ipc_os_priv_instance - OS specific private data each instance
@@ -70,15 +65,15 @@ struct ipc_os_priv_instance {
 
 /**
  * struct ipc_os_priv_type - OS specific private data
- * @ipc_files_opened:    indicate whether device files are opened
- * @ipc_cdev_fd:         kernel character device file descriptor
- * @dev_mem_fd:	         MEM device file descriptor
+ * @is_files_opened:    indicate whether device files are opened
+ * @ipc_cdev_fd:        kernel character device file descriptor
+ * @ipc_uio_module_fd:  ipc-shm-uio device file descriptor
  * @id:                 private data per instance
  */
 static struct ipc_os_priv_type {
-	uint8_t ipc_files_opened;
+	bool is_files_opened;
 	int ipc_cdev_fd;
-	int dev_mem_fd;
+	int ipc_uio_module_fd;
 	struct ipc_os_priv_instance id[IPC_SHM_MAX_INSTANCES];
 } ipc_os_priv;
 
@@ -178,6 +173,38 @@ static int get_uio_dev_name(char *dev_name, const uint8_t instance)
 	return count >= 0 ? 0 : -ENONET;
 }
 
+/* Open file and initialize ipc-shm-uio module */
+static int ipc_os_module_init(void)
+{
+	if (ipc_os_priv.is_files_opened == true) {
+		return 0;
+	}
+	/* open ipc-shm-uio kernel module */
+	ipc_os_priv.ipc_uio_module_fd = open(IPC_UIO_MODULE_PATH, O_RDONLY);
+	if (ipc_os_priv.ipc_uio_module_fd == -1) {
+		shm_err("Can't open %s module\n", IPC_UIO_MODULE_PATH);
+		return -ENODEV;
+	}
+
+	if (finit_module(ipc_os_priv.ipc_uio_module_fd, "", 0) != 0) {
+		shm_err("Can't load %s module\n", IPC_UIO_MODULE_PATH);
+		close(ipc_os_priv.ipc_uio_module_fd);
+		return -ENODEV;
+	}
+
+	/* open ipc-cdev-uio" device for initialization support */
+	ipc_os_priv.ipc_cdev_fd = open(IPC_UIO_CDEV_NAME, O_RDWR);
+	if (ipc_os_priv.ipc_cdev_fd == -1) {
+		shm_err("Can't open %s device\n", IPC_UIO_CDEV_NAME);
+		close(ipc_os_priv.ipc_uio_module_fd);
+		return -ENODEV;
+	}
+
+	ipc_os_priv.is_files_opened = true;
+
+	return 0;
+}
+
 /* Rx sotfirq thread */
 static void *ipc_shm_softirq(void *arg)
 {
@@ -204,15 +231,52 @@ static void *ipc_shm_softirq(void *arg)
 	return 0;
 }
 
+static int ipc_os_softirq_init(const uint8_t instance)
+{
+	int err;
+	struct sched_param irq_thread_param;
+	pthread_attr_t irq_thread_attr;
+
+	/* start Rx softirq thread with the highest priority for its policy */
+	err = pthread_attr_init(&irq_thread_attr);
+	if (err != 0) {
+		shm_err("Can't initialize Rx softirq attributes\n");
+		return err;
+	}
+
+	err = pthread_attr_setschedpolicy(&irq_thread_attr, RX_SOFTIRQ_POLICY);
+	if (err != 0) {
+		shm_err("Can't set Rx softirq policy\n");
+		return err;
+	}
+
+	irq_thread_param.sched_priority = sched_get_priority_max(
+		RX_SOFTIRQ_POLICY);
+	err = pthread_attr_setschedparam(&irq_thread_attr, &irq_thread_param);
+	if (err != 0) {
+		shm_err("Can't set Rx softirq scheduler parameters\n");
+		return err;
+	}
+
+	err = pthread_create(&ipc_os_priv.id[instance].irq_thread_id,
+		&irq_thread_attr, ipc_shm_softirq, &ipc_os_priv.id[instance]);
+	if (err != 0) {
+		shm_err("Can't start Rx softirq thread\n");
+		return err;
+	}
+	shm_dbg("Created Rx softirq thread with priority=%d\n",
+		irq_thread_param.sched_priority);
+	shm_dbg("done\n");
+
+	return err;
+}
+
 int8_t ipc_os_init(const uint8_t instance, const struct ipc_shm_cfg *cfg,
 		uint32_t (*rx_cb)(const uint8_t, int))
 {
 	size_t page_size = sysconf(_SC_PAGE_SIZE);
 	off_t page_phys_addr;
 	int err, i;
-	int ipc_uio_module_fd;
-	struct sched_param irq_thread_param;
-	pthread_attr_t irq_thread_attr;
 	struct ipc_uio_cdev_data data_cfg;
 	char uio_dev_name[IPC_SHM_UIO_BUF_LEN];
 	char dev_uio[IPC_SHM_UIO_BUF_LEN*2];
@@ -221,43 +285,28 @@ int8_t ipc_os_init(const uint8_t instance, const struct ipc_shm_cfg *cfg,
 	if (!rx_cb)
 		return -EINVAL;
 
+	data_cfg.instance = instance;
+	data_cfg.cfg = *cfg;
+
 	/* save params */
 	ipc_os_priv.id[instance].shm_size = cfg->shm_size;
 	ipc_os_priv.id[instance].rx_cb = rx_cb;
 	ipc_os_priv.id[instance].instance = instance;
 
-	if (ipc_os_priv.ipc_files_opened == (uint8_t)IPC_STATUS_CLEAR) {
-		/* open ipc-shm-uio kernel module */
-		ipc_uio_module_fd = open(IPC_UIO_MODULE_PATH, O_RDONLY);
-		if (ipc_uio_module_fd == -1) {
-			shm_err("Can't open %s module\n", IPC_UIO_MODULE_PATH);
-			return -ENODEV;
-		}
+	/* Open file and kernel module */
+	err = ipc_os_module_init();
+	if (0 != err)
+		return err;
 
-		if (finit_module(ipc_uio_module_fd, "", 0) != 0) {
-			shm_err("Can't load %s module\n", IPC_UIO_MODULE_PATH);
-			err = -ENODEV;
-			goto err_close_ipc_shm_uio;
-		}
-
-		/* open ipc-cdev-uio" device for initialization support */
-		ipc_os_priv.ipc_cdev_fd = open(IPC_UIO_CDEV_NAME, O_RDWR);
-		if (ipc_os_priv.ipc_cdev_fd == -1) {
-			shm_err("Can't open %s device\n", IPC_UIO_CDEV_NAME);
-			err = -ENODEV;
-			goto err_close_ipc_shm_uio;
-		}
-
-		/* open MEM device for interrupt support */
-		ipc_os_priv.dev_mem_fd = open(IPC_UIO_DEV_MEM_NAME, O_RDWR);
-		if (ipc_os_priv.dev_mem_fd == -1) {
-			shm_err("Can't open %s device\n", IPC_UIO_DEV_MEM_NAME);
-			err = -ENODEV;
-			goto err_close_ipc_cdev_uio;
-		}
-
-		ipc_os_priv.ipc_files_opened = (uint8_t)IPC_STATUS_SET;
+	/* Write data to prepare mmap local */
+	err = ioctl(ipc_os_priv.ipc_cdev_fd, IPC_IOC_MMAP_LOCAL,
+			cfg->local_shm_addr);
+	if (err < 0) {
+		shm_err("Can't write data to mmap local %d\n", err);
+		err = -EINVAL;
+		goto err_close_ipc_dev;
 	}
+
 	/* map local physical shared memory */
 	/* truncate address to a multiple of page size, or mmap will fail */
 	page_phys_addr = (cfg->local_shm_addr / page_size) * page_size;
@@ -269,16 +318,25 @@ int8_t ipc_os_init(const uint8_t instance, const struct ipc_shm_cfg *cfg,
 			ipc_os_priv.id[instance].local_shm_offset
 				+ cfg->shm_size,
 			PROT_READ | PROT_WRITE, MAP_SHARED,
-			ipc_os_priv.dev_mem_fd, page_phys_addr);
+			ipc_os_priv.ipc_cdev_fd, page_phys_addr);
 	if (ipc_os_priv.id[instance].local_shm_map == MAP_FAILED) {
 		shm_err("Can't map memory: %lx\n", cfg->local_shm_addr);
 		err = -ENOMEM;
-		goto err_close_mem_dev;
+		goto err_close_ipc_dev;
 	}
 
 	ipc_os_priv.id[instance].local_virt_shm
 		= ipc_os_priv.id[instance].local_shm_map
 			+ ipc_os_priv.id[instance].local_shm_offset;
+
+	/* Write data to prepare mmap remote */
+	err = ioctl(ipc_os_priv.ipc_cdev_fd, IPC_IOC_MMAP_REMOTE,
+			cfg->remote_shm_addr);
+	if (err < 0) {
+		shm_err("Can't write data to mmap remote %d\n", err);
+		err = -EINVAL;
+		goto err_unmap_local_shm;
+	}
 
 	/* map remote physical shared memory */
 	page_phys_addr = (cfg->remote_shm_addr / page_size) * page_size;
@@ -290,7 +348,7 @@ int8_t ipc_os_init(const uint8_t instance, const struct ipc_shm_cfg *cfg,
 			ipc_os_priv.id[instance].remote_shm_offset
 				+ cfg->shm_size,
 			PROT_READ | PROT_WRITE, MAP_SHARED,
-			ipc_os_priv.dev_mem_fd, page_phys_addr);
+			ipc_os_priv.ipc_cdev_fd, page_phys_addr);
 	if (ipc_os_priv.id[instance].remote_shm_map == MAP_FAILED) {
 		shm_err("Can't map memory: %lx\n", cfg->remote_shm_addr);
 		err = -ENOMEM;
@@ -302,13 +360,9 @@ int8_t ipc_os_init(const uint8_t instance, const struct ipc_shm_cfg *cfg,
 			+ ipc_os_priv.id[instance].remote_shm_offset;
 
 	ipc_os_priv.id[instance].irq_num = cfg->inter_core_rx_irq;
-	/* Write data to char dev */
-	data_cfg.instance = instance;
-	data_cfg.cfg = *cfg;
-	data_cfg.cmd = IPC_UIO_INIT;
 
-	err = write(ipc_os_priv.ipc_cdev_fd, &data_cfg,
-		sizeof(struct ipc_uio_cdev_data));
+	/* Write data to init uio dev */
+	err = ioctl(ipc_os_priv.ipc_cdev_fd, IPC_IOC_INIT, data_cfg);
 	if (err < 0) {
 		shm_err("Can't write data to kernel space %d\n", err);
 		err = -EINVAL;
@@ -337,36 +391,11 @@ int8_t ipc_os_init(const uint8_t instance, const struct ipc_shm_cfg *cfg,
 		goto err_unmap_remote_shm;
 	}
 
-	/* start Rx softirq thread with the highest priority for its policy */
-	err = pthread_attr_init(&irq_thread_attr);
+	err = ipc_os_softirq_init(instance);
 	if (err != 0) {
 		goto err_close_uio_dev;
-		shm_err("Can't initialize Rx softirq attributes\n");
 	}
 
-	err = pthread_attr_setschedpolicy(&irq_thread_attr, RX_SOFTIRQ_POLICY);
-	if (err != 0) {
-		goto err_close_uio_dev;
-		shm_err("Can't set Rx softirq policy\n");
-	}
-
-	irq_thread_param.sched_priority = sched_get_priority_max(
-		RX_SOFTIRQ_POLICY);
-	err = pthread_attr_setschedparam(&irq_thread_attr, &irq_thread_param);
-	if (err != 0) {
-		goto err_close_uio_dev;
-		shm_err("Can't set Rx softirq scheduler parameters\n");
-	}
-
-	err = pthread_create(&ipc_os_priv.id[instance].irq_thread_id,
-		&irq_thread_attr, ipc_shm_softirq, &ipc_os_priv.id[instance]);
-	if (err == -1) {
-		shm_err("Can't start Rx softirq thread\n");
-		goto err_close_uio_dev;
-	}
-	shm_dbg("Created Rx softirq thread with priority=%d\n",
-		irq_thread_param.sched_priority);
-	shm_dbg("done\n");
 	ipc_os_priv.id[instance].state = IPC_SHM_INSTANCE_ENABLED;
 
 	return 0;
@@ -381,26 +410,17 @@ err_unmap_local_shm:
 	munmap(ipc_os_priv.id[instance].local_shm_map,
 		ipc_os_priv.id[instance].local_shm_offset
 			+ ipc_os_priv.id[instance].shm_size);
-err_close_mem_dev:
-	for (i = 0; i < IPC_SHM_MAX_INSTANCES; i++) {
-		if (ipc_os_priv.id[i].state == IPC_SHM_INSTANCE_ENABLED)
-			goto err_close_ipc_shm_uio;
-	}
-	close(ipc_os_priv.dev_mem_fd);
-err_close_ipc_cdev_uio:
-	for (i = 0; i < IPC_SHM_MAX_INSTANCES; i++) {
-		if (ipc_os_priv.id[i].state == IPC_SHM_INSTANCE_ENABLED)
-			goto err_close_ipc_shm_uio;
-	}
-	close(ipc_os_priv.ipc_cdev_fd);
-err_close_ipc_shm_uio:
+err_close_ipc_dev:
 	ipc_os_priv.id[instance].state = IPC_SHM_INSTANCE_DISABLED;
 	for (i = 0; i < IPC_SHM_MAX_INSTANCES; i++) {
 		if (ipc_os_priv.id[i].state == IPC_SHM_INSTANCE_ENABLED)
 			return err;
 	}
-	ipc_os_priv.ipc_files_opened = IPC_STATUS_CLEAR;
-	close(ipc_uio_module_fd);
+	ipc_os_priv.is_files_opened = false;
+	if (ipc_os_priv.ipc_cdev_fd >= 0)
+		close(ipc_os_priv.ipc_cdev_fd);
+	if (ipc_os_priv.ipc_uio_module_fd >= 0)
+		close(ipc_os_priv.ipc_uio_module_fd);
 
 	return err;
 }
@@ -425,10 +445,8 @@ void ipc_os_free(const uint8_t instance)
 
 		/* unregister uio device */
 		data_cfg.instance = instance;
-		data_cfg.cmd = IPC_UIO_FREE;
 
-		err = write(ipc_os_priv.ipc_cdev_fd, &data_cfg,
-			sizeof(struct ipc_uio_cdev_data));
+		err = ioctl(ipc_os_priv.ipc_cdev_fd, IPC_IOC_FREE, data_cfg);
 		if (err < 0)
 			shm_err("Can't unregister uio device %d\n", err);
 
@@ -451,8 +469,7 @@ void ipc_os_free(const uint8_t instance)
 			return;
 	}
 	close(ipc_os_priv.ipc_cdev_fd);
-	close(ipc_os_priv.dev_mem_fd);
-	ipc_os_priv.ipc_files_opened = IPC_STATUS_CLEAR;
+	ipc_os_priv.is_files_opened = false;
 
 	/* unload ipc-uio kernel module */
 	if (delete_module(IPC_UIO_MODULE_NAME, O_NONBLOCK) != 0) {
@@ -478,15 +495,22 @@ uintptr_t ipc_os_ioremap(uintptr_t phys_addr, uint32_t size)
 	size_t addr_offset;
 	size_t page_size = sysconf(_SC_PAGE_SIZE);
 	off_t page_phys_addr;
+	int err = 0;
 
-	if (-1 == ipc_os_priv.dev_mem_fd)
+	if (-1 == ipc_os_priv.ipc_cdev_fd)
 		return (uintptr_t)NULL;
+
+	err = ioctl(ipc_os_priv.ipc_cdev_fd, IPC_IOC_MMAP_SCMI, phys_addr);
+	if (err < 0) {
+		shm_err("Can't write data to kernel space %d\n", err);
+		return (uintptr_t)NULL;
+	}
 
 	page_phys_addr = (phys_addr / page_size) * page_size;
 	addr_offset = phys_addr - page_phys_addr;
 	virt_memmap = mmap(NULL, addr_offset + size,
 		PROT_READ | PROT_WRITE, MAP_SHARED,
-		ipc_os_priv.dev_mem_fd, page_phys_addr);
+		ipc_os_priv.ipc_cdev_fd, page_phys_addr);
 	if (MAP_FAILED == virt_memmap) {
 		shm_err("Can't map memory: %lx\n", phys_addr);
 		return (uintptr_t)NULL;

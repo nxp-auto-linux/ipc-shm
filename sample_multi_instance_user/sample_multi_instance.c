@@ -30,7 +30,6 @@
 #define IPC_SHM_SIZE 0x10000
 
 /* convenience wrappers for printing messages */
-#define pr_fmt(fmt) "ipc-shm-us-app: %s(): "fmt
 #define sample_err(fmt, ...) printf(pr_fmt(fmt), __func__, ##__VA_ARGS__)
 #define sample_info(fmt, ...) printf("ipc-shm-us-app: "fmt, ##__VA_ARGS__)
 #ifdef DEBUG
@@ -72,7 +71,6 @@ struct instance_id {
  * struct ipc_sample_app - sample app private data
  * @instance:		instance id
  * @num_msgs:		number of messages to be sent to remote app
- * @mem_fd:		MEM device file descriptor
  * @local_virt_shm:	local shared memory virtual address
  * @local_shm_offset:	local ShM offset in mapped page
  * @local_shm_map:	local ShM mapped page address
@@ -83,7 +81,6 @@ struct instance_id {
 static struct ipc_sample_app {
 	uint8_t instance;
 	int num_msgs;
-	int mem_fd;
 	int *local_virt_shm;
 	size_t local_shm_offset;
 	int *local_shm_map;
@@ -461,16 +458,9 @@ void int_handler(int signum)
 int main(int argc, char *argv[])
 {
 	int err = 0;
-	int i = 0;
 	struct sigaction sig_action;
-	size_t page_size = sysconf(_SC_PAGE_SIZE);
-	off_t page_phys_addr;
-	uintptr_t local_shm_addr;
-	uint32_t shm_size;
-	char tmp[IPC_SHM_SIZE] = {0};
 
-	for (i = 0; i < ipcf_shm_instances_cfg.num_instances; i++)
-		sem_init(&app.sema, 0, 0);
+	sem_init(&app.sema, 0, 0);
 
 	/* init ipc shm driver */
 	err = init_ipc_shm();
@@ -513,26 +503,7 @@ int main(int argc, char *argv[])
 
 	ipc_shm_free();
 
-	/* Clear memory to re-init driver */
-	for (i = 0; i < ipcf_shm_instances_cfg.num_instances; i++) {
-		sem_destroy(&app.sema);
-		local_shm_addr
-			= ipcf_shm_instances_cfg.shm_cfg[i].local_shm_addr;
-		shm_size = ipcf_shm_instances_cfg.shm_cfg[i].shm_size;
-		page_phys_addr = (local_shm_addr / page_size) * page_size;
-		app.local_shm_offset = local_shm_addr - page_phys_addr;
-		app.mem_fd = open(IPC_SHM_DEV_MEM_NAME, O_RDWR);
-
-		app.local_shm_map = mmap(NULL, app.local_shm_offset + shm_size,
-					PROT_READ | PROT_WRITE, MAP_SHARED,
-					app.mem_fd, page_phys_addr);
-
-		app.local_virt_shm = app.local_shm_map + app.local_shm_offset;
-
-		memcpy(app.local_virt_shm, tmp, shm_size);
-		munmap(app.local_shm_map, app.local_shm_offset + shm_size);
-	}
-	close(app.mem_fd);
+	sem_destroy(&app.sema);
 
 	sample_info("exit\n");
 
