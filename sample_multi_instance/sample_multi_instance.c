@@ -1,6 +1,6 @@
 /* SPDX-License-Identifier: BSD-3-Clause */
 /*
- * Copyright 2021-2024 NXP
+ * Copyright 2021-2025 NXP
  */
 #include <linux/module.h>
 #include <linux/kernel.h>
@@ -43,6 +43,7 @@ MODULE_PARM_DESC(msg_sizes, "Sample message sizes");
  * struct ipc_sample_app - sample app private data
  * @num_tx_msg:		number of transmitted messaged
  * @num_rx_msg:		number of received messaged
+ * @expected_msgs:	number of expected messages
  * @num_channels:	number of channels configured in this sample
  * @num_msgs:		number of messages to be sent to remote app
  * @ctrl_shm:		control channel local shared memory
@@ -55,6 +56,7 @@ MODULE_PARM_DESC(msg_sizes, "Sample message sizes");
 static struct ipc_sample_app {
 	volatile int num_tx_msg;
 	volatile int num_rx_msg;
+	volatile int expected_msgs;
 	int num_channels;
 	int num_msgs;
 	char *ctrl_shm;
@@ -142,11 +144,16 @@ void data_chan_rx_cb(void *arg, const uint8_t instance, uint8_t chan_id,
 void ctrl_chan_rx_cb(void *arg, const uint8_t instance, uint8_t chan_id,
 		void *mem)
 {
+	struct ipc_sample_app *cb_arg_sample =
+		&((struct ipc_sample_app *)(*(uintptr_t *)arg))[instance];
+
 	WARN_ON(chan_id != CTRL_CHAN_ID);
 	WARN_ON(strlen(mem) > MAX_SAMPLE_MSG_LEN);
 
 	sample_info("ch %d << %ld bytes: %s\n",
 		    chan_id, strlen(mem), (char *)mem);
+	cb_arg_sample->expected_msgs
+		= ipc_strtol((char *)mem + strlen("REPLIED MESSAGES: "));
 }
 
 /* send control message with number of data messages to be sent */
@@ -372,6 +379,7 @@ static int run_demo_poll(int num_msgs)
 	int err, msg, ch;
 
 	sample_info("starting demo...\n");
+	app[INSTANCE_ID2].expected_msgs = 0;
 
 	/* signal number of messages to remote via control channel */
 	err = send_ctrl_msg(INSTANCE_ID2);
@@ -390,8 +398,10 @@ static int run_demo_poll(int num_msgs)
 				return err;
 			app[INSTANCE_ID2].num_tx_msg++;
 			if (++msg == num_msgs) {
-				while (app[INSTANCE_ID2].num_tx_msg
-					!= app[INSTANCE_ID2].num_rx_msg) {
+				while ((app[INSTANCE_ID2].num_tx_msg
+					!= app[INSTANCE_ID2].num_rx_msg)
+					|| (app[INSTANCE_ID2].expected_msgs
+					== 0)) {
 					(void)ipc_shm_poll_channels(
 						INSTANCE_ID2);
 				}

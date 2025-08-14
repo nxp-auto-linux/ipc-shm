@@ -51,6 +51,7 @@ static int msg_sizes[IPC_SHM_MAX_POOLS] = {MAX_SAMPLE_MSG_LEN};
  * struct instance_id - sample app private data of an instance
  * @num_tx_msg:		number of transmitted messaged
  * @num_rx_msg:		number of received messaged
+ * @expected_msgs:	number of expected messages
  * @num_channels:	number of channels configured in this sample
  * @ctrl_shm:		control channel local shared memory
  * @last_rx_no_msg:	last number of received message
@@ -60,6 +61,7 @@ static int msg_sizes[IPC_SHM_MAX_POOLS] = {MAX_SAMPLE_MSG_LEN};
 struct instance_id {
 	volatile int tx_count;
 	volatile int rx_count;
+	volatile int expected_msgs;
 	int num_channels;
 	char *ctrl_shm;
 	volatile int last_rx_no_msg;
@@ -224,12 +226,17 @@ void ctrl_chan_rx_cb(void *arg, const uint8_t instance, uint8_t chan_id,
 {
 	/* temp buffer for string operations that do unaligned SRAM accesses */
 	char tmp[CTRL_CHAN_SIZE];
+	char *endptr;
 
 	assert(chan_id == CTRL_CHAN_ID);
 	assert(strlen(mem) <= CTRL_CHAN_SIZE);
 
 	ipc_memcpy_fromio(tmp, (char *)mem, CTRL_CHAN_SIZE);
 	sample_info("ch %d << %ld bytes: %s\n", chan_id, strlen(tmp), tmp);
+
+	app.id[instance].expected_msgs
+		= strtol((char *)mem + strlen("REPLIED MESSAGES: "),
+			&endptr, 10);
 
 	/* notify run_demo() the ctrl reply was received and demo can end */
 	sem_post(&app.sema);
@@ -413,6 +420,7 @@ static int run_demo_poll(int num_msgs, uint8_t instance)
 {
 	int i, err, msg, ch;
 
+	app.id[instance].expected_msgs = 0;
 	/* signal number of messages to remote via control channel */
 	err = send_ctrl_msg(instance);
 	if (err)
@@ -430,8 +438,10 @@ static int run_demo_poll(int num_msgs, uint8_t instance)
 				return err;
 			app.id[instance].tx_count++;
 			if (++msg == num_msgs) {
-				while (app.id[instance].tx_count
-					!= app.id[instance].rx_count) {
+				while ((app.id[instance].tx_count
+					!= app.id[instance].rx_count)
+					|| (app.id[instance].expected_msgs
+					== 0)) {
 					(void)ipc_shm_poll_channels(
 						instance);
 				}
