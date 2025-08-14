@@ -79,8 +79,11 @@ Note: use the release branch: release/**IPCF_RELEASE_NAME**
 
     export CROSS_COMPILE=/<toolchain-path>/aarch64-linux-gnu-
     export ARCH=arm64
-    make -C ./linux s32cc_defconfig
+    make -C ./linux <board>_defconfig
     make -C ./linux
+
+    The values of <board> are given in NXP Auto Linux BSP User Manual for the
+    target board
 
 3. Build IPCF-ShM driver modules providing kernel source location, e.g.::
 
@@ -99,7 +102,7 @@ Note: use the release branch: release/**IPCF_RELEASE_NAME**
     If using UIO driver::
       make -C ./ipc-shm/sample_user \
             PLATFORM_FLAVOR=[PLATFORM] \
-            IPC_UIO_MODULE_DIR="/lib/modules/<kernel-release>/extra"
+            IPC_UIO_MODULE_DIR="/lib/modules/<kernel-release>/updates"
 
     User must specific the platform::
 

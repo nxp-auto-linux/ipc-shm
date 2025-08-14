@@ -33,9 +33,6 @@ Building the application
 This module is built with Yocto from NXP Auto Linux BSP, but can also be built
 manually, if needed.
 
-Note: modules are also included in NXP Auto Linux BSP pre-built images that can
-      be downloaded from NXP Auto Linux BSP Flexera catalog.
-
 Building with Yocto
 -------------------
 1. Follow the steps for building NXP Auto Linux BSP with Yocto::
@@ -74,8 +71,11 @@ Note: use the release branch: release/**IPCF_RELEASE_NAME**
 
     export CROSS_COMPILE=/<toolchain-path>/aarch64-linux-gnu-
     export ARCH=arm64
-    make -C ./linux s32cc_defconfig
+    make -C ./linux <board>_defconfig
     make -C ./linux
+
+    The values of <board> are given in NXP Auto Linux BSP User Manual for the
+    target board
 
 3. Build IPCF driver and sample modules providing kernel source location, e.g.::
 
@@ -99,8 +99,8 @@ Running the application
 
 3. Insert IPCF kernel modules after Linux boot::
 
-    insmod /lib/modules/`uname -r`/extra/ipc-shm-dev.ko
-    insmod /lib/modules/`uname -r`/extra/ipc-shm-sample.ko
+    insmod /lib/modules/`uname -r`/updates/ipc-shm-dev.ko
+    insmod /lib/modules/`uname -r`/updates/ipc-shm-sample.ko
 
 4. Clear the kernel log::
 
