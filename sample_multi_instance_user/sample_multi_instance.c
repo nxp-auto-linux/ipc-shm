@@ -131,6 +131,11 @@ void ipc_memcpy_toio(void *dst, void *buf, size_t count)
 	char *dst_casted = (char *)dst;
 	char *buf_casted = (char *)buf;
 
+	if ((dst == NULL) || (buf == NULL) || (count == 0)) {
+		sample_err("Invalid input parameters");
+		return;
+	}
+
 	while (count && !IS_ALIGNED((unsigned long)dst_casted, bytes_aligned)) {
 		*dst_casted = *buf_casted;
 		dst_casted += 1;
@@ -162,6 +167,11 @@ void ipc_memcpy_fromio(void *dst, void *buf, size_t count)
 	/* Cast to char* as memcpy copy each bytes */
 	char *dst_casted = (char *)dst;
 	char *buf_casted = (char *)buf;
+
+	if ((dst == NULL) || (buf == NULL) || (count == 0)) {
+		sample_err("Invalid input parameters");
+		return;
+	}
 
 	while (count && !IS_ALIGNED((unsigned long)buf_casted, bytes_aligned)) {
 		*dst_casted = *buf_casted;
