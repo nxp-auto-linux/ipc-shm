@@ -5,6 +5,12 @@
 #include <linux/ioport.h>
 #include <linux/io.h>
 #include <linux/interrupt.h>
+/* Conditionally include mailbox support */
+#if IS_ENABLED(CONFIG_MAILBOX) && IS_ENABLED(CONFIG_NXP_S32N79_MRU)
+#include <linux/mailbox_client.h>
+#include <linux/of_platform.h>
+#include <linux/platform_device.h>
+#endif
 #include <linux/of_irq.h>
 #include <linux/of_address.h>
 #include <linux/version.h>
@@ -19,16 +25,18 @@
 #if defined(PLATFORM_FLAVOR_s32g2) || defined(PLATFORM_FLAVOR_s32g3) || \
 	defined(PLATFORM_FLAVOR_s32r45) || defined(PLATFORM_FLAVOR_s32r47)
 	#define DT_INTC_NODE_COMP "nxp,s32cc-mscm"
-#elif defined(PLATFORM_FLAVOR_s32n7)
-	#define DT_INTC_NODE_COMP     "nxp,s32n79-mru"
 #elif defined(PLATFORM_FLAVOR_s32v234)
 	#define DT_INTC_NODE_COMP "fsl,s32v234-mscm"
+#elif defined(PLATFORM_FLAVOR_s32n7)
+	#define DT_INTC_NODE_COMP "nxp,s32n79-ipc-shm"
+	#define MAILBOX_NAME_SIZE (8U)
+	#define IPC_SHM_MAGIC_NUM (0x49504346U)
+#if (!IS_ENABLED(CONFIG_MAILBOX)) || (!IS_ENABLED(CONFIG_NXP_S32N79_MRU))
+	#warning "CONFIG_MAILBOX and CONFIG_NXP_S32N79_MRU must be enabled \
+		for interrupt support on s32n7 platform"
+#endif
 #else
 	#error "Platform not supported"
-#endif
-
-#if defined(PLATFORM_FLAVOR_s32n7)
-	#define IPCF_MAX_COMP_STR 32u
 #endif
 
 /**
@@ -38,7 +46,11 @@
  * @remote_phys_shm:    remote shared memory physical address
  * @local_virt_shm:     local shared memory virtual address
  * @remote_virt_shm:    remote shared memory virtual address
- * @irq_num:            Linux IRQ number
+ * @mbox_tx_client:     mailbox transmit client (if mailbox enabled)
+ * @mbox_rx_client:     mailbox receive client (if mailbox enabled)
+ * @mbox_tx_channel:    mailbox transmit channel (if mailbox enabled)
+ * @mbox_rx_channel:    mailbox receive channel (if mailbox enabled)
+ * @rx_irq:             Linux IRQ number
  * @state:              state to indicate whether instance is initialized
  * @rx_cb:              upper layer rx callback
  */
@@ -48,21 +60,24 @@ struct ipc_os_priv_instance {
 	uintptr_t remote_phys_shm;
 	uintptr_t local_virt_shm;
 	uintptr_t remote_virt_shm;
-	int irq_num;
+#if IS_ENABLED(CONFIG_MAILBOX) && IS_ENABLED(CONFIG_NXP_S32N79_MRU)
+	struct mbox_client mbox_tx_client;
+	struct mbox_client mbox_rx_client;
+	struct mbox_chan *mbox_tx_channel;
+	struct mbox_chan *mbox_rx_channel;
+#endif
+	int rx_irq;
 	int state;
 	uint32_t (*rx_cb)(const uint8_t instance, int budget);
 };
 
 /**
- * struct ipc_os_priv - OS specific private data
+ * struct ipc_os_priv_type - OS specific private data
  * @id:             private data per instance
  */
-static struct ipc_os_priv {
-#if defined(PLATFORM_FLAVOR_s32n7)
-	char mru_node_name[IPCF_MAX_COMP_STR];
-#endif
+static struct ipc_os_priv_type {
 	struct ipc_os_priv_instance id[IPC_SHM_MAX_INSTANCES];
-} priv;
+} ipc_os_priv;
 
 static void ipc_shm_softirq(unsigned long arg);
 #if LINUX_VERSION_CODE < KERNEL_VERSION(5, 10, 0)
@@ -74,17 +89,17 @@ static DECLARE_TASKLET_OLD(ipc_shm_rx_tasklet, ipc_shm_softirq);
 /* sotfirq routine for deferred interrupt handling */
 static void ipc_shm_softirq(unsigned long arg)
 {
-	int work = 0;
 	unsigned long budget = IPC_SOFTIRQ_BUDGET;
 	uint8_t i = 0;
+	int work = 0;
 
 	for (i = 0; i < IPC_SHM_MAX_INSTANCES; i++) {
-		if ((priv.id[i].state == IPC_SHM_INSTANCE_DISABLED)
-					|| (priv.id[i].irq_num == IPC_IRQ_NONE))
+		if ((ipc_os_priv.id[i].state == IPC_SHM_INSTANCE_DISABLED)
+				|| (ipc_os_priv.id[i].rx_irq == IPC_IRQ_NONE))
 			continue;
 
 		/* Do the budgeted work */
-		work = priv.id[i].rx_cb(i, budget);
+		work = ipc_os_priv.id[i].rx_cb(i, budget);
 
 		/* If we used the full budget, schedule again.
 		 * We don't know how much work remains until we do the work.
@@ -100,14 +115,19 @@ static void ipc_shm_softirq(unsigned long arg)
 	}
 }
 
+#if IS_ENABLED(CONFIG_MAILBOX) && IS_ENABLED(CONFIG_NXP_S32N79_MRU) \
+	&& defined(PLATFORM_FLAVOR_s32n7)
+static void ipc_shm_hardirq(struct mbox_client *client, void *msg)
+#else
 /* driver interrupt service routine */
 static irqreturn_t ipc_shm_hardirq(int irq, void *dev)
+#endif
 {
 	uint8_t i = 0;
 
 	for (i = 0; i < IPC_SHM_MAX_INSTANCES; i++) {
-		if ((priv.id[i].state == IPC_SHM_INSTANCE_DISABLED)
-				|| (priv.id[i].irq_num == IPC_IRQ_NONE))
+		if ((ipc_os_priv.id[i].state == IPC_SHM_INSTANCE_DISABLED)
+				|| (ipc_os_priv.id[i].rx_irq == IPC_IRQ_NONE))
 			continue;
 
 		/* disable notifications from remote */
@@ -119,15 +139,149 @@ static irqreturn_t ipc_shm_hardirq(int irq, void *dev)
 
 	tasklet_schedule(&ipc_shm_rx_tasklet);
 
+#if IS_ENABLED(CONFIG_MAILBOX) && IS_ENABLED(CONFIG_NXP_S32N79_MRU) \
+	&& defined(PLATFORM_FLAVOR_s32n7)
+	/* Do nothing */
+#else
 	return IRQ_HANDLED;
+#endif
 }
 
-static int8_t get_irq_number(const uint8_t instance,
-	const struct ipc_shm_cfg *cfg, int *irq_num)
+
+#if IS_ENABLED(CONFIG_MAILBOX) && IS_ENABLED(CONFIG_NXP_S32N79_MRU) \
+	&& defined(PLATFORM_FLAVOR_s32n7)
+
+/**
+ * ipc_os_mailbox_init() - Initialize mailbox channels for IPC instance
+ * @instance: IPC instance number
+ * @cfg:      IPC shared memory configuration structure
+ *
+ * Initializes mailbox communication channels for the specified IPC instance.
+ * Sets up both RX and TX channels based on the configuration. If no IRQs are
+ * configured, the instance is enabled without mailbox setup.
+ *
+ * Return:
+ * * %0                   - On success
+ * * %Negative error code - On error
+ */
+static int ipc_os_mailbox_init(const uint8_t instance,
+	const struct ipc_shm_cfg *cfg)
+{
+	struct device_node *compatible_node = NULL;
+	char tx_name[MAILBOX_NAME_SIZE];
+	char rx_name[MAILBOX_NAME_SIZE];
+	struct platform_device *pdev;
+	int err;
+
+	if ((IPC_IRQ_NONE == cfg->inter_core_rx_irq)
+			&& (IPC_IRQ_NONE == cfg->inter_core_tx_irq)) {
+		ipc_os_priv.id[instance].rx_irq = IPC_IRQ_NONE;
+		ipc_os_priv.id[instance].state = IPC_SHM_INSTANCE_ENABLED;
+		return 0;
+	}
+
+	/* Find device tree node by compatible */
+	compatible_node = of_find_compatible_node(
+			NULL, NULL, DT_INTC_NODE_COMP);
+	if (!compatible_node) {
+		shm_err("Cannot find node with compatible %s in device tree\n",
+			DT_INTC_NODE_COMP);
+		return -ENXIO;
+	}
+
+	pdev = of_find_device_by_node(compatible_node);
+	of_node_put(compatible_node);
+	if (!pdev) {
+		shm_err("Cannot find platform device for node %s\n",
+			DT_INTC_NODE_COMP);
+		return -ENODEV;
+	}
+
+	/* Get mailbox names based on instance */
+	snprintf(tx_name, sizeof(tx_name), "tx_%d", instance);
+	snprintf(rx_name, sizeof(rx_name), "rx_%d", instance);
+
+	if (IPC_IRQ_NONE != cfg->inter_core_rx_irq) {
+		ipc_os_priv.id[instance].mbox_rx_client.dev
+			= &pdev->dev;
+		ipc_os_priv.id[instance].mbox_rx_client.rx_callback
+			= ipc_shm_hardirq;
+		ipc_os_priv.id[instance].mbox_rx_client.tx_done = NULL;
+
+		/* Request RX channel from mailbox controller
+		 * (receives from A78)
+		 */
+		ipc_os_priv.id[instance].mbox_rx_channel
+			= mbox_request_channel_byname(
+				&ipc_os_priv.id[instance].mbox_rx_client,
+				rx_name);
+		if (IS_ERR(ipc_os_priv.id[instance].mbox_rx_channel)) {
+			err = PTR_ERR(ipc_os_priv.id[instance].mbox_rx_channel);
+			shm_err("Failed to request RX mailbox %s: %d\n",
+				rx_name, err);
+			platform_device_put(pdev);
+			return err;
+		}
+	}
+
+	if (IPC_IRQ_NONE != cfg->inter_core_tx_irq) {
+		ipc_os_priv.id[instance].mbox_tx_client.dev
+			= &pdev->dev;
+		ipc_os_priv.id[instance].mbox_tx_client.rx_callback = NULL;
+		ipc_os_priv.id[instance].mbox_tx_client.tx_done = NULL;
+		/* Request TX channel from mailbox controller
+		 * (sends to another core)
+		 */
+		ipc_os_priv.id[instance].mbox_tx_channel
+			= mbox_request_channel_byname(
+				&ipc_os_priv.id[instance].mbox_tx_client,
+				tx_name);
+		if (IS_ERR(ipc_os_priv.id[instance].mbox_tx_channel)) {
+			err = PTR_ERR(ipc_os_priv.id[instance].mbox_tx_channel);
+			shm_err("Failed to request TX mailbox %s: %d\n",
+				tx_name, err);
+			mbox_free_channel(
+				ipc_os_priv.id[instance].mbox_rx_channel);
+			platform_device_put(pdev);
+			return err;
+		}
+	}
+
+	ipc_os_priv.id[instance].rx_irq = cfg->inter_core_rx_irq;
+	ipc_os_priv.id[instance].state = IPC_SHM_INSTANCE_ENABLED;
+
+	/* Clean up platform device reference */
+	platform_device_put(pdev);
+
+	return 0;
+}
+
+/**
+ * ipc_os_mailbox_free() - Free mailbox channels for an IPC instance
+ * @instance: IPC instance number
+ *
+ * Releases both RX and TX mailbox channels associated with the specified
+ * IPC instance and sets the channel pointers to NULL.
+ */
+static void ipc_os_mailbox_free(const uint8_t instance)
+{
+	if (ipc_os_priv.id[instance].mbox_rx_channel) {
+		mbox_free_channel(ipc_os_priv.id[instance].mbox_rx_channel);
+		ipc_os_priv.id[instance].mbox_rx_channel = NULL;
+	}
+
+	if (ipc_os_priv.id[instance].mbox_tx_channel) {
+		mbox_free_channel(ipc_os_priv.id[instance].mbox_tx_channel);
+		ipc_os_priv.id[instance].mbox_tx_channel = NULL;
+	}
+}
+#else
+/* Return interrupt number from a device tree node */
+static int8_t ipc_os_get_irq_id(const uint8_t instance,
+	const struct ipc_shm_cfg *cfg, int *rx_irq)
 {
 	struct device_node *compatible_node = NULL;
 
-#if !defined(PLATFORM_FLAVOR_s32n7)
 	/* get node with compatible string from device tree */
 	compatible_node = of_find_compatible_node(
 			NULL, NULL, DT_INTC_NODE_COMP);
@@ -136,56 +290,69 @@ static int8_t get_irq_number(const uint8_t instance,
 			DT_INTC_NODE_COMP);
 		return -ENXIO;
 	}
-	*irq_num = of_irq_get(compatible_node, ipc_hw_get_rx_irq(instance));
-	if (*irq_num <= 0) {
+	*rx_irq = of_irq_get(compatible_node, ipc_hw_get_rx_irq(instance));
+	if (*rx_irq <= 0) {
 		shm_err("Unable to decode node's IRQ\n");
 		of_node_put(compatible_node);
 		return -EINVAL;
 	}
 	shm_dbg("Rx IRQ of instance %d = %d\n",
-		instance, *irq_num);
+		instance, *rx_irq);
 
 	/* release refcount to interrupt DT node */
 	of_node_put(compatible_node);
-#else
-	uint8_t subsystem_id = cfg->mru_rx.subsystem_id;
-	uint8_t mru_id = cfg->mru_rx.mru_id;
 
-	/* Get the node name */
-	snprintf(priv.mru_node_name, IPCF_MAX_COMP_STR,
-			"aps%d_mru%d", subsystem_id, mru_id);
+	return 0;
+}
 
-	/* Iterate and get the correct node with name */
-	for_each_compatible_node(compatible_node, NULL, DT_INTC_NODE_COMP) {
-		if (of_node_name_eq(compatible_node, priv.mru_node_name)) {
-			shm_dbg("Get node with name %s\n", priv.mru_node_name);
+static int8_t ipc_os_irq_init(const uint8_t instance,
+	const struct ipc_shm_cfg *cfg)
+{
+	int err;
+	int i;
 
-			/* Get interrupt from node */
-			*irq_num = of_irq_get(compatible_node,
-				ipc_hw_get_rx_irq(instance));
-			if (*irq_num <= 0) {
-				shm_err("Unable to decode node's IRQ\n");
-				of_node_put(compatible_node);
-				return -EINVAL;
-			}
-			shm_dbg("Rx IRQ of instance %d = %d\n",
-				instance, *irq_num);
+	if (cfg->inter_core_rx_irq == IPC_IRQ_NONE) {
+		ipc_os_priv.id[instance].rx_irq = IPC_IRQ_NONE;
+		ipc_os_priv.id[instance].state = IPC_SHM_INSTANCE_ENABLED;
+		return 0;
+	}
 
-			/* release refcount to interrupt DT node */
-			of_node_put(compatible_node);
+	err = ipc_os_get_irq_id(instance, cfg,
+		&ipc_os_priv.id[instance].rx_irq);
+	if (err != 0) {
+		return -EINVAL;
+	}
+
+	/* check duplicate irq number */
+	for (i = 0; i < IPC_SHM_MAX_INSTANCES; i++) {
+		if (instance == i)
+			continue;
+		if (ipc_os_priv.id[instance].rx_irq
+				== ipc_os_priv.id[i].rx_irq) {
+			ipc_os_priv.id[instance].state
+				= IPC_SHM_INSTANCE_ENABLED;
+			return 0;
 		}
 	}
 
-#endif
+	/* init rx interrupt */
+	err = request_irq(ipc_os_priv.id[instance].rx_irq, ipc_shm_hardirq,
+		0, DRIVER_NAME, &ipc_os_priv);
+	if (err) {
+		shm_err("Request interrupt %d failed\n",
+			ipc_os_priv.id[instance].rx_irq);
+		return -EINVAL;
+	}
+
 	return 0;
 }
+#endif
 
 int8_t ipc_os_init(const uint8_t instance, const struct ipc_shm_cfg *cfg,
 		uint32_t (*rx_cb)(const uint8_t, int))
 {
 	struct resource *res;
 	int err;
-	int i;
 
 	if (!rx_cb)
 		return -EINVAL;
@@ -202,9 +369,9 @@ int8_t ipc_os_init(const uint8_t instance, const struct ipc_shm_cfg *cfg,
 		return -EADDRINUSE;
 	}
 
-	priv.id[instance].local_virt_shm
+	ipc_os_priv.id[instance].local_virt_shm
 		= (uintptr_t)ioremap(cfg->local_shm_addr, cfg->shm_size);
-	if (!priv.id[instance].local_virt_shm) {
+	if (!ipc_os_priv.id[instance].local_virt_shm) {
 		err = -ENOMEM;
 		goto err_release_local_region;
 	}
@@ -218,59 +385,45 @@ int8_t ipc_os_init(const uint8_t instance, const struct ipc_shm_cfg *cfg,
 		goto err_unmap_local_shm;
 	}
 
-	priv.id[instance].remote_virt_shm
+	ipc_os_priv.id[instance].remote_virt_shm
 		= (uintptr_t)ioremap(cfg->remote_shm_addr, cfg->shm_size);
-	if (!priv.id[instance].remote_virt_shm) {
+	if (!ipc_os_priv.id[instance].remote_virt_shm) {
 		err = -ENOMEM;
 		goto err_release_remote_region;
 	}
 
 	/* save params */
-	priv.id[instance].shm_size = cfg->shm_size;
-	priv.id[instance].local_phys_shm = cfg->local_shm_addr;
-	priv.id[instance].remote_phys_shm = cfg->remote_shm_addr;
-	priv.id[instance].rx_cb = rx_cb;
+	ipc_os_priv.id[instance].shm_size = cfg->shm_size;
+	ipc_os_priv.id[instance].local_phys_shm = cfg->local_shm_addr;
+	ipc_os_priv.id[instance].remote_phys_shm = cfg->remote_shm_addr;
+	ipc_os_priv.id[instance].rx_cb = rx_cb;
 
-	if (cfg->inter_core_rx_irq == IPC_IRQ_NONE) {
-		priv.id[instance].irq_num = IPC_IRQ_NONE;
-	} else {
-		err = get_irq_number(instance, cfg, &priv.id[instance].irq_num);
-		if (err != 0) {
-			goto err_unmap_remote_shm;
-		}
+#if IS_ENABLED(CONFIG_MAILBOX) && IS_ENABLED(CONFIG_NXP_S32N79_MRU) \
+		&& defined(PLATFORM_FLAVOR_s32n7)
+	err = ipc_os_mailbox_init(instance, cfg);
+	if (err != 0) {
+		shm_err("Failed to initialize mailbox for instance %d\n",
+			instance);
+		goto err_unmap_remote_shm;
 	}
-
-	/* check duplicate irq number */
-	for (i = 0; i < IPC_SHM_MAX_INSTANCES; i++) {
-		if (instance == i)
-			continue;
-		if (priv.id[instance].irq_num == priv.id[i].irq_num) {
-			priv.id[instance].state = IPC_SHM_INSTANCE_ENABLED;
-			return 0;
-		}
+#else
+	err = ipc_os_irq_init(instance, cfg);
+	if (err != 0) {
+		shm_err("Failed to initialize IRQ for instance %d\n", instance);
+		goto err_unmap_remote_shm;
 	}
+#endif
 
-	if (priv.id[instance].irq_num != IPC_IRQ_NONE) {
-		/* init rx interrupt */
-		err = request_irq(priv.id[instance].irq_num, ipc_shm_hardirq,
-			0, DRIVER_NAME, &priv);
-		if (err) {
-			shm_err("Request interrupt %d failed\n",
-				priv.id[instance].irq_num);
-			goto err_unmap_remote_shm;
-		}
-	}
-
-	priv.id[instance].state = IPC_SHM_INSTANCE_ENABLED;
+	ipc_os_priv.id[instance].state = IPC_SHM_INSTANCE_ENABLED;
 
 	return 0;
 
 err_unmap_remote_shm:
-	iounmap((void *)priv.id[instance].remote_virt_shm);
+	iounmap((void *)ipc_os_priv.id[instance].remote_virt_shm);
 err_release_remote_region:
 	release_mem_region((phys_addr_t)cfg->remote_shm_addr, cfg->shm_size);
 err_unmap_local_shm:
-	iounmap((void *)priv.id[instance].local_virt_shm);
+	iounmap((void *)ipc_os_priv.id[instance].local_virt_shm);
 err_release_local_region:
 	release_mem_region((phys_addr_t)cfg->local_shm_addr, cfg->shm_size);
 
@@ -279,17 +432,22 @@ err_release_local_region:
 
 void ipc_os_free(const uint8_t instance)
 {
-	uint8_t inst_id = 0;
 	int keep_irq_enable = 0;
+	uint8_t inst_id = 0;
 
-	priv.id[instance].state = IPC_SHM_INSTANCE_DISABLED;
+	ipc_os_priv.id[instance].state = IPC_SHM_INSTANCE_DISABLED;
+	ipc_os_priv.id[instance].rx_cb = NULL;
 
-	if (priv.id[instance].irq_num != IPC_IRQ_NONE) {
+	if (ipc_os_priv.id[instance].rx_irq != IPC_IRQ_NONE) {
+#if IS_ENABLED(CONFIG_MAILBOX) && IS_ENABLED(CONFIG_NXP_S32N79_MRU) \
+	&& defined(PLATFORM_FLAVOR_s32n7)
+		ipc_os_mailbox_free(instance);
+#else
 		for (inst_id = 0; inst_id < IPC_SHM_MAX_INSTANCES; inst_id++) {
 			if (instance == inst_id)
 				continue;
-			if (priv.id[inst_id].irq_num
-					== priv.id[instance].irq_num) {
+			if (ipc_os_priv.id[inst_id].rx_irq
+					== ipc_os_priv.id[instance].rx_irq) {
 				keep_irq_enable++;
 				break;
 			}
@@ -298,29 +456,33 @@ void ipc_os_free(const uint8_t instance)
 		if (keep_irq_enable == 0) {
 			ipc_hw_irq_disable(instance);
 			/* only free irq if irq number is requested */
-			if (priv.id[instance].irq_num != 0) {
-				free_irq(priv.id[instance].irq_num, &priv);
+			if (ipc_os_priv.id[instance].rx_irq != 0) {
+				free_irq(ipc_os_priv.id[instance].rx_irq,
+					&ipc_os_priv);
 			}
 		}
-		priv.id[instance].irq_num = 0;
+		ipc_os_priv.id[instance].rx_irq = 0;
+#endif
 	}
 
-	iounmap((void *)priv.id[instance].remote_virt_shm);
-	release_mem_region((phys_addr_t)priv.id[instance].remote_phys_shm,
-		priv.id[instance].shm_size);
-	iounmap((void *)priv.id[instance].local_virt_shm);
-	release_mem_region((phys_addr_t)priv.id[instance].local_phys_shm,
-		priv.id[instance].shm_size);
+	iounmap((void *)ipc_os_priv.id[instance].remote_virt_shm);
+	release_mem_region(
+		(phys_addr_t)ipc_os_priv.id[instance].remote_phys_shm,
+		ipc_os_priv.id[instance].shm_size);
+	iounmap((void *)ipc_os_priv.id[instance].local_virt_shm);
+	release_mem_region(
+		(phys_addr_t)ipc_os_priv.id[instance].local_phys_shm,
+		ipc_os_priv.id[instance].shm_size);
 }
 
 uintptr_t ipc_os_get_local_shm(const uint8_t instance)
 {
-	return priv.id[instance].local_virt_shm;
+	return ipc_os_priv.id[instance].local_virt_shm;
 }
 
 uintptr_t ipc_os_get_remote_shm(const uint8_t instance)
 {
-	return priv.id[instance].remote_virt_shm;
+	return ipc_os_priv.id[instance].remote_virt_shm;
 }
 
 uintptr_t ipc_os_ioremap(uintptr_t phys_addr, uint32_t size)
@@ -352,7 +514,25 @@ void ipc_os_iounmap(uintptr_t phys_addr, uintptr_t vir_addr, uint32_t size)
 	release_mem_region((phys_addr_t)phys_addr, size);
 }
 
-#if !defined(PLATFORM_FLAVOR_s32n7)
+#if IS_ENABLED(CONFIG_MAILBOX) && IS_ENABLED(CONFIG_NXP_S32N79_MRU)
+void ipc_os_mailbox_tx(const uint8_t instance)
+{
+	uint32_t IPC_SHM_SENDING = IPC_SHM_MAGIC_NUM;
+	int err;
+
+	/* Send IPC notification message through mailbox channel */
+	err = mbox_send_message(ipc_os_priv.id[instance].mbox_tx_channel,
+		&IPC_SHM_SENDING);
+	if (err < 0) {
+		shm_err("Failed to send test message: %d\n", err);
+		return;
+	}
+
+	/* Signal mailbox framework that transmission is complete */
+	mbox_client_txdone(ipc_os_priv.id[instance].mbox_tx_channel, 0);
+}
+#endif
+
 void *ipc_os_map_intc(void)
 {
 	struct device_node *node = NULL;
@@ -377,66 +557,6 @@ void *ipc_os_map_intc(void)
 	/* map configuration register space */
 	return ioremap(res.start, resource_size(&res));
 }
-#else
-void *ipc_os_mru_map_intc(uint8_t mru_instance,
-	uint8_t subsystem_id, uint8_t mru_id)
-{
-	struct device_node *node = NULL;
-	struct resource res;
-	void *peripheral_addr = NULL;
-	int err;
-
-	/* get DT node */
-	switch (mru_instance) {
-	case (uint8_t)IPC_MRU_APS_INSTANCE:
-		snprintf(priv.mru_node_name, IPCF_MAX_COMP_STR,
-			"aps%d_mru%d", subsystem_id, mru_id);
-		break;
-	case (uint8_t)IPC_MRU_FSS_INSTANCE:
-		snprintf(priv.mru_node_name, IPCF_MAX_COMP_STR,
-			"fss_mru%d", mru_id);
-		break;
-	case (uint8_t)IPC_MRU_RTU_INSTANCE:
-		snprintf(priv.mru_node_name, IPCF_MAX_COMP_STR,
-			"rtu%d_mru%d", subsystem_id, mru_id);
-		break;
-	case (uint8_t)IPC_MRU_RCU_C_INSTANCE:
-		snprintf(priv.mru_node_name, IPCF_MAX_COMP_STR,
-			"rcu_mru%d", mru_id);
-		break;
-	case (uint8_t)IPC_MRU_RCU_L_INSTANCE:
-		snprintf(priv.mru_node_name, IPCF_MAX_COMP_STR,
-			"rcu_mru_l_%d", mru_id);
-		break;
-	case (uint8_t)IPC_MRU_RCU_H_INSTANCE:
-		snprintf(priv.mru_node_name, IPCF_MAX_COMP_STR,
-			"rcu_mru_h_%d", mru_id);
-		break;
-	default:
-		return NULL;
-	}
-
-	for_each_compatible_node(node, NULL, DT_INTC_NODE_COMP) {
-		if (of_node_name_eq(node, priv.mru_node_name)) {
-			/* get base address from DT node */
-			err = of_address_to_resource(node, 0, &res);
-			of_node_put(node);
-			if (err) {
-				shm_err("Unable to read regs"
-					" address from DT interrupt node %s\n",
-					priv.mru_node_name);
-				return NULL;
-			}
-
-			peripheral_addr = ioremap(
-				res.start, resource_size(&res));
-		}
-	}
-	of_node_put(node);
-	/* map configuration register space */
-	return peripheral_addr;
-}
-#endif
 
 void ipc_os_unmap_intc(void *addr)
 {
@@ -446,9 +566,9 @@ void ipc_os_unmap_intc(void *addr)
 int8_t ipc_os_poll_channels(const uint8_t instance)
 {
 	/* the softirq will handle rx operation if rx interrupt is configured */
-	if (priv.id[instance].irq_num == IPC_IRQ_NONE) {
-		if (priv.id[instance].rx_cb != NULL)
-			return priv.id[instance].rx_cb(instance,
+	if (ipc_os_priv.id[instance].rx_irq == IPC_IRQ_NONE) {
+		if (ipc_os_priv.id[instance].rx_cb != NULL)
+			return ipc_os_priv.id[instance].rx_cb(instance,
 				IPC_SOFTIRQ_BUDGET);
 		return -EINVAL;
 	}

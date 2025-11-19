@@ -421,6 +421,10 @@ err_close_ipc_dev:
 		close(ipc_os_priv.ipc_cdev_fd);
 	if (ipc_os_priv.ipc_uio_module_fd >= 0)
 		close(ipc_os_priv.ipc_uio_module_fd);
+	/* unload ipc-uio kernel module */
+	if (delete_module(IPC_UIO_MODULE_NAME, O_NONBLOCK) != 0) {
+		shm_err("Can't unload %s module\n", IPC_UIO_MODULE_NAME);
+	}
 
 	return err;
 }

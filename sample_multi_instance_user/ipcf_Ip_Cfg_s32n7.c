@@ -78,18 +78,7 @@ struct ipc_shm_cfg ipcf_shm_cfg_instances[] = {
 		.remote_shm_addr = 0x24800000,
 		.inter_core_tx_irq = IPC_IRQ_MRU,
 		.inter_core_rx_irq = IPC_IRQ_MRU,
-		.mru_tx = {
-			.mru_instance = IPC_MRU_RTU_INSTANCE,
-			.subsystem_id = IPC_SUBSYSTEM_0,
-			.mru_id = IPC_MRU_0,
-			.mru_channel_id = IPC_MRU_CHANNEL_0
-		},
-		.mru_rx = {
-			.mru_instance = IPC_MRU_APS_INSTANCE,
-			.subsystem_id = IPC_SUBSYSTEM_0,
-			.mru_id = IPC_MRU_0,
-			.mru_channel_id = IPC_MRU_CHANNEL_0
-		},
+		.mbox_cfg_id = 0,
 		.shm_size  = 0x1000,
 		.num_channels = 3,
 		.channels = ipcf_shm_cfg_channels,
@@ -99,12 +88,7 @@ struct ipc_shm_cfg ipcf_shm_cfg_instances[] = {
 		.remote_shm_addr = 0x24801000,
 		.inter_core_tx_irq = IPC_IRQ_NONE,
 		.inter_core_rx_irq = IPC_IRQ_MRU,
-		.mru_rx = {
-			.mru_instance = IPC_MRU_APS_INSTANCE,
-			.subsystem_id = IPC_SUBSYSTEM_0,
-			.mru_id = IPC_MRU_1,
-			.mru_channel_id = IPC_MRU_CHANNEL_0
-		},
+		.mbox_cfg_id = 1,
 		.shm_size  = 0x1000,
 		.num_channels = 3,
 		.channels = ipcf_shm_cfg_channels,

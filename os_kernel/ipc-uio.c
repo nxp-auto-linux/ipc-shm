@@ -2,41 +2,52 @@
 /*
  * Copyright 2019,2021-2025 NXP
  */
+#include <linux/cdev.h>
+#if IS_ENABLED(CONFIG_MAILBOX) && IS_ENABLED(CONFIG_NXP_S32N79_MRU)
+#include <linux/mailbox_client.h>
+#endif
+#include <linux/mm.h>
+#include <linux/mod_devicetable.h>
 #include <linux/module.h>
 #include <linux/platform_device.h>
-#include <linux/mod_devicetable.h>
 #include <linux/uio_driver.h>
-#include <linux/cdev.h>
 #include <linux/version.h>
-#include <linux/mm.h>
 
 #include "ipc-shm.h"
 #include "ipc-os.h"
 #include "ipc-hw.h"
 #include "ipc-uio.h"
 
-#if defined(PLATFORM_FLAVOR_s32n7)
-	#include <linux/io.h>
-	#include <linux/of_address.h>
-	#include <linux/of_irq.h>
-
-	#define DT_INTC_NODE_COMP     "nxp,s32n79-mru"
-	#define IPCF_MAX_COMP_STR 32u
-#endif
 #define IPC_CDEV_NAME		"ipc-cdev-uio"
 #define IPC_UIO_NAME		"ipc-shm-uio"
 #define IPC_UIO_VERSION		"2.0"
 
+#if IS_ENABLED(CONFIG_MAILBOX) || IS_ENABLED(CONFIG_NXP_S32N79_MRU)
+	#define MAILBOX_NAME_SIZE (8U)
+	#define IPC_SHM_MAGIC_NUM (0x49504346U)
+	/* Using this define instead of IPC_IRQ_NONE
+	 * As UIO_IRQ_CUSTOM = -1, indicates custom IRQ handling
+	 * has the same value as IPC_IRQ_NONE
+	 */
+	#define IPC_UIO_POLLING    (0xFFFF)
+#else
+	#define IPC_UIO_POLLING    (IPC_IRQ_NONE)
+#endif
+
 static DEFINE_MUTEX(mmap_device_mutex);
 /**
  * struct ipc_uio_priv_type - IPCF SHM UIO device data
- * @state:      instance state (initialized or not)
- * @irq_num:    rx interrupt number using to request irq
- * @dev:        Linux device capabilities
- * @refcnt:     reference counter to allow a single UIO device open at a time
- * @info:       UIO device capabilities
- * @data:       Chrdev private data to get user space configuration
- * @uio_name:   UIO device name
+ * @state:           instance state (initialized or not)
+ * @irq_num:         rx interrupt number using to request irq
+ * @dev:             Linux device capabilities
+ * @refcnt:          reference counter to allow only 1 UIO device open at a time
+ * @info:            UIO device capabilities
+ * @data:            Chrdev private data to get user space configuration
+ * @mbox_tx_client:  mailbox client for transmit channel (if mailbox enabled)
+ * @mbox_rx_client:  mailbox client for receive channel (if mailbox enabled)
+ * @mbox_tx_channel: mailbox transmit channel (if mailbox enabled)
+ * @mbox_rx_channel: mailbox receive channel (if mailbox enabled)
+ * @uio_name:        UIO device name
  */
 struct ipc_uio_priv_type {
 	int state;
@@ -45,13 +56,17 @@ struct ipc_uio_priv_type {
 	atomic_t refcnt;
 	struct uio_info info;
 	struct ipc_uio_cdev_data data;
+#if IS_ENABLED(CONFIG_MAILBOX) && IS_ENABLED(CONFIG_NXP_S32N79_MRU)
+	struct mbox_client mbox_tx_client;
+	struct mbox_client mbox_rx_client;
+	struct mbox_chan *mbox_tx_channel;
+	struct mbox_chan *mbox_rx_channel;
+#endif
 	char uio_name[32];
 };
 
 /**
  * struct ipc_pdev_priv_type - IPCF SHM platform device data
- * @dev_created:     checking if device is created
- * @mru_node_name:   store name of the MRU node in device tree
  * @major:           chrdev major number which is allocated dynamically
  * @irq_num_init:    interrupt index for each instance
  * @cmd:             most recent ioctl command
@@ -63,24 +78,196 @@ struct ipc_uio_priv_type {
  * @uio_id:          IPCF SHM UIO device data for each instance
  */
 struct ipc_pdev_priv_type {
-#if defined(PLATFORM_FLAVOR_s32n7)
-	uint8_t dev_created;
-	char mru_node_name[IPCF_MAX_COMP_STR];
-#endif
 	dev_t major;
 	int irq_num_init[IPC_SHM_MAX_INSTANCES];
 	uint32_t cmd;
 	uintptr_t phys_addr;
 	struct platform_device *ipc_pdev;
-#if !defined(PLATFORM_FLAVOR_s32n7)
 	void __iomem *pdev_reg;
-#else
-	void __iomem *pdev_reg[IPC_SHM_MAX_INSTANCES];
-#endif
 	struct class *cdev_class;
 	struct cdev cdev;
 	struct ipc_uio_priv_type uio_id[IPC_SHM_MAX_INSTANCES];
 } ipc_pdev_priv;
+
+#if IS_ENABLED(CONFIG_MAILBOX) && IS_ENABLED(CONFIG_NXP_S32N79_MRU) \
+	&& defined(PLATFORM_FLAVOR_s32n7)
+/**
+ * ipc_uio_mailbox_rx_callback() - Mailbox receive callback for IPC UIO
+ * @client: mailbox client structure
+ * @msg:    received message (unused)
+ *
+ * This callback is invoked when a message is received on the mailbox RX
+ * channel. It disables and clears the hardware interrupt, then notifies
+ * the UIO subsystem to wake up userspace applications waiting for events.
+ */
+static void ipc_uio_mailbox_rx_callback(struct mbox_client *client, void *msg)
+{
+	struct ipc_uio_priv_type *priv = container_of(client,
+		struct ipc_uio_priv_type, mbox_rx_client);
+	uint8_t instance = priv->data.instance;
+
+	/* Disable and clear interrupt like traditional IRQ handler */
+	ipc_hw_irq_disable(instance);
+	ipc_hw_irq_clear(instance);
+
+	/* Notify UIO subsystem  */
+	uio_event_notify(&priv->info);
+}
+
+/**
+ * ipc_uio_irq_init() - Initialize mailbox channels for IPC UIO instance
+ * @instance: IPC instance number
+ * @cfg:      IPC shared memory configuration structure
+ *
+ * Sets up mailbox RX and TX channels for the specified IPC instance based on
+ * the configuration. If both RX and TX IRQs are disabled, configures the
+ * instance for polling mode. Otherwise, requests the appropriate mailbox
+ * channels by name and configures the mailbox clients with proper callbacks.
+ * The RX channel is configured with a callback to handle incoming messages,
+ * while the TX channel is used for sending notifications.
+ *
+ * * %0                   - On success
+ * * %Negative error code - On error
+ */
+static int ipc_uio_irq_init(const uint8_t instance,
+	const struct ipc_shm_cfg *cfg)
+{
+	char tx_name[MAILBOX_NAME_SIZE];
+	char rx_name[MAILBOX_NAME_SIZE];
+	struct device *dev;
+	int err;
+
+	if ((IPC_IRQ_NONE == cfg->inter_core_rx_irq) &&
+			(IPC_IRQ_NONE == cfg->inter_core_tx_irq)) {
+		ipc_pdev_priv.irq_num_init[instance] = IPC_UIO_POLLING;
+		return 0; /* No mailbox needed */
+	}
+
+	/* Use the existing platform device */
+	dev = &ipc_pdev_priv.ipc_pdev->dev;
+
+	/* Get mailbox names */
+	snprintf(tx_name, sizeof(tx_name), "tx_%d", instance);
+	snprintf(rx_name, sizeof(rx_name), "rx_%d", instance);
+
+	/* Request RX channel from mailbox controller
+	 * (receives from A78)
+	 */
+	if (IPC_IRQ_NONE != cfg->inter_core_rx_irq) {
+		ipc_pdev_priv.uio_id[instance].mbox_rx_client.dev = dev;
+		ipc_pdev_priv.uio_id[instance].mbox_rx_client.rx_callback
+			= ipc_uio_mailbox_rx_callback;
+		ipc_pdev_priv.uio_id[instance].mbox_rx_client.tx_done = NULL;
+
+		ipc_pdev_priv.uio_id[instance].mbox_rx_channel
+			= mbox_request_channel_byname(
+				&ipc_pdev_priv.uio_id[instance].mbox_rx_client,
+				rx_name);
+		if (IS_ERR(ipc_pdev_priv.uio_id[instance].mbox_rx_channel)) {
+			err = PTR_ERR(
+				ipc_pdev_priv.uio_id[instance].mbox_rx_channel);
+			shm_err("Failed to request RX mailbox %s: %d\n",
+				rx_name, err);
+			return err;
+		}
+	}
+
+	/* Request TX channel from mailbox controller
+	 * (sends from A78)
+	 */
+	if (IPC_IRQ_NONE != cfg->inter_core_tx_irq) {
+		ipc_pdev_priv.uio_id[instance].mbox_tx_client.dev = dev;
+		ipc_pdev_priv.uio_id[instance].mbox_tx_client.rx_callback
+			= NULL;
+		ipc_pdev_priv.uio_id[instance].mbox_tx_client.tx_done = NULL;
+
+		ipc_pdev_priv.uio_id[instance].mbox_tx_channel
+			= mbox_request_channel_byname(
+				&ipc_pdev_priv.uio_id[instance].mbox_tx_client,
+				tx_name);
+		if (IS_ERR(ipc_pdev_priv.uio_id[instance].mbox_tx_channel)) {
+			err = PTR_ERR(
+				ipc_pdev_priv.uio_id[instance].mbox_tx_channel);
+			shm_err("Failed to request TX mailbox %s: %d\n",
+				tx_name, err);
+			if (ipc_pdev_priv.uio_id[instance].mbox_rx_channel)
+				mbox_free_channel(
+					ipc_pdev_priv.uio_id[instance]
+						.mbox_rx_channel);
+			return err;
+		}
+	}
+
+	ipc_pdev_priv.irq_num_init[instance] = UIO_IRQ_CUSTOM;
+
+	return 0;
+}
+
+/**
+ * ipc_uio_mailbox_free() - free mailbox channels and reset pointers
+ * @uio_priv: pointer to UIO private data structure
+ *
+ * This function releases both RX and TX mailbox channels if they are
+ * allocated and sets the channel pointers to NULL to prevent reuse.
+ */
+static void ipc_uio_mailbox_free(struct ipc_uio_priv_type *uio_priv)
+{
+	if (uio_priv->mbox_rx_channel) {
+		mbox_free_channel(uio_priv->mbox_rx_channel);
+		uio_priv->mbox_rx_channel = NULL;
+	}
+
+	if (uio_priv->mbox_tx_channel) {
+		mbox_free_channel(uio_priv->mbox_tx_channel);
+		uio_priv->mbox_tx_channel = NULL;
+	}
+}
+#else
+/**
+ * ipc_uio_irq_init() - initialize IRQ configuration for IPC UIO instance
+ * @instance: IPC instance number
+ * @cfg:      pointer to IPC shared memory configuration structure
+ *
+ * This function initializes the IRQ configuration for a specific IPC instance.
+ * If no RX IRQ is configured, it sets the instance to polling mode. Otherwise,
+ * it retrieves the Linux IRQ number from the platform device and validates
+ * that the IRQ is not already in use by another instance.
+ *
+ * * %0                   - On success
+ * * %Negative error code - On error
+ */
+static int ipc_uio_irq_init(const uint8_t instance,
+	const struct ipc_shm_cfg *cfg)
+{
+	int irq, i;
+
+	if (cfg->inter_core_rx_irq == IPC_IRQ_NONE) {
+		ipc_pdev_priv.irq_num_init[instance] = IPC_UIO_POLLING;
+		return 0;
+	}
+
+	/* get Linux IRQ number */
+	irq = platform_get_irq(ipc_pdev_priv.ipc_pdev,
+		ipc_hw_get_rx_irq(instance));
+	if (irq < 0) {
+		shm_dbg("Failed to get IRQ\n");
+		return irq;
+	}
+	shm_dbg("GIC Rx IRQ = %d\n", irq);
+
+	/* check duplicate irq number */
+	for (i = 0; i < IPC_SHM_MAX_INSTANCES; i++) {
+		if (irq == ipc_pdev_priv.irq_num_init[i]) {
+			shm_dbg("Can't create UIO device with same irq %d\n",
+				irq);
+			return -EFAULT;
+		}
+	}
+	ipc_pdev_priv.irq_num_init[instance] = irq;
+
+	return 0;
+}
+#endif
 
 /**
  * ipc_shm_uio_open() - open operation will respond to a open UIO request
@@ -147,92 +334,37 @@ static irqreturn_t ipc_shm_uio_handler(int irq, struct uio_info *dev_info)
 	return IRQ_HANDLED;
 }
 
-#if defined(PLATFORM_FLAVOR_s32n7)
-static int8_t get_irq_number(const uint8_t instance,
-	const struct ipc_shm_cfg *cfg, int *irq_num)
-{
-	struct device_node *compatible_node = NULL;
-	uint8_t subsystem_id = cfg->mru_rx.subsystem_id;
-	uint8_t mru_id = cfg->mru_rx.mru_id;
-
-	/* Get the node name */
-	snprintf(ipc_pdev_priv.mru_node_name, IPCF_MAX_COMP_STR,
-			"aps%d_mru%d", subsystem_id, mru_id);
-
-	for_each_compatible_node(compatible_node, NULL, DT_INTC_NODE_COMP) {
-		if (of_node_name_eq(compatible_node,
-				ipc_pdev_priv.mru_node_name)) {
-			shm_dbg("Get node with name is %s\n",
-				ipc_pdev_priv.mru_node_name);
-
-			*irq_num = of_irq_get(
-				compatible_node, ipc_hw_get_rx_irq(instance));
-			if (*irq_num <= 0) {
-				shm_err("Unable decode node's IRQ\n");
-				of_node_put(compatible_node);
-				return -EINVAL;
-			}
-			shm_dbg("Rx IRQ of instance %d = %d\n",
-				instance, *irq_num);
-
-			/* release refcount to interrupt DT node */
-			of_node_put(compatible_node);
-		}
-	}
-
-	return 0;
-}
-#endif
-
 /**
  * ipc_uio_init() - Initialize an UIO and ipcf hw
  * @ipc_uio_cdev_data:    Chrdev private data from user space
  *
  * Return:
- * * %0				- on success
- * * %Negative error code	- On error
+ * * %0                   - on success
+ * * %Negative error code - On error
  */
 static int ipc_uio_init(struct ipc_uio_cdev_data *data)
 {
-	int err, irq, i;
-	int instance = data->instance;
 	struct ipc_shm_cfg *cfg = &data->cfg;
+	int instance = data->instance;
+	int err;
 
 	err = sprintf(ipc_pdev_priv.uio_id[instance].uio_name,
 			"instance_%d", instance);
 	/* init Peripheral HW for inter-core interrupts */
 	err = ipc_hw_init(instance, cfg);
-	if (err)
-		return err;
-
-	if (cfg->inter_core_rx_irq == IPC_IRQ_NONE)
-		return 0;
-	/* get Linux IRQ number */
-#if !defined(PLATFORM_FLAVOR_s32n7)
-	irq = platform_get_irq(ipc_pdev_priv.ipc_pdev,
-		ipc_hw_get_rx_irq(instance));
-	if (irq < 0) {
-		shm_dbg("Failed to get IRQ\n");
-		return irq;
-	}
-	shm_dbg("GIC Rx IRQ = %d\n", irq);
-#else
-	err = get_irq_number(instance, cfg, &irq);
 	if (err) {
-		shm_dbg("Failed to get IRQ get_irq_number\n");
+		shm_err("Failed to initialize hardware for instance %d: %d\n",
+			instance, err);
 		return err;
 	}
-#endif
 
-	/* check duplicate irq number */
-	for (i = 0; i < IPC_SHM_MAX_INSTANCES; i++) {
-		if (irq == ipc_pdev_priv.irq_num_init[i]) {
-			shm_dbg("Can't create UIO device with same irq %d\n",
-				irq);
-			return -EFAULT;
-		}
+	err = ipc_uio_irq_init(instance, cfg);
+	if (err) {
+		shm_err("Failed to initialize IRQ for instance %d: %d\n",
+			instance, err);
+		return err;
 	}
-	ipc_pdev_priv.irq_num_init[instance] = irq;
+
 	ipc_pdev_priv.uio_id[instance].dev = &ipc_pdev_priv.ipc_pdev->dev;
 	/* Register UIO device */
 	atomic_set(&ipc_pdev_priv.uio_id[instance].refcnt, 1);
@@ -249,12 +381,14 @@ static int ipc_uio_init(struct ipc_uio_cdev_data *data)
 	ipc_pdev_priv.uio_id[instance].info.priv
 			= &ipc_pdev_priv.uio_id[instance];
 
-	err = uio_register_device(
-			ipc_pdev_priv.uio_id[instance].dev,
-			&ipc_pdev_priv.uio_id[instance].info);
-	if (err) {
-		shm_dbg("UIO registration failed\n");
-		return err;
+	if (IPC_UIO_POLLING != ipc_pdev_priv.irq_num_init[instance]) {
+		err = uio_register_device(
+				ipc_pdev_priv.uio_id[instance].dev,
+				&ipc_pdev_priv.uio_id[instance].info);
+		if (err) {
+			shm_dbg("UIO registration failed\n");
+			return err;
+		}
 	}
 	ipc_pdev_priv.uio_id[instance].state = IPC_SHM_INSTANCE_ENABLED;
 
@@ -266,20 +400,26 @@ static int ipc_uio_init(struct ipc_uio_cdev_data *data)
 
 static int ipc_uio_free(struct ipc_uio_cdev_data *data)
 {
-	int err = -EINVAL;
 	uint8_t inst = data->instance;
 
-	if ((inst < IPC_SHM_MAX_INSTANCES)
-		&& (ipc_pdev_priv.uio_id[inst].state
+	if (IPC_SHM_MAX_INSTANCES <= inst)
+		return -EINVAL;
+
+	if ((ipc_pdev_priv.uio_id[inst].state
 			== IPC_SHM_INSTANCE_ENABLED)
 		&& (ipc_pdev_priv.irq_num_init[inst]
-			!= IPC_IRQ_NONE)) {
+			!= IPC_UIO_POLLING)) {
 		uio_unregister_device(&ipc_pdev_priv.uio_id[inst].info);
-		ipc_pdev_priv.irq_num_init[inst] = IPC_IRQ_NONE;
-		err = 0;
+#if IS_ENABLED(CONFIG_MAILBOX) && IS_ENABLED(CONFIG_NXP_S32N79_MRU) \
+	&& defined(PLATFORM_FLAVOR_s32n7)
+		ipc_uio_mailbox_free(&ipc_pdev_priv.uio_id[inst]);
+#endif
 	}
 
-	return err;
+	ipc_pdev_priv.uio_id[inst].state = IPC_SHM_INSTANCE_DISABLED;
+	ipc_pdev_priv.irq_num_init[inst] = IPC_IRQ_NONE;
+
+	return 0;
 }
 
 /**
@@ -402,11 +542,6 @@ static int ipc_shm_uio_probe(struct platform_device *pdev)
 	int i;
 	struct resource *res;
 
-#if defined(PLATFORM_FLAVOR_s32n7)
-	if (ipc_pdev_priv.dev_created == 1)
-		return 0;
-#endif
-
 	for (i = 0; i < IPC_SHM_MAX_INSTANCES; i++) {
 		ipc_pdev_priv.uio_id[i].irq_num = IPC_IRQ_NONE;
 		ipc_pdev_priv.irq_num_init[i] = IPC_IRQ_NONE;
@@ -415,18 +550,15 @@ static int ipc_shm_uio_probe(struct platform_device *pdev)
 	platform_set_drvdata(pdev, ipc_pdev_priv.uio_id);
 	ipc_pdev_priv.ipc_pdev = pdev;
 
-#if !defined(PLATFORM_FLAVOR_s32n7)
-	/* map MSCM register configuration space */
+	/* map register configuration space */
 	res = platform_get_resource(ipc_pdev_priv.ipc_pdev, IORESOURCE_MEM, 0);
+#if !defined(PLATFORM_FLAVOR_s32n7)
 	ipc_pdev_priv.pdev_reg = devm_ioremap_resource(
 					&ipc_pdev_priv.ipc_pdev->dev, res);
 	if (IS_ERR_OR_NULL(ipc_pdev_priv.pdev_reg)) {
 		shm_err("Failed to map MSCM register space\n");
 		return -ENOMEM;
 	}
-#else
-	/* Surpress warning of unused variable */
-	(void)res;
 #endif
 
 	/* Create a chrdev to initial user-kernel communication */
@@ -463,10 +595,6 @@ static int ipc_shm_uio_probe(struct platform_device *pdev)
 	shm_dbg("%s registered with major %d\n",
 		IPC_CDEV_NAME, MAJOR(ipc_pdev_priv.major));
 
-#if defined(PLATFORM_FLAVOR_s32n7)
-	ipc_pdev_priv.dev_created = 1;
-#endif
-
 	shm_dbg("device ready\n");
 
 	return 0;
@@ -484,114 +612,47 @@ fail_alloc_chrdev_region:
 /* Platform driver remove methods */
 static void ipc_shm_uio_remove(struct platform_device *pdev)
 {
-	int i;
-
-#if defined(PLATFORM_FLAVOR_s32n7)
-	if (ipc_pdev_priv.dev_created == 0)
-		return;
-#endif
 	device_destroy(ipc_pdev_priv.cdev_class, ipc_pdev_priv.major);
 	class_destroy(ipc_pdev_priv.cdev_class);
 	cdev_del(&ipc_pdev_priv.cdev);
 	unregister_chrdev_region(ipc_pdev_priv.major, 1);
-	for (i = 0; i < IPC_SHM_MAX_INSTANCES; i++) {
-		if (ipc_pdev_priv.uio_id[i].state == IPC_SHM_INSTANCE_ENABLED) {
-			ipc_pdev_priv.uio_id[i].state
-				= IPC_SHM_INSTANCE_DISABLED;
-			if (ipc_pdev_priv.irq_num_init[i] == IPC_IRQ_NONE)
-				continue;
-			uio_unregister_device(&ipc_pdev_priv.uio_id[i].info);
-		}
-	}
 
-#if defined(PLATFORM_FLAVOR_s32n7)
-	ipc_pdev_priv.dev_created = 0;
-#endif
 	shm_dbg("device removed\n");
 }
 
-#if !defined(PLATFORM_FLAVOR_s32n7)
+#if IS_ENABLED(CONFIG_MAILBOX) && IS_ENABLED(CONFIG_NXP_S32N79_MRU) \
+	&& defined(PLATFORM_FLAVOR_s32n7)
+void ipc_os_mailbox_tx(const uint8_t instance)
+{
+	uint32_t IPC_SHM_SENDING = IPC_SHM_MAGIC_NUM;
+	int err;
+
+	/* Send IPC notification message through mailbox channel */
+	err = mbox_send_message(ipc_pdev_priv.uio_id[instance].mbox_tx_channel,
+		&IPC_SHM_SENDING);
+	if (err < 0) {
+		shm_err("Failed to send test message: %d\n", err);
+		return;
+	}
+
+	/* Signal mailbox framework that transmission is complete */
+	mbox_client_txdone(ipc_pdev_priv.uio_id[instance].mbox_tx_channel, 0);
+}
+#endif
+
 void *ipc_os_map_intc(void)
 {
 	return ipc_pdev_priv.pdev_reg;
 }
-#else
-/**
- * ipc_os_mru_map_intc() - I/O memory map interrupt controller register space
- *
- * I/O memory map the inter-core interrupts HW block (Mru HW block)
- */
-void *ipc_os_mru_map_intc(uint8_t mru_instance,
-	uint8_t subsystem_id, uint8_t mru_id)
-{
-	struct device_node *node = NULL;
-	struct resource res;
-	void *peripheral_addr = NULL;
-	int err;
-
-	/* get DT node */
-	switch (mru_instance) {
-	case (uint8_t)IPC_MRU_APS_INSTANCE:
-		snprintf(ipc_pdev_priv.mru_node_name, IPCF_MAX_COMP_STR,
-			"aps%d_mru%d", subsystem_id, mru_id);
-		break;
-	case (uint8_t)IPC_MRU_FSS_INSTANCE:
-		snprintf(ipc_pdev_priv.mru_node_name, IPCF_MAX_COMP_STR,
-			"fss_mru%d", mru_id);
-		break;
-	case (uint8_t)IPC_MRU_RTU_INSTANCE:
-		snprintf(ipc_pdev_priv.mru_node_name, IPCF_MAX_COMP_STR,
-			"rtu%d_mru%d", subsystem_id, mru_id);
-		break;
-	case (uint8_t)IPC_MRU_RCU_C_INSTANCE:
-		snprintf(ipc_pdev_priv.mru_node_name, IPCF_MAX_COMP_STR,
-			"rcu_mru%d", mru_id);
-		break;
-	case (uint8_t)IPC_MRU_RCU_L_INSTANCE:
-		snprintf(ipc_pdev_priv.mru_node_name, IPCF_MAX_COMP_STR,
-			"rcu_mru_l_%d", mru_id);
-		break;
-	case (uint8_t)IPC_MRU_RCU_H_INSTANCE:
-		snprintf(ipc_pdev_priv.mru_node_name, IPCF_MAX_COMP_STR,
-			"rcu_mru_h_%d", mru_id);
-		break;
-	default:
-		return NULL;
-	}
-
-	for_each_compatible_node(node, NULL, DT_INTC_NODE_COMP) {
-		if (of_node_name_eq(node, ipc_pdev_priv.mru_node_name)) {
-			/* get base address from DT node */
-			err = of_address_to_resource(node, 0, &res);
-			of_node_put(node);
-			if (err) {
-				shm_err("Unable to read regs address "
-					"from DT interrupt node %s\n",
-					ipc_pdev_priv.mru_node_name);
-				return NULL;
-			}
-
-			peripheral_addr = ioremap(
-				res.start, resource_size(&res));
-		}
-	}
-	of_node_put(node);
-	/* map configuration register space */
-	return peripheral_addr;
-}
-#endif
 
 void ipc_os_unmap_intc(void *addr)
 {
-#if defined(PLATFORM_FLAVOR_s32n7)
-	iounmap(addr);
-#endif
 }
 
 static const struct of_device_id ipc_shm_ids[] = {
 	{ .compatible = "fsl,s32v234-mscm", },
 	{ .compatible = "nxp,s32cc-mscm", },
-	{ .compatible = "nxp,s32n79-mru", },
+	{ .compatible = "nxp,s32n79-ipc-shm", },
 	{}
 };
 
