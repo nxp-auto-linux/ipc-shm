@@ -70,7 +70,9 @@ void ipc_hw_irq_disable(const uint8_t instance)
 void ipc_hw_irq_notify(const uint8_t instance)
 {
 	if (IPC_IRQ_NONE != ipc_hw_priv[instance].tx_irq) {
+#if IS_ENABLED(CONFIG_MAILBOX) && IS_ENABLED(CONFIG_NXP_S32N79_MRU)
 		ipc_os_mailbox_tx(instance);
+#endif
 	}
 }
 

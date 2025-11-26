@@ -52,8 +52,22 @@ Building with Yocto
 
   then select::
 
-    device driver --->
+    Device Drivers --->
     {*} Userspace I/O drivers
+
+* When building examples for S32N79, in case of using mailbox interrupt, ensure
+  that the mailbox configuration is enabled in the Linux kernel build. Note
+  that the NXP Auto Linux BSP pre-built images may not include these mailbox
+  configuration options by default. Therefore, the following steps must be
+  performed::
+
+    bitbake virtual/kernel -c menuconfig
+
+  then select::
+
+    Device Drivers --->
+      [*] Mailbox Hardware Support --->
+        <*> NXP S32N79 Message Receive Unit (MRU)
 
 * use image fsl-image-auto with any of the following machines supported for IPCF:
   s32g274aevb, s32r45xevb, s32g399aevb.

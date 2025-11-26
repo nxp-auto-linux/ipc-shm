@@ -34,8 +34,22 @@ Building the application
 This module is built with Yocto from NXP Auto Linux BSP, but can also be built
 manually, if needed.
 
-Note: modules are also included in NXP Auto Linux BSP pre-built images that can
-      be downloaded from NXP Auto Linux BSP Flexera catalog.
+Note:
+ - Modules are also included in NXP Auto Linux BSP pre-built images that can be
+   downloaded from NXP Auto Linux BSP Flexera catalog.
+ - When building examples for S32N79, in case of using mailbox interrupt, ensure
+   that the mailbox configuration is enabled in the Linux kernel build. Note
+   that the NXP Auto Linux BSP pre-built images may not include these mailbox
+   configuration options by default. Therefore, the following steps must be
+   performed::
+
+    bitbake virtual/kernel -c menuconfig
+
+    then select::
+
+        Device Drivers --->
+            [*] Mailbox Hardware Support --->
+                <*> NXP S32N79 Message Receive Unit (MRU)
 
 Building with Yocto
 -------------------
