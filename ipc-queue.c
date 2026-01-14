@@ -1,6 +1,6 @@
 /* SPDX-License-Identifier: BSD-3-Clause */
 /*
- * Copyright 2018-2019,2022-2025 NXP
+ * Copyright 2018-2019,2022-2026 NXP
  */
 
 #include "ipc-os.h"
@@ -61,13 +61,20 @@ int8_t ipc_queue_push(struct ipc_queue *queue, const void *buf)
 	/* read indexes of push/pop rings are swapped (interference freedom) */
 	read = queue->pop_ring->read;
 
-	/* Check if read and write are valid value */
-	if ((read >= queue->elem_num) || (write >= queue->elem_num))
+	/* Check if write has valid value */
+	if (write >= queue->elem_num)
 		return -EINVAL;
 
-	/* check if queue is full ([write + 1 == read] because of sentinel) */
-	if (((write + 1u) % queue->elem_num) == read)
-		return -ENOMEM;
+	if (queue->pop_ring->sentinel == IPC_QUEUE_INIT_DONE) {
+		/* Check if read has valid value */
+		if (read >= queue->elem_num)
+			return -EINVAL;
+
+		/* check if queue is full */
+		/* ([write + 1 == read] because of sentinel) */
+		if (((write + 1u) % queue->elem_num) == read)
+			return -ENOMEM;
+	}
 
 	/* copy element from buffer in queue */
 	dst = &queue->push_ring->data[write * queue->elem_size];
