@@ -1,9 +1,11 @@
 /* SPDX-License-Identifier: BSD-3-Clause */
 /*
- * Copyright 2019,2021-2025 NXP
+ * Copyright 2019,2021-2026 NXP
  */
+#include "ipc-os.h"
+
 #include <linux/cdev.h>
-#if IS_ENABLED(CONFIG_MAILBOX) && IS_ENABLED(CONFIG_NXP_S32N79_MRU)
+#if IPC_MAILBOX_ENABLED
 #include <linux/mailbox_client.h>
 #endif
 #include <linux/mm.h>
@@ -14,7 +16,6 @@
 #include <linux/version.h>
 
 #include "ipc-shm.h"
-#include "ipc-os.h"
 #include "ipc-hw.h"
 #include "ipc-uio.h"
 
@@ -22,7 +23,7 @@
 #define IPC_UIO_NAME		"ipc-shm-uio"
 #define IPC_UIO_VERSION		"2.0"
 
-#if IS_ENABLED(CONFIG_MAILBOX) || IS_ENABLED(CONFIG_NXP_S32N79_MRU)
+#if IPC_MAILBOX_ENABLED
 	#define MAILBOX_NAME_SIZE (8U)
 	#define IPC_SHM_MAGIC_NUM (0x49504346U)
 	/* Using this define instead of IPC_IRQ_NONE
@@ -56,7 +57,7 @@ struct ipc_uio_priv_type {
 	atomic_t refcnt;
 	struct uio_info info;
 	struct ipc_uio_cdev_data data;
-#if IS_ENABLED(CONFIG_MAILBOX) && IS_ENABLED(CONFIG_NXP_S32N79_MRU)
+#if IPC_MAILBOX_ENABLED
 	struct mbox_client mbox_tx_client;
 	struct mbox_client mbox_rx_client;
 	struct mbox_chan *mbox_tx_channel;
@@ -89,8 +90,7 @@ struct ipc_pdev_priv_type {
 	struct ipc_uio_priv_type uio_id[IPC_SHM_MAX_INSTANCES];
 } ipc_pdev_priv;
 
-#if IS_ENABLED(CONFIG_MAILBOX) && IS_ENABLED(CONFIG_NXP_S32N79_MRU) \
-	&& defined(PLATFORM_FLAVOR_s32n7)
+#if IPC_S32N7_MAILBOX_ENABLED
 /**
  * ipc_uio_mailbox_rx_callback() - Mailbox receive callback for IPC UIO
  * @client: mailbox client structure
@@ -180,6 +180,9 @@ static int ipc_uio_irq_init(const uint8_t instance,
 		ipc_pdev_priv.uio_id[instance].mbox_tx_client.rx_callback
 			= NULL;
 		ipc_pdev_priv.uio_id[instance].mbox_tx_client.tx_done = NULL;
+		ipc_pdev_priv.uio_id[instance].mbox_tx_client.knows_txdone
+			= true;
+		ipc_pdev_priv.uio_id[instance].mbox_tx_client.tx_block = false;
 
 		ipc_pdev_priv.uio_id[instance].mbox_tx_channel
 			= mbox_request_channel_byname(
@@ -410,8 +413,7 @@ static int ipc_uio_free(struct ipc_uio_cdev_data *data)
 		&& (ipc_pdev_priv.irq_num_init[inst]
 			!= IPC_UIO_POLLING)) {
 		uio_unregister_device(&ipc_pdev_priv.uio_id[inst].info);
-#if IS_ENABLED(CONFIG_MAILBOX) && IS_ENABLED(CONFIG_NXP_S32N79_MRU) \
-	&& defined(PLATFORM_FLAVOR_s32n7)
+#if IPC_S32N7_MAILBOX_ENABLED
 		ipc_uio_mailbox_free(&ipc_pdev_priv.uio_id[inst]);
 #endif
 	}
@@ -620,8 +622,7 @@ static void ipc_shm_uio_remove(struct platform_device *pdev)
 	shm_dbg("device removed\n");
 }
 
-#if IS_ENABLED(CONFIG_MAILBOX) && IS_ENABLED(CONFIG_NXP_S32N79_MRU) \
-	&& defined(PLATFORM_FLAVOR_s32n7)
+#if IPC_S32N7_MAILBOX_ENABLED
 void ipc_os_mailbox_tx(const uint8_t instance)
 {
 	uint32_t IPC_SHM_SENDING = IPC_SHM_MAGIC_NUM;

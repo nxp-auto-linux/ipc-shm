@@ -1,6 +1,6 @@
 /* SPDX-License-Identifier: BSD-3-Clause */
 /*
- * Copyright 2018,2021,2024-2025 NXP
+ * Copyright 2018,2021,2024-2026 NXP
  */
 #ifndef IPC_OS_H
 #define IPC_OS_H
@@ -14,6 +14,19 @@
 
 #define IPC_SHM_INSTANCE_DISABLED   0
 #define IPC_SHM_INSTANCE_ENABLED    1
+
+/* Check if mailbox configuration is enabled for s32n7 in linux config */
+#define IPC_MAILBOX_ENABLED (IS_ENABLED(CONFIG_MAILBOX) && \
+			IS_ENABLED(CONFIG_NXP_S32N79_MRU))
+
+#ifndef PLATFORM_FLAVOR_s32n7
+	/* Avoid warning when building other platforms */
+	#define PLATFORM_FLAVOR_s32n7 0
+#endif /* PLATFORM_FLAVOR_s32n7 */
+/* Check if mailbox configuration is enabled for s32n7 for ipc-shm */
+#define IPC_S32N7_MAILBOX_ENABLED (IS_ENABLED(CONFIG_MAILBOX) && \
+				IS_ENABLED(CONFIG_NXP_S32N79_MRU) && \
+				PLATFORM_FLAVOR_s32n7)
 
 /* convenience wrappers for printing errors and debug messages */
 #define shm_fmt(fmt) DRIVER_NAME": %s(): "fmt
@@ -58,8 +71,7 @@ uintptr_t ipc_os_ioremap(uintptr_t phys_addr, uint32_t size);
 /* ipc_os_ioremap() - I/O memory unmap for a physical address */
 void ipc_os_iounmap(uintptr_t phys_addr, uintptr_t vir_addr, uint32_t size);
 
-#if IS_ENABLED(CONFIG_MAILBOX) && IS_ENABLED(CONFIG_NXP_S32N79_MRU) \
-	&& defined(PLATFORM_FLAVOR_s32n7)
+#if IPC_S32N7_MAILBOX_ENABLED
 /**
  * ipc_os_mailbox_tx() - Send mailbox message to remote core
  * @instance: instance id

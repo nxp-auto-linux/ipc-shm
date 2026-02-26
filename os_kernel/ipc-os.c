@@ -1,12 +1,14 @@
 /* SPDX-License-Identifier: BSD-3-Clause */
 /*
- * Copyright 2018-2025 NXP
+ * Copyright 2018-2026 NXP
  */
+#include "ipc-os.h"
+
 #include <linux/ioport.h>
 #include <linux/io.h>
 #include <linux/interrupt.h>
 /* Conditionally include mailbox support */
-#if IS_ENABLED(CONFIG_MAILBOX) && IS_ENABLED(CONFIG_NXP_S32N79_MRU)
+#if IPC_MAILBOX_ENABLED
 #include <linux/mailbox_client.h>
 #include <linux/of_platform.h>
 #include <linux/platform_device.h>
@@ -15,7 +17,6 @@
 #include <linux/of_address.h>
 #include <linux/version.h>
 
-#include "ipc-os.h"
 #include "ipc-hw.h"
 #include "ipc-shm.h"
 
@@ -31,7 +32,7 @@
 	#define DT_INTC_NODE_COMP "nxp,s32n79-ipc-shm"
 	#define MAILBOX_NAME_SIZE (8U)
 	#define IPC_SHM_MAGIC_NUM (0x49504346U)
-#if (!IS_ENABLED(CONFIG_MAILBOX)) || (!IS_ENABLED(CONFIG_NXP_S32N79_MRU))
+#if !IPC_MAILBOX_ENABLED
 	#warning "CONFIG_MAILBOX and CONFIG_NXP_S32N79_MRU must be enabled \
 		for interrupt support on s32n7 platform"
 #endif
@@ -60,7 +61,7 @@ struct ipc_os_priv_instance {
 	uintptr_t remote_phys_shm;
 	uintptr_t local_virt_shm;
 	uintptr_t remote_virt_shm;
-#if IS_ENABLED(CONFIG_MAILBOX) && IS_ENABLED(CONFIG_NXP_S32N79_MRU)
+#if IPC_MAILBOX_ENABLED
 	struct mbox_client mbox_tx_client;
 	struct mbox_client mbox_rx_client;
 	struct mbox_chan *mbox_tx_channel;
@@ -115,8 +116,7 @@ static void ipc_shm_softirq(unsigned long arg)
 	}
 }
 
-#if IS_ENABLED(CONFIG_MAILBOX) && IS_ENABLED(CONFIG_NXP_S32N79_MRU) \
-	&& defined(PLATFORM_FLAVOR_s32n7)
+#if IPC_S32N7_MAILBOX_ENABLED
 static void ipc_shm_hardirq(struct mbox_client *client, void *msg)
 #else
 /* driver interrupt service routine */
@@ -139,8 +139,7 @@ static irqreturn_t ipc_shm_hardirq(int irq, void *dev)
 
 	tasklet_schedule(&ipc_shm_rx_tasklet);
 
-#if IS_ENABLED(CONFIG_MAILBOX) && IS_ENABLED(CONFIG_NXP_S32N79_MRU) \
-	&& defined(PLATFORM_FLAVOR_s32n7)
+#if IPC_S32N7_MAILBOX_ENABLED
 	/* Do nothing */
 #else
 	return IRQ_HANDLED;
@@ -148,8 +147,7 @@ static irqreturn_t ipc_shm_hardirq(int irq, void *dev)
 }
 
 
-#if IS_ENABLED(CONFIG_MAILBOX) && IS_ENABLED(CONFIG_NXP_S32N79_MRU) \
-	&& defined(PLATFORM_FLAVOR_s32n7)
+#if IPC_S32N7_MAILBOX_ENABLED
 
 /**
  * ipc_os_mailbox_init() - Initialize mailbox channels for IPC instance
@@ -229,6 +227,9 @@ static int ipc_os_mailbox_init(const uint8_t instance,
 			= &pdev->dev;
 		ipc_os_priv.id[instance].mbox_tx_client.rx_callback = NULL;
 		ipc_os_priv.id[instance].mbox_tx_client.tx_done = NULL;
+		ipc_os_priv.id[instance].mbox_tx_client.knows_txdone = true;
+		ipc_os_priv.id[instance].mbox_tx_client.tx_block = false;
+
 		/* Request TX channel from mailbox controller
 		 * (sends to another core)
 		 */
@@ -398,8 +399,7 @@ int8_t ipc_os_init(const uint8_t instance, const struct ipc_shm_cfg *cfg,
 	ipc_os_priv.id[instance].remote_phys_shm = cfg->remote_shm_addr;
 	ipc_os_priv.id[instance].rx_cb = rx_cb;
 
-#if IS_ENABLED(CONFIG_MAILBOX) && IS_ENABLED(CONFIG_NXP_S32N79_MRU) \
-		&& defined(PLATFORM_FLAVOR_s32n7)
+#if IPC_S32N7_MAILBOX_ENABLED
 	err = ipc_os_mailbox_init(instance, cfg);
 	if (err != 0) {
 		shm_err("Failed to initialize mailbox for instance %d\n",
@@ -432,15 +432,16 @@ err_release_local_region:
 
 void ipc_os_free(const uint8_t instance)
 {
+#if !(IPC_S32N7_MAILBOX_ENABLED)
 	int keep_irq_enable = 0;
 	uint8_t inst_id = 0;
+#endif
 
 	ipc_os_priv.id[instance].state = IPC_SHM_INSTANCE_DISABLED;
 	ipc_os_priv.id[instance].rx_cb = NULL;
 
 	if (ipc_os_priv.id[instance].rx_irq != IPC_IRQ_NONE) {
-#if IS_ENABLED(CONFIG_MAILBOX) && IS_ENABLED(CONFIG_NXP_S32N79_MRU) \
-	&& defined(PLATFORM_FLAVOR_s32n7)
+#if IPC_S32N7_MAILBOX_ENABLED
 		ipc_os_mailbox_free(instance);
 #else
 		for (inst_id = 0; inst_id < IPC_SHM_MAX_INSTANCES; inst_id++) {
@@ -514,7 +515,7 @@ void ipc_os_iounmap(uintptr_t phys_addr, uintptr_t vir_addr, uint32_t size)
 	release_mem_region((phys_addr_t)phys_addr, size);
 }
 
-#if IS_ENABLED(CONFIG_MAILBOX) && IS_ENABLED(CONFIG_NXP_S32N79_MRU)
+#if IPC_S32N7_MAILBOX_ENABLED
 void ipc_os_mailbox_tx(const uint8_t instance)
 {
 	uint32_t IPC_SHM_SENDING = IPC_SHM_MAGIC_NUM;
