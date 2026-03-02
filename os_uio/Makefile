@@ -1,6 +1,6 @@
 # SPDX-License-Identifier:	BSD-3-Clause
 #
-# Copyright 2023,2025 NXP
+# Copyright 2023,2026 NXP
 #
 MAKEFLAGS += --warn-undefined-variables
 EXTRA_CFLAGS ?=
@@ -43,7 +43,9 @@ CFLAGS += -DIPC_UIO_MODULE_PATH=\"$(IPC_UIO_MODULE_DIR)/$(ipc_uio_name).ko\"
 CFLAGS += -DIPC_UIO_MODULE_NAME=\"$(shell echo $(ipc_uio_name) | tr '-' '_')\"
 
 # object file list
-objs = ../ipc-shm.o ../ipc-queue.o ipc-os.o
+objs = ipc-shm.o ipc-queue.o ipc-os.o
+
+vpath %.c . ..
 
 %.o: %.c
 	@echo 'Building lib file: $<'
