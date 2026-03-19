@@ -19,10 +19,6 @@
 #define IPC_MAILBOX_ENABLED (IS_ENABLED(CONFIG_MAILBOX) && \
 			IS_ENABLED(CONFIG_NXP_S32N79_MRU))
 
-#ifndef PLATFORM_FLAVOR_s32n7
-	/* Avoid warning when building other platforms */
-	#define PLATFORM_FLAVOR_s32n7 0
-#endif /* PLATFORM_FLAVOR_s32n7 */
 /* Check if mailbox configuration is enabled for s32n7 for ipc-shm */
 #define IPC_S32N7_MAILBOX_ENABLED (IS_ENABLED(CONFIG_MAILBOX) && \
 				IS_ENABLED(CONFIG_NXP_S32N79_MRU) && \

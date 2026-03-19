@@ -84,9 +84,10 @@ void *ipc_shm_acquire_buf(const uint8_t instance, uint8_t chan_id,
  * Function used only for managed channels where buffer management is enabled.
  * Function is thread-safe for different channels but not for the same channel.
  *
- * * %0        - On success
- * * %-EINVAL  - Invalid instance, channel or buffer
- * * %-ENOMEM  - Cannot release buffer
+ * * %0               - On success
+ * * %-EINVAL         - Invalid instance, channel or buffer
+ * * %-ENOMEM         - Cannot release buffer
+ * * %-EADDRNOTAVAIL  - Buffer is released to the pool and cannot release again
  */
 int8_t ipc_shm_release_buf(const uint8_t instance, uint8_t chan_id,
 				const void *buf);
@@ -101,8 +102,9 @@ int8_t ipc_shm_release_buf(const uint8_t instance, uint8_t chan_id,
  * Function used only for managed channels where buffer management is enabled.
  * Function is thread-safe for different channels but not for the same channel.
  *
- * * %0        - On success
- * * %-EINVAL  - Invalid instance, channel or buffer
+ * * %0              - On success
+ * * %-EINVAL        - Invalid instance, channel or buffer
+ * * %-EADDRNOTAVAIL - Buffer is transmitted without being acquired
  */
 int8_t ipc_shm_tx(const uint8_t instance, int chan_id, void *buf,
 			uint32_t size);
