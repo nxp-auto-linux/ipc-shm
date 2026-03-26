@@ -1,6 +1,6 @@
 /* SPDX-License-Identifier: BSD-3-Clause */
 /*
- * Copyright 2024-2025 NXP
+ * Copyright 2024-2026 NXP
  */
 #ifndef IPC_TYPES_H
 #define IPC_TYPES_H
@@ -167,12 +167,16 @@ struct ipc_shm_managed_cfg {
 
 /**
  * struct ipc_shm_unmanaged_cfg - unmanaged channel parameters
+ * @addr:     detached buffer physical address (used only if detached is true)
  * @size:     unmanaged channel memory size
+ * @detached: if true, channel uses external buffer at @addr instead of shm
  * @rx_cb:    receive callback
  * @cb_arg:   optional receive callback argument
  */
 struct ipc_shm_unmanaged_cfg {
+	volatile uintptr_t addr;
 	uint32_t size;
+	bool detached;
 	void (*rx_cb)(void *cb_arg, const uint8_t instance, uint8_t chan_id,
 			void *mem);
 	void *cb_arg;

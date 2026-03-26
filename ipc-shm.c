@@ -134,14 +134,24 @@ struct ipc_channel_umem {
 
 /**
  * struct ipc_unmanaged_channel - unmanaged channel private data
- * @size:        unmanaged channel memory size requested by app
- * @local_umem:  local channel unmanaged memory
- * @remote_umem: remote channel unmanaged memory
- * @rx_cb:       receive callback
- * @cb_arg:      optional receive callback argument
+ * @size:                      unmanaged channel memory size requested by app
+ * @detached:                  if true, channel uses external buffer
+ * @detached_phys_addr:        local detached buffer physical address
+ * @detached_virt_addr:        local detached buffer virtual address
+ * @remote_detached_phys_addr: cached remote detached buffer physical address
+ * @remote_detached_virt_addr: cached remote detached buffer virtual address
+ * @local_umem:                local channel unmanaged memory
+ * @remote_umem:               remote channel unmanaged memory
+ * @rx_cb:                     receive callback
+ * @cb_arg:                    optional receive callback argument
  */
 struct ipc_unmanaged_channel {
 	uint32_t size;
+	bool detached;
+	uintptr_t detached_phys_addr;
+	uintptr_t detached_virt_addr;
+	uintptr_t remote_phys_addr;
+	uintptr_t remote_virt_addr;
 	struct ipc_channel_umem *local_mem;
 	struct ipc_channel_umem *remote_mem;
 	void (*rx_cb)(void *cb_arg, const uint8_t instance, uint8_t chan_id,
@@ -321,6 +331,41 @@ static int8_t ipc_check_mchan_integrity(struct ipc_managed_channel *mchan)
 }
 
 /**
+ * ipc_unmanaged_buf_addr() - get remote unmanaged channel buffer address
+ * @uchan: unmanaged channel pointer
+ *
+ * For attached channels, returns the remote mem buffer directly.
+ * For detached channels, reads the remote physical address from shared memory
+ * and remaps it if it changed since the last call.
+ *
+ * Return: virtual buffer address, or (uintptr_t)NULL on failure
+ */
+static uintptr_t ipc_unmanaged_buf_addr(
+		struct ipc_unmanaged_channel *uchan)
+{
+	uintptr_t rphys;
+
+	if (uchan->detached == false)
+		return (uintptr_t)uchan->remote_mem->mem;
+
+	rphys = *((uintptr_t *)(uchan->remote_mem->mem));
+	if (rphys == (uintptr_t)NULL)
+		return (uintptr_t)NULL;
+
+	/* remap only if remote phys addr changed */
+	if (rphys != uchan->remote_phys_addr) {
+		if (uchan->remote_virt_addr != (uintptr_t)NULL)
+			ipc_os_iounmap(uchan->remote_phys_addr,
+				uchan->remote_virt_addr, uchan->size);
+		uchan->remote_phys_addr = rphys;
+		uchan->remote_virt_addr =
+			ipc_os_ioremap(rphys, uchan->size);
+	}
+
+	return uchan->remote_virt_addr;
+}
+
+/**
  * ipc_channel_rx() - handle Rx for a single channel
  * @instance: instance id
  * @chan_id:  channel id
@@ -377,8 +422,11 @@ static uint32_t ipc_channel_rx(const uint8_t instance, uint8_t chan_id,
 				uchan->local_mem->remote_tx_count
 					= remote_tx_count;
 
-				uchan->rx_cb(uchan->cb_arg, instance, chan->id,
-						(void *)uchan->remote_mem->mem);
+				buf_addr = ipc_unmanaged_buf_addr(uchan);
+
+				if (buf_addr != (uintptr_t)NULL)
+					uchan->rx_cb(uchan->cb_arg, instance,
+						chan->id, (void *)buf_addr);
 
 				return budget;
 			}
@@ -541,7 +589,7 @@ static int8_t ipc_buf_pool_init(const uint8_t instance, uint8_t chan_id,
 	align_padding = (uint8_t)((8U - (cfg->num_bufs % 8U)) % 8U);
 	buf_state_size = (uint32_t)cfg->num_bufs + (uint32_t)align_padding;
 
-	
+
 
 	/* Place rx buffer state array in shared memory right after queue */
 	pool->rx_buffer_is_free = (bool *)(mng_pool->local_pool_shm
@@ -733,13 +781,19 @@ static int8_t unmanaged_channel_init(const uint8_t instance, int chan_id,
 	struct ipc_unmanaged_channel *chan = get_unmanaged_chan(instance,
 			chan_id);
 
-	if ((cfg->rx_cb == NULL) || (cfg->size > IPC_SHM_MAX_UMNG_SIZE)) {
+	if ((cfg->rx_cb == NULL) || (cfg->size == 0u)
+			|| (cfg->size > IPC_SHM_MAX_UMNG_SIZE)) {
 		shm_err("Receive callback not specified\n");
 		return -EINVAL;
 	}
 
 	/* save unmanaged channel parameters */
 	chan->size = cfg->size;
+	chan->detached = cfg->detached;
+	chan->detached_phys_addr = (uintptr_t)NULL;
+	chan->detached_virt_addr = (uintptr_t)NULL;
+	chan->remote_phys_addr = (uintptr_t)NULL;
+	chan->remote_virt_addr = (uintptr_t)NULL;
 	chan->rx_cb = cfg->rx_cb;
 	chan->cb_arg = cfg->cb_arg;
 
@@ -763,7 +817,25 @@ static int8_t unmanaged_channel_init(const uint8_t instance, int chan_id,
 		chan->local_mem->remote_tx_count = 0;
 	}
 
-	chan->local_mem->sentinel = (uint32_t)IPC_UCHAN_INIT_DONE;
+	if (cfg->detached == false) {
+		chan->local_mem->sentinel = (uint32_t)IPC_UCHAN_INIT_DONE;
+	} else {
+		if (cfg->addr == (uintptr_t)NULL)
+			return -EINVAL;
+
+		chan->detached_phys_addr = cfg->addr;
+
+		/* ioremap local detached buffer (phys -> virt) */
+		chan->detached_virt_addr = ipc_os_ioremap(
+				chan->detached_phys_addr, cfg->size);
+		if (chan->detached_virt_addr == (uintptr_t)NULL)
+			return -EINVAL;
+
+		/* store physical address in shared memory for remote */
+		*((uintptr_t *)(chan->local_mem->mem)) = cfg->addr;
+
+		chan->local_mem->sentinel = (uint32_t)IPC_UCHAN_INIT_DONE;
+	}
 
 	return 0;
 }
@@ -906,6 +978,30 @@ static void ipc_shm_free_channel(const uint8_t instance, uint8_t chan_id,
 	} else if (chan_type == IPC_SHM_UNMANAGED) {
 		uchan = &ipc_shm_priv_data[instance].channels[chan_id].ch.umng;
 		if (uchan->local_mem != NULL) {
+			if (uchan->detached == true) {
+				*((uintptr_t *)(uchan->local_mem->mem))
+					= (uintptr_t)NULL;
+				if (uchan->detached_virt_addr
+						!= (uintptr_t)NULL) {
+					ipc_os_iounmap(
+						uchan->detached_phys_addr,
+						uchan->detached_virt_addr,
+						uchan->size);
+					uchan->detached_virt_addr
+						= (uintptr_t)NULL;
+				}
+				if (uchan->remote_virt_addr
+						!= (uintptr_t)NULL) {
+					ipc_os_iounmap(
+						uchan->remote_phys_addr,
+						uchan->remote_virt_addr,
+						uchan->size);
+					uchan->remote_virt_addr
+						= (uintptr_t)NULL;
+					uchan->remote_phys_addr
+						= (uintptr_t)NULL;
+				}
+			}
 			uchan->local_mem->sentinel = 0;
 			uchan->local_mem->tx_count = 0;
 			uchan->local_mem->remote_tx_count = 0;
@@ -935,11 +1031,16 @@ static uint32_t get_chan_memmap_size(const uint8_t instance, int chan_id)
 	int pool_id;
 
 	/* unmanaged channels: control structure size + channel memory size */
-	if (chan->type == IPC_SHM_UNMANAGED)
-		return (uint32_t)(sizeof(struct ipc_channel_umem) +
-			chan->ch.umng.size);
-	else if (chan->type == IPC_SHM_SCMI)
+	if (chan->type == IPC_SHM_UNMANAGED) {
+		if (chan->ch.umng.detached == false)
+			return (uint32_t)(sizeof(struct ipc_channel_umem) +
+				chan->ch.umng.size);
+
+		/* 64 bits reserved to store the unmanaged detached address */
+		return (uint32_t)(sizeof(struct ipc_channel_umem) + 8u);
+	} else if (chan->type == IPC_SHM_SCMI) {
 		return 0;
+	}
 
 	/* managed channels: size of BD queue + size of buf pools */
 	mchan = get_managed_chan(instance, chan_id);
@@ -1340,7 +1441,10 @@ void *ipc_shm_unmanaged_acquire(const uint8_t instance, uint8_t chan_id)
 		return NULL;
 
 	/* for unmanaged channels return entire channel memory */
-	return (void *)chan->local_mem->mem;
+	if (chan->detached == false)
+		return (void *)chan->local_mem->mem;
+
+	return (void *)chan->detached_virt_addr;
 }
 
 int8_t ipc_shm_unmanaged_tx(const uint8_t instance, uint8_t chan_id)
@@ -1558,7 +1662,10 @@ int8_t ipc_shm_get_message_from_channel(uint8_t instance, uint8_t chan_id,
 
 		/* save new remote Tx counter and update the buffer*/
 		uchan->local_mem->remote_tx_count = remote_tx_count;
-		*msg_buffer = (void *)uchan->remote_mem->mem;
+
+		*msg_buffer = (void *)ipc_unmanaged_buf_addr(uchan);
+		if (*msg_buffer == NULL)
+			return -EINVAL;
 
 		return 0;
 	}
@@ -1579,6 +1686,7 @@ int8_t ipc_shm_get_message_from_channel(uint8_t instance, uint8_t chan_id,
 				<= (ipc_os_get_remote_shm(instance) +
 				ipc_shm_priv_data[instance].shm_size))) {
 		*msg_buffer = (void *)buf_addr;
+		pool->rx_buffer_is_free[bd.buf_id] = false;
 		return 0;
 	}
 

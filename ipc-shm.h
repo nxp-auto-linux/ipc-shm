@@ -1,12 +1,12 @@
 /* SPDX-License-Identifier: BSD-3-Clause */
 /*
- * Copyright 2018-2025 NXP
+ * Copyright 2018-2026 NXP
  */
 #ifndef IPC_SHM_H
 #define IPC_SHM_H
 
-#include "ipc-types.h"
 #include "ipc-os.h"
+#include "ipc-types.h"
 
 
 /**
