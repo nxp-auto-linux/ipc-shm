@@ -1,39 +1,51 @@
 /* SPDX-License-Identifier: BSD-3-Clause */
 /*
- * Copyright 2025 NXP
+ * Copyright 2025-2026 NXP
  */
 
 #include "ipcf_Ip_Cfg.h"
 
+static struct ipc_shm_buffer_state ipcf_shm_pool_state_0_0[5];
+static struct ipc_shm_buffer_state ipcf_shm_pool_state_0_1[5];
+static struct ipc_shm_buffer_state ipcf_shm_pool_state_0_2[5];
 /* Pools must be sorted in ascending order by buffer size */
-static struct ipc_shm_pool_cfg ipcf_shm_cfg_buf_pools0_1[3] = {
+static struct ipc_shm_pool_cfg ipcf_shm_cfg_buf_pools0[3] = {
 	{
 		.num_bufs = 5,
 		.buf_size = 32,
+		.buffer_state = ipcf_shm_pool_state_0_0,
 	},
 	{
 		.num_bufs = 5,
 		.buf_size = 256,
+		.buffer_state = ipcf_shm_pool_state_0_1,
 	},
 	{
 		.num_bufs = 5,
 		.buf_size = 4096,
+		.buffer_state = ipcf_shm_pool_state_0_2,
 	},
 };
 
+static struct ipc_shm_buffer_state ipcf_shm_pool_state_1_0[5];
+static struct ipc_shm_buffer_state ipcf_shm_pool_state_1_1[5];
+static struct ipc_shm_buffer_state ipcf_shm_pool_state_1_2[5];
 /* Pools must be sorted in ascending order by buffer size */
-static struct ipc_shm_pool_cfg ipcf_shm_cfg_buf_pools0_2[3] = {
+static struct ipc_shm_pool_cfg ipcf_shm_cfg_buf_pools1[3] = {
 	{
 		.num_bufs = 5,
 		.buf_size = 32,
+		.buffer_state = ipcf_shm_pool_state_1_0,
 	},
 	{
 		.num_bufs = 5,
 		.buf_size = 256,
+		.buffer_state = ipcf_shm_pool_state_1_1,
 	},
 	{
 		.num_bufs = 5,
 		.buf_size = 4096,
+		.buffer_state = ipcf_shm_pool_state_1_2,
 	},
 };
 
@@ -53,7 +65,7 @@ static struct ipc_shm_channel_cfg ipcf_shm_cfg_channels0[3] = {
 		.ch = {
 			.managed = {
 				.num_pools = 3,
-				.pools = ipcf_shm_cfg_buf_pools0_1,
+				.pools = ipcf_shm_cfg_buf_pools0,
 				.rx_cb = data_chan_rx_cb,
 				.cb_arg = &rx_cb_arg,
 			},
@@ -64,7 +76,7 @@ static struct ipc_shm_channel_cfg ipcf_shm_cfg_channels0[3] = {
 		.ch = {
 			.managed = {
 				.num_pools = 3,
-				.pools = ipcf_shm_cfg_buf_pools0_2,
+				.pools = ipcf_shm_cfg_buf_pools1,
 				.rx_cb = data_chan_rx_cb,
 				.cb_arg = &rx_cb_arg,
 			},

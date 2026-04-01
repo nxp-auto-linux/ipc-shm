@@ -24,9 +24,8 @@ struct ipc_shm_cfg ipcf_shm_cfg_instances[] = {
 	{
 		.local_shm_addr  = 0x381C0000,
 		.remote_shm_addr = 0x381D0000,
-		.inter_core_tx_irq = IPC_IRQ_MRU,
-		.inter_core_rx_irq = IPC_IRQ_MRU,
-		.mbox_cfg_id = 0,
+		.inter_core_tx_irq = 0,
+		.inter_core_rx_irq = 0,
 		.shm_size  = 0x1000,
 		.num_channels = 1,
 		.channels = ipcf_shm_cfg_channels,

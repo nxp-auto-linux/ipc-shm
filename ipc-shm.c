@@ -63,8 +63,7 @@ struct ipc_shm_bd {
  * @local_pool_addr:  address of local buffer pool
  * @remote_pool_addr: address of remote buffer pool
  * @bd_queue:         queue containing BDs of free buffers
- * @rx_buffer_is_free: array tracking release status of RX buffers
- * @tx_buffer_is_free: array tracking transmit status of TX buffers
+ * @buffer_state:     array tracking status of RX and TX buffers
  *
  * bd_queue has two rings: one for pushing BDs (release ring) and one for
  * popping BDs (acquire ring).
@@ -84,8 +83,7 @@ struct ipc_shm_pool {
 	uintptr_t local_pool_addr;
 	uintptr_t remote_pool_addr;
 	struct ipc_queue bd_queue;
-	bool *rx_buffer_is_free;
-	bool *tx_buffer_is_free;
+	struct ipc_shm_buffer_state *buffer_state;
 };
 
 /**
@@ -449,7 +447,7 @@ static uint32_t ipc_channel_rx(const uint8_t instance, uint8_t chan_id,
 			&& ((buf_addr + pool->buf_size)
 				<= ipc_os_get_remote_shm(instance) +
 				ipc_shm_priv_data[instance].shm_size)) {
-			pool->rx_buffer_is_free[bd.buf_id] = false;
+			pool->buffer_state[bd.buf_id].rx_buffer_is_free = false;
 			mchan->rx_cb(mchan->cb_arg, instance, chan->id,
 				(void *)buf_addr, bd.data_size);
 		}
@@ -555,9 +553,7 @@ static int8_t ipc_buf_pool_init(const uint8_t instance, uint8_t chan_id,
 	struct ipc_managed_channel *chan = get_managed_chan(instance, chan_id);
 	struct ipc_shm_pool *pool = &chan->pools[pool_id];
 	struct ipc_queue_data queue_data;
-	uint32_t buf_state_size;
 	uint32_t queue_mem_size;
-	uint8_t align_padding;
 	struct ipc_shm_bd bd;
 	uint16_t buf_id;
 	int8_t err;
@@ -584,41 +580,26 @@ static int8_t ipc_buf_pool_init(const uint8_t instance, uint8_t chan_id,
 	if (err != 0)
 		return err;
 
+	if (NULL == cfg->buffer_state)
+		return -EINVAL;
+
 	/* init local/remote buffer pool addrs */
 	queue_mem_size = ipc_queue_mem_size(&pool->bd_queue);
-	align_padding = (uint8_t)((8U - (cfg->num_bufs % 8U)) % 8U);
-	buf_state_size = (uint32_t)cfg->num_bufs + (uint32_t)align_padding;
-
-
-
-	/* Place rx buffer state array in shared memory right after queue */
-	pool->rx_buffer_is_free = (bool *)(mng_pool->local_pool_shm
-					+ queue_mem_size);
-
-	/**
-	 * Place tx buffer state array in shared memory after rx buffer state array
-	 * with padding alignment to avoid unaligned access
-	 */
-	pool->tx_buffer_is_free = (bool *)(pool->rx_buffer_is_free
-					+ buf_state_size);
 
 	/* init actual local buffer pool addr */
-	pool->local_pool_addr = mng_pool->local_pool_shm
-				+ queue_mem_size
-				+ (2U * buf_state_size);
-	/* init actual remote buffer pool addr */
-	pool->remote_pool_addr = mng_pool->remote_pool_shm
-				+ queue_mem_size
-				+ (2U * buf_state_size);
+	pool->local_pool_addr = mng_pool->local_pool_shm + queue_mem_size;
 
-	pool->shm_size = queue_mem_size
-			+ (cfg->buf_size * cfg->num_bufs)
-			+ (2U * buf_state_size);
+	/* init actual remote buffer pool addr */
+	pool->remote_pool_addr = mng_pool->remote_pool_shm + queue_mem_size;
+
+	pool->shm_size = queue_mem_size + (cfg->buf_size * cfg->num_bufs);
+
+	pool->buffer_state = cfg->buffer_state;
 
 	/* Initialize all buffer states to FREE */
 	for (buf_id = 0; buf_id < cfg->num_bufs; buf_id++) {
-		pool->tx_buffer_is_free[buf_id] = true;
-		pool->rx_buffer_is_free[buf_id] = true;
+		pool->buffer_state[buf_id].tx_buffer_is_free = true;
+		pool->buffer_state[buf_id].rx_buffer_is_free = true;
 	}
 
 	/* check if pool fits into shared memory */
@@ -1232,7 +1213,7 @@ void *ipc_shm_acquire_buf(const uint8_t instance,
 		return NULL;
 
 	/* Mark buffer as in use */
-	pool->tx_buffer_is_free[bd.buf_id] = false;
+	pool->buffer_state[bd.buf_id].tx_buffer_is_free  = false;
 
 	shm_dbg("ch %d: pool %d: acquired buffer %d with address %lx\n",
 			chan_id, pool_id, bd.buf_id, buf_addr);
@@ -1354,7 +1335,7 @@ int8_t ipc_shm_release_buf(const uint8_t instance, uint8_t chan_id,
 			pool->buf_size);
 	bd.data_size = 0; /* reset size of written data in buffer */
 
-	if (true == pool->rx_buffer_is_free[bd.buf_id]) {
+	if (true == pool->buffer_state[bd.buf_id].rx_buffer_is_free) {
 		shm_err("Buffer %d from pool %d is already free\n",bd.buf_id, bd.pool_id);
 		return -EADDRNOTAVAIL;
 	}
@@ -1367,7 +1348,7 @@ int8_t ipc_shm_release_buf(const uint8_t instance, uint8_t chan_id,
 	}
 
 	/* Mark buffer descriptor as free */
-	pool->rx_buffer_is_free[bd.buf_id] = true;
+	pool->buffer_state[bd.buf_id].rx_buffer_is_free = true;
 
 	shm_dbg("ch %d: pool %d: released buffer %d with address %p\n",
 			chan_id, bd.pool_id, bd.buf_id, buf);
@@ -1405,7 +1386,7 @@ int8_t ipc_shm_tx(const uint8_t instance, int chan_id, void *buf, uint32_t size)
 			/ pool->buf_size);
 	bd.data_size = (uint32_t)size;
 
-	if (true == pool->tx_buffer_is_free[bd.buf_id]) {
+	if (true == pool->buffer_state[bd.buf_id].tx_buffer_is_free) {
 		shm_err("Buffer %d from pool %d is already in use\n", bd.buf_id, bd.pool_id);
 		return -EADDRNOTAVAIL;
 	}
@@ -1418,7 +1399,7 @@ int8_t ipc_shm_tx(const uint8_t instance, int chan_id, void *buf, uint32_t size)
 	}
 
 	/* Mark buffer descriptor as free */
-	pool->tx_buffer_is_free[bd.buf_id] = true;
+	pool->buffer_state[bd.buf_id].tx_buffer_is_free  = true;
 
 	/* notify remote that data is available */
 	ipc_hw_irq_notify(instance);
@@ -1686,7 +1667,7 @@ int8_t ipc_shm_get_message_from_channel(uint8_t instance, uint8_t chan_id,
 				<= (ipc_os_get_remote_shm(instance) +
 				ipc_shm_priv_data[instance].shm_size))) {
 		*msg_buffer = (void *)buf_addr;
-		pool->rx_buffer_is_free[bd.buf_id] = false;
+		pool->buffer_state[bd.buf_id].rx_buffer_is_free = false;
 		return 0;
 	}
 

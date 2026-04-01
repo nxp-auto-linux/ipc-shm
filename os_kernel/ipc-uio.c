@@ -146,14 +146,13 @@ static int ipc_uio_irq_init(const uint8_t instance,
 	/* Use the existing platform device */
 	dev = &ipc_pdev_priv.ipc_pdev->dev;
 
-	/* Get mailbox names */
-	snprintf(tx_name, sizeof(tx_name), "tx_%d", instance);
-	snprintf(rx_name, sizeof(rx_name), "rx_%d", instance);
-
 	/* Request RX channel from mailbox controller
 	 * (receives from A78)
 	 */
 	if (IPC_IRQ_NONE != cfg->inter_core_rx_irq) {
+		/* Get mailbox names based on instance */
+		snprintf(rx_name, sizeof(rx_name), "rx_%d",
+			cfg->inter_core_rx_irq);
 		ipc_pdev_priv.uio_id[instance].mbox_rx_client.dev = dev;
 		ipc_pdev_priv.uio_id[instance].mbox_rx_client.rx_callback
 			= ipc_uio_mailbox_rx_callback;
@@ -176,6 +175,9 @@ static int ipc_uio_irq_init(const uint8_t instance,
 	 * (sends from A78)
 	 */
 	if (IPC_IRQ_NONE != cfg->inter_core_tx_irq) {
+		/* Get mailbox names based on instance */
+		snprintf(tx_name, sizeof(tx_name), "tx_%d",
+			cfg->inter_core_tx_irq);
 		ipc_pdev_priv.uio_id[instance].mbox_tx_client.dev = dev;
 		ipc_pdev_priv.uio_id[instance].mbox_tx_client.rx_callback
 			= NULL;
@@ -521,7 +523,6 @@ static int ipc_cdev_mmap(struct file *file, struct vm_area_struct *vma)
 		}
 		offset += PAGE_SIZE;
 	}
-
 
 	shm_dbg("Mapped physical memory %p to user space\n",
 		(void *)ipc_pdev_priv.phys_addr);

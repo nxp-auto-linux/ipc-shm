@@ -195,11 +195,11 @@ static int ipc_os_mailbox_init(const uint8_t instance,
 		return -ENODEV;
 	}
 
-	/* Get mailbox names based on instance */
-	snprintf(tx_name, sizeof(tx_name), "tx_%d", instance);
-	snprintf(rx_name, sizeof(rx_name), "rx_%d", instance);
 
 	if (IPC_IRQ_NONE != cfg->inter_core_rx_irq) {
+		/* Get mailbox names based on instance */
+		snprintf(rx_name, sizeof(rx_name), "rx_%d",
+			cfg->inter_core_rx_irq);
 		ipc_os_priv.id[instance].mbox_rx_client.dev
 			= &pdev->dev;
 		ipc_os_priv.id[instance].mbox_rx_client.rx_callback
@@ -223,6 +223,9 @@ static int ipc_os_mailbox_init(const uint8_t instance,
 	}
 
 	if (IPC_IRQ_NONE != cfg->inter_core_tx_irq) {
+		/* Get mailbox names based on instance */
+		snprintf(tx_name, sizeof(tx_name), "tx_%d",
+			cfg->inter_core_tx_irq);
 		ipc_os_priv.id[instance].mbox_tx_client.dev
 			= &pdev->dev;
 		ipc_os_priv.id[instance].mbox_tx_client.rx_callback = NULL;

@@ -5,34 +5,46 @@
 
 #include "ipcf_Ip_Cfg.h"
 
+static struct ipc_shm_buffer_state ipcf_shm_pool_state_0_0[5];
+static struct ipc_shm_buffer_state ipcf_shm_pool_state_0_1[5];
+static struct ipc_shm_buffer_state ipcf_shm_pool_state_0_2[5];
 /* Pools must be sorted in ascending order by buffer size */
 static struct ipc_shm_pool_cfg ipcf_shm_cfg_buf_pools0[3] = {
 	{
 		.num_bufs = 5,
 		.buf_size = 32,
+		.buffer_state = ipcf_shm_pool_state_0_0,
 	},
 	{
 		.num_bufs = 5,
 		.buf_size = 64,
+		.buffer_state = ipcf_shm_pool_state_0_1,
 	},
 	{
 		.num_bufs = 5,
 		.buf_size = 128,
+		.buffer_state = ipcf_shm_pool_state_0_2,
 	},
 };
+static struct ipc_shm_buffer_state ipcf_shm_pool_state_1_0[5];
+static struct ipc_shm_buffer_state ipcf_shm_pool_state_1_1[5];
+static struct ipc_shm_buffer_state ipcf_shm_pool_state_1_2[5];
 /* Pools must be sorted in ascending order by buffer size */
 static struct ipc_shm_pool_cfg ipcf_shm_cfg_buf_pools1[3] = {
 	{
 		.num_bufs = 5,
 		.buf_size = 32,
+		.buffer_state = ipcf_shm_pool_state_1_0,
 	},
 	{
 		.num_bufs = 5,
 		.buf_size = 64,
+		.buffer_state = ipcf_shm_pool_state_1_1,
 	},
 	{
 		.num_bufs = 5,
 		.buf_size = 128,
+		.buffer_state = ipcf_shm_pool_state_1_2,
 	},
 };
 
@@ -76,9 +88,8 @@ struct ipc_shm_cfg ipcf_shm_cfg_instances[] = {
 	{
 		.local_shm_addr  = 0x381C0000,
 		.remote_shm_addr = 0x381D0000,
-		.inter_core_tx_irq = IPC_IRQ_MRU,
-		.inter_core_rx_irq = IPC_IRQ_MRU,
-		.mbox_cfg_id = 0,
+		.inter_core_tx_irq = 0,
+		.inter_core_rx_irq = 0,
 		.shm_size  = 0x1000,
 		.num_channels = 3,
 		.channels = ipcf_shm_cfg_channels,

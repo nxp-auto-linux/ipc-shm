@@ -5,38 +5,51 @@
 
 #include "ipcf_Ip_Cfg.h"
 
+static struct ipc_shm_buffer_state ipcf_shm_pool0_state_0_0[5];
+static struct ipc_shm_buffer_state ipcf_shm_pool0_state_0_1[5];
+static struct ipc_shm_buffer_state ipcf_shm_pool0_state_0_2[5];
 /* Pools must be sorted in ascending order by buffer size */
-static struct ipc_shm_pool_cfg ipcf_shm_cfg_buf_pools0[3] = {
+static struct ipc_shm_pool_cfg ipcf_shm_cfg_buf_pools0_1[3] = {
 	{
 		.num_bufs = 5,
 		.buf_size = 32,
+		.buffer_state = ipcf_shm_pool0_state_0_0,
 	},
 	{
 		.num_bufs = 5,
 		.buf_size = 64,
+		.buffer_state = ipcf_shm_pool0_state_0_1,
 	},
 	{
 		.num_bufs = 5,
 		.buf_size = 128,
-	},
-};
-/* Pools must be sorted in ascending order by buffer size */
-static struct ipc_shm_pool_cfg ipcf_shm_cfg_buf_pools1[3] = {
-	{
-		.num_bufs = 5,
-		.buf_size = 32,
-	},
-	{
-		.num_bufs = 5,
-		.buf_size = 64,
-	},
-	{
-		.num_bufs = 5,
-		.buf_size = 128,
+		.buffer_state = ipcf_shm_pool0_state_0_2,
 	},
 };
 
-static struct ipc_shm_channel_cfg ipcf_shm_cfg_channels[3] = {
+static struct ipc_shm_buffer_state ipcf_shm_pool0_state_1_0[5];
+static struct ipc_shm_buffer_state ipcf_shm_pool0_state_1_1[5];
+static struct ipc_shm_buffer_state ipcf_shm_pool0_state_1_2[5];
+/* Pools must be sorted in ascending order by buffer size */
+static struct ipc_shm_pool_cfg ipcf_shm_cfg_buf_pools0_2[3] = {
+	{
+		.num_bufs = 5,
+		.buf_size = 32,
+		.buffer_state = ipcf_shm_pool0_state_1_0,
+	},
+	{
+		.num_bufs = 5,
+		.buf_size = 64,
+		.buffer_state = ipcf_shm_pool0_state_1_1,
+	},
+	{
+		.num_bufs = 5,
+		.buf_size = 128,
+		.buffer_state = ipcf_shm_pool0_state_1_2,
+	},
+};
+
+static struct ipc_shm_channel_cfg ipcf_shm_cfg_channels0[3] = {
 	{
 		.type = IPC_SHM_UNMANAGED,
 		.ch = {
@@ -52,7 +65,7 @@ static struct ipc_shm_channel_cfg ipcf_shm_cfg_channels[3] = {
 		.ch = {
 			.managed = {
 				.num_pools = 3,
-				.pools = ipcf_shm_cfg_buf_pools0,
+				.pools = ipcf_shm_cfg_buf_pools0_1,
 				.rx_cb = data_chan_rx_cb,
 				.cb_arg = &rx_cb_arg,
 			},
@@ -63,7 +76,162 @@ static struct ipc_shm_channel_cfg ipcf_shm_cfg_channels[3] = {
 		.ch = {
 			.managed = {
 				.num_pools = 3,
-				.pools = ipcf_shm_cfg_buf_pools1,
+				.pools = ipcf_shm_cfg_buf_pools0_2,
+				.rx_cb = data_chan_rx_cb,
+				.cb_arg = &rx_cb_arg,
+			},
+		},
+	},
+};
+
+static struct ipc_shm_buffer_state ipcf_shm_pool1_state_0_0[5];
+static struct ipc_shm_buffer_state ipcf_shm_pool1_state_0_1[5];
+static struct ipc_shm_buffer_state ipcf_shm_pool1_state_0_2[5];
+/* Pools must be sorted in ascending order by buffer size */
+static struct ipc_shm_pool_cfg ipcf_shm_cfg_buf_pools1_1[3] = {
+	{
+		.num_bufs = 5,
+		.buf_size = 32,
+		.buffer_state = ipcf_shm_pool1_state_0_0,
+	},
+	{
+		.num_bufs = 5,
+		.buf_size = 64,
+		.buffer_state = ipcf_shm_pool1_state_0_1,
+	},
+	{
+		.num_bufs = 5,
+		.buf_size = 128,
+		.buffer_state = ipcf_shm_pool1_state_0_2,
+	},
+};
+static struct ipc_shm_buffer_state ipcf_shm_pool1_state_1_0[5];
+static struct ipc_shm_buffer_state ipcf_shm_pool1_state_1_1[5];
+static struct ipc_shm_buffer_state ipcf_shm_pool1_state_1_2[5];
+/* Pools must be sorted in ascending order by buffer size */
+static struct ipc_shm_pool_cfg ipcf_shm_cfg_buf_pools1_2[3] = {
+	{
+		.num_bufs = 5,
+		.buf_size = 32,
+		.buffer_state = ipcf_shm_pool1_state_1_0,
+	},
+	{
+		.num_bufs = 5,
+		.buf_size = 64,
+		.buffer_state = ipcf_shm_pool1_state_1_1,
+	},
+	{
+		.num_bufs = 5,
+		.buf_size = 128,
+		.buffer_state = ipcf_shm_pool1_state_1_2,
+	},
+};
+
+static struct ipc_shm_channel_cfg ipcf_shm_cfg_channels1[3] = {
+	{
+		.type = IPC_SHM_UNMANAGED,
+		.ch = {
+			.unmanaged = {
+				.size = 64,
+				.rx_cb = ctrl_chan_rx_cb,
+				.cb_arg = &rx_cb_arg,
+			},
+		},
+	},
+	{
+		.type = IPC_SHM_MANAGED,
+		.ch = {
+			.managed = {
+				.num_pools = 3,
+				.pools = ipcf_shm_cfg_buf_pools1_1,
+				.rx_cb = data_chan_rx_cb,
+				.cb_arg = &rx_cb_arg,
+			},
+		},
+	},
+	{
+		.type = IPC_SHM_MANAGED,
+		.ch = {
+			.managed = {
+				.num_pools = 3,
+				.pools = ipcf_shm_cfg_buf_pools1_2,
+				.rx_cb = data_chan_rx_cb,
+				.cb_arg = &rx_cb_arg,
+			},
+		},
+	},
+};
+
+static struct ipc_shm_buffer_state ipcf_shm_pool2_state_0_0[5];
+static struct ipc_shm_buffer_state ipcf_shm_pool2_state_0_1[5];
+static struct ipc_shm_buffer_state ipcf_shm_pool2_state_0_2[5];
+/* Pools must be sorted in ascending order by buffer size */
+static struct ipc_shm_pool_cfg ipcf_shm_cfg_buf_pools2_1[3] = {
+	{
+		.num_bufs = 5,
+		.buf_size = 32,
+		.buffer_state = ipcf_shm_pool2_state_0_0,
+	},
+	{
+		.num_bufs = 5,
+		.buf_size = 64,
+		.buffer_state = ipcf_shm_pool2_state_0_1,
+	},
+	{
+		.num_bufs = 5,
+		.buf_size = 128,
+		.buffer_state = ipcf_shm_pool2_state_0_2,
+	},
+};
+static struct ipc_shm_buffer_state ipcf_shm_pool2_state_1_0[5];
+static struct ipc_shm_buffer_state ipcf_shm_pool2_state_1_1[5];
+static struct ipc_shm_buffer_state ipcf_shm_pool2_state_1_2[5];
+/* Pools must be sorted in ascending order by buffer size */
+static struct ipc_shm_pool_cfg ipcf_shm_cfg_buf_pools2_2[3] = {
+	{
+		.num_bufs = 5,
+		.buf_size = 32,
+		.buffer_state = ipcf_shm_pool2_state_1_0,
+	},
+	{
+		.num_bufs = 5,
+		.buf_size = 64,
+		.buffer_state = ipcf_shm_pool2_state_1_1,
+	},
+	{
+		.num_bufs = 5,
+		.buf_size = 128,
+		.buffer_state = ipcf_shm_pool2_state_1_2,
+	},
+};
+static struct ipc_shm_channel_cfg ipcf_shm_cfg_channels2[3] = {
+	{
+		.type = IPC_SHM_UNMANAGED,
+		.ch = {
+			.unmanaged = {
+				.size = 64,
+				.rx_cb = ctrl_chan_rx_cb,
+				.cb_arg = &rx_cb_arg,
+			},
+		},
+	},
+	{
+		.type = IPC_SHM_MANAGED,
+		.ch = {
+			.managed = {
+				.num_pools = 3,
+				.pools = ipcf_shm_cfg_buf_pools2_1,
+				.rx_cb = data_chan_rx_cb,
+				.cb_arg = &rx_cb_arg,
+			},
+		},
+	},
+	{
+		.type = IPC_SHM_MANAGED,
+		.ch = {
+			.managed = {
+				.num_pools = 3,
+				.pools = ipcf_shm_cfg_buf_pools2_2,
 				.rx_cb = data_chan_rx_cb,
 				.cb_arg = &rx_cb_arg,
 			},
@@ -76,22 +244,20 @@ struct ipc_shm_cfg ipcf_shm_cfg_instances[] = {
 	{
 		.local_shm_addr  = 0x381C0000,
 		.remote_shm_addr = 0x381D0000,
-		.inter_core_tx_irq = IPC_IRQ_MRU,
-		.inter_core_rx_irq = IPC_IRQ_MRU,
-		.mbox_cfg_id = 0,
+		.inter_core_tx_irq = 0,
+		.inter_core_rx_irq = 0,
 		.shm_size  = 0x1000,
 		.num_channels = 3,
-		.channels = ipcf_shm_cfg_channels,
+		.channels = ipcf_shm_cfg_channels0,
 	},
 	{
 		.local_shm_addr  = 0x3A1C0000,
 		.remote_shm_addr = 0x3A1D0000,
 		.inter_core_tx_irq = IPC_IRQ_NONE,
-		.inter_core_rx_irq = IPC_IRQ_MRU,
-		.mbox_cfg_id = 1,
+		.inter_core_rx_irq = 1,
 		.shm_size  = 0x1000,
 		.num_channels = 3,
-		.channels = ipcf_shm_cfg_channels,
+		.channels = ipcf_shm_cfg_channels1,
 	},
 	{
 		.local_shm_addr  = 0x3C1C0000,
@@ -100,7 +266,7 @@ struct ipc_shm_cfg ipcf_shm_cfg_instances[] = {
 		.inter_core_rx_irq = IPC_IRQ_NONE,
 		.shm_size  = 0x1000,
 		.num_channels = 3,
-		.channels = ipcf_shm_cfg_channels,
+		.channels = ipcf_shm_cfg_channels2,
 	},
 };
 

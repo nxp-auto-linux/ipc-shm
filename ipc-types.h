@@ -20,14 +20,6 @@
 /* magic number to indicate the queue integrity */
 #define IPC_QUEUE_INIT_DONE                 (0x474E495246435049ULL)
 
-#if defined(PLATFORM_FLAVOR_s32n7)
-
-/*
- * Used when using MRU driver
- */
-#define IPC_IRQ_MRU                         (-2)
-#endif
-
 /*
  * Used when polling is desired on either transmit or receive path
  */
@@ -141,13 +133,25 @@ enum ipc_shm_core_index {
 };
 
 /**
+ * struct ipc_shm_buffer_state - track release/transmit status of buffer locally
+ * @rx_buffer_is_free: flag indicating if RX buffer is available for use
+ * @tx_buffer_is_free: flag indicating if TX buffer is available for use
+ */
+struct ipc_shm_buffer_state {
+	bool rx_buffer_is_free;
+	bool tx_buffer_is_free;
+};
+
+/**
  * struct ipc_shm_pool_cfg - memory buffer pool parameters
  * @num_bufs:   number of buffers
  * @buf_size:   buffer size
+ * @buffer_state: array tracking status of RX and TX buffers
  */
 struct ipc_shm_pool_cfg {
 	uint16_t num_bufs;
 	uint32_t buf_size;
+	struct ipc_shm_buffer_state *buffer_state;
 };
 
 /**
@@ -262,7 +266,6 @@ struct ipc_shm_local_core {
  * @shm_size:            local/remote shared memory size
  * @inter_core_tx_irq:   inter-core interrupt reserved for shm driver Tx
  * @inter_core_rx_irq:   inter-core interrupt reserved for shm driver Rx
- * @mbox_cfg_id:         MRU mailbox configuration reserved for shm driver
  * @local_core:          local core targeted by remote core interrupt
  * @remote_core:         remote core to trigger the interrupt on
  * @num_channels:        number of shared memory channels
@@ -272,8 +275,10 @@ struct ipc_shm_local_core {
  * different. For ARM platforms, a default value can be assigned to the local
  * and remote core using IPC_CORE_DEFAULT. Local and remote core is only used
  * for platforms that support MSCM core-to-core interrupts
- * When using MRU interrupt, the inter_core_tx_irq or inter_core_rx_irq must
- * be set to IPC_IRQ_NONE or IPC_IRQ_MRU depends on use case.
+ * When using MRU interrupt, inter_core_tx_irq or inter_core_rx_irq can
+ * be set to IPC_IRQ_NONE to operate in polling mode. Otherwise, these
+ * values are used to determine the mailbox configuration for transmitting
+ * and receiving.
  *
  * Local and remote channel and buffer pool configurations must be symmetric.
  */
@@ -285,7 +290,6 @@ struct ipc_shm_cfg {
 	int16_t inter_core_rx_irq;
 	struct ipc_shm_local_core local_core;
 	struct ipc_shm_remote_core remote_core;
-	uint8_t mbox_cfg_id;
 	uint8_t num_channels;
 	struct ipc_shm_channel_cfg *channels;
 };

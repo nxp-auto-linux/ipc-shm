@@ -1,6 +1,6 @@
 /* SPDX-License-Identifier: BSD-3-Clause */
 /*
- * Copyright 2025 NXP
+ * Copyright 2025-2026 NXP
  */
 #include <linux/types.h>
 
@@ -29,10 +29,9 @@ static struct ipc_hw_priv_type {
  */
 int8_t ipc_hw_init(const uint8_t instance, const struct ipc_shm_cfg *cfg)
 {
-	if (((IPC_IRQ_NONE != cfg->inter_core_rx_irq)
-			&& (IPC_IRQ_MRU != cfg->inter_core_rx_irq))
-		|| ((IPC_IRQ_NONE != cfg->inter_core_tx_irq)
-			&& (IPC_IRQ_MRU != cfg->inter_core_tx_irq)))
+	/* Check if polling mode is enabled or the index is greater than 0 */
+	if ((IPC_IRQ_NONE > cfg->inter_core_rx_irq)
+			|| (IPC_IRQ_NONE > cfg->inter_core_tx_irq))
 		return -EINVAL;
 
 	ipc_hw_priv[instance].tx_irq = cfg->inter_core_tx_irq;
@@ -70,7 +69,7 @@ void ipc_hw_irq_disable(const uint8_t instance)
 void ipc_hw_irq_notify(const uint8_t instance)
 {
 	if (IPC_IRQ_NONE != ipc_hw_priv[instance].tx_irq) {
-#if IS_ENABLED(CONFIG_MAILBOX) && IS_ENABLED(CONFIG_NXP_S32N79_MRU)
+#if IPC_S32N7_MAILBOX_ENABLED
 		ipc_os_mailbox_tx(instance);
 #endif
 	}
