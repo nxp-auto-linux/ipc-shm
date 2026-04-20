@@ -813,7 +813,7 @@ static int8_t unmanaged_channel_init(const uint8_t instance, int chan_id,
 			return -EINVAL;
 
 		/* store physical address in shared memory for remote */
-		*((uintptr_t *)(chan->local_mem->mem)) = cfg->addr;
+		*((uint64_t *)(chan->local_mem->mem)) = cfg->addr;
 
 		chan->local_mem->sentinel = (uint32_t)IPC_UCHAN_INIT_DONE;
 	}
