@@ -4,7 +4,7 @@
 IPCF Shared Memory Sample Application with XEN hypervisor
 =========================================================
 
-:Copyright: 2023-2024 NXP
+:Copyright: 2023-2024,2026 NXP
 
 Overview
 ========
@@ -125,11 +125,11 @@ Running the application
 3. Login with root and insert IPCF kernel modules::
 
   In Dom0::
-    insmod /lib/modules/`uname -r`/extra/ipc-shm-xen.ko
-    insmod /lib/modules/`uname -r`/extra/ipc-shm-sample-dom0.ko
+    insmod /lib/modules/`uname -r`/updates/ipc-shm-xen.ko
+    insmod /lib/modules/`uname -r`/updates/ipc-shm-sample-dom0.ko
   In Dom0less::
-    insmod /lib/modules/`uname -r`/extra/ipc-shm-xen.ko
-    insmod /lib/modules/`uname -r`/extra/ipc-shm-sample-dom0less.ko
+    insmod /lib/modules/`uname -r`/updates/ipc-shm-xen.ko
+    insmod /lib/modules/`uname -r`/updates/ipc-shm-sample-dom0less.ko
 
 4. Clear the kernel log::
 

@@ -4,7 +4,7 @@
 IPCF Shared Memory Sample Multi-Instance Application for Linux
 ==============================================================
 
-:Copyright: 2021-2022,2023,2025 NXP
+:Copyright: 2021-2022,2023,2026 NXP
 
 Overview
 ========
@@ -115,8 +115,8 @@ Running the application
 
 3. Insert IPCF kernel modules after Linux boot::
 
-    insmod /lib/modules/`uname -r`/extra/ipc-shm-dev.ko
-    insmod /lib/modules/`uname -r`/extra/ipc-shm-sample_multi_instance.ko
+    insmod /lib/modules/`uname -r`/updates/ipc-shm-dev.ko
+    insmod /lib/modules/`uname -r`/updates/ipc-shm-sample_multi_instance.ko
 
 4. Clear the kernel log::
 

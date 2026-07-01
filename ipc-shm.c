@@ -831,6 +831,9 @@ static int8_t scmi_channel_init(const uint8_t instance, uint8_t chan_id,
 	if ((uintptr_t)NULL == cfg->scmi_addr)
 		return -EINVAL;
 
+	if (NULL == cfg->rx_cb)
+		return -EINVAL;
+
 	/* save scmi channel parameters TBD mapping */
 	chan->scmi_phys_addr = cfg->scmi_addr;
 	chan->scmi_size = cfg->scmi_size;
@@ -1063,6 +1066,11 @@ int8_t ipc_shm_init_instance(uint8_t instance)
 		(cfg->num_channels > IPC_SHM_MAX_CHANNELS)) {
 		shm_err("Number of channels must be between 1 and %d\n",
 				IPC_SHM_MAX_CHANNELS);
+		return -EINVAL;
+	}
+
+	if (cfg->shm_size == 0) {
+		shm_err("Shared memory must be bigger than 0\n");
 		return -EINVAL;
 	}
 
