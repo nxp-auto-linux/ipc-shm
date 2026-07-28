@@ -411,6 +411,7 @@ static uint32_t ipc_channel_rx(const uint8_t instance, uint8_t chan_id,
 	if (chan->type == IPC_SHM_UNMANAGED) {
 		if (0 == ipc_check_uchan_integrity(uchan)) {
 			remote_tx_count = uchan->remote_mem->tx_count;
+			dma_rmb();
 
 			/* call Rx cb if remote Tx counter changed */
 			if (remote_tx_count
@@ -786,10 +787,13 @@ static int8_t unmanaged_channel_init(const uint8_t instance, int chan_id,
 			== (uint32_t)IPC_SHM_UCHAN_INIT_IN_PROGRESS)
 		return -EAGAIN;
 
+	dma_rmb();
+
 	/* Mark that the queue initialization is in progress */
 	chan->local_mem->sentinel = (uint32_t)IPC_SHM_UCHAN_INIT_IN_PROGRESS;
-	/* Check if remote initialization is in progress */
+	/* Check if remote initialization is done */
 	if (chan->remote_mem->sentinel == (uint32_t)IPC_UCHAN_INIT_DONE) {
+		dma_rmb();
 		/* Use values from remote if it is already initialized */
 		chan->local_mem->tx_count = chan->remote_mem->remote_tx_count;
 		chan->local_mem->remote_tx_count = chan->remote_mem->tx_count;
@@ -1593,6 +1597,7 @@ int8_t ipc_shm_is_channel_not_empty(const uint8_t instance, uint8_t chan_id,
 			return -EINVAL;
 
 		remote_tx_count = uchan->remote_mem->tx_count;
+		dma_rmb();
 
 		/* call Rx cb if remote Tx counter changed */
 		if (remote_tx_count != uchan->local_mem->remote_tx_count)
@@ -1644,6 +1649,7 @@ int8_t ipc_shm_get_message_from_channel(uint8_t instance, uint8_t chan_id,
 			return -EINVAL;
 
 		remote_tx_count = uchan->remote_mem->tx_count;
+		dma_rmb();
 
 		/* Check if there are pending message */
 		if (remote_tx_count == uchan->local_mem->remote_tx_count)

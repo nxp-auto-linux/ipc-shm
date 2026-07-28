@@ -1,6 +1,6 @@
 /* SPDX-License-Identifier: BSD-3-Clause */
 /*
- * Copyright 2023-2025 NXP
+ * Copyright 2023-2026 NXP
  */
 #ifndef IPC_OS_H
 #define IPC_OS_H
@@ -25,6 +25,13 @@
 #else
 #define shm_dbg(fmt, ...)
 #endif
+
+/*
+ * Read barrier for NonCacheable/Device memory (workaround for ERR053234).
+ * Prevents Load-after-Load reordering across the Outer Shareable domain.
+ * Equivalent to the kernel dma_rmb() on ARM64.
+ */
+#define dma_rmb() asm volatile("dmb oshld" ::: "memory")
 
 /* forward declarations */
 struct ipc_shm_cfg;

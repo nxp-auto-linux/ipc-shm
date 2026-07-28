@@ -21,6 +21,8 @@ int8_t ipc_queue_pop(struct ipc_queue *queue, void *buf)
 
 	write = queue->pop_ring->write;
 
+	dma_rmb();
+
 	/* read indexes of push/pop rings are swapped (interference freedom) */
 	read = queue->push_ring->read;
 
@@ -61,11 +63,14 @@ int8_t ipc_queue_push(struct ipc_queue *queue, const void *buf)
 	/* read indexes of push/pop rings are swapped (interference freedom) */
 	read = queue->pop_ring->read;
 
+	dma_rmb();
+
 	/* Check if write has valid value */
 	if (write >= queue->elem_num)
 		return -EINVAL;
 
 	if (queue->pop_ring->sentinel == IPC_QUEUE_INIT_DONE) {
+		dma_rmb();
 		/* Check if read has valid value */
 		if (read >= queue->elem_num)
 			return -EINVAL;
@@ -102,10 +107,13 @@ static int8_t ipc_queue_sync_index(struct ipc_queue *queue,
 	if (queue->pop_ring->sentinel == IPC_QUEUE_INIT_IN_PROGRESS)
 		return -EAGAIN;
 
+	dma_rmb();
+
 	/* Mark that the queue initialization is in progress */
 	queue->push_ring->sentinel = IPC_QUEUE_INIT_IN_PROGRESS;
 
 	if (queue->pop_ring->sentinel == IPC_QUEUE_INIT_DONE) {
+		dma_rmb();
 		/* Use values from remote if it is already initialized */
 		queue->push_ring->write = queue->pop_ring->read;
 		if (queue_type == IPC_SHM_CHANNEL_QUEUE) {
@@ -190,6 +198,8 @@ int8_t ipc_queue_not_empty(const struct ipc_queue *queue, bool *not_empty)
 	write = queue->push_ring->read;
 	read = queue->pop_ring->write;
 
+	dma_rmb();
+
 	/* Check if read and write are valid value */
 	if ((read >= queue->elem_num) || (write >= queue->elem_num))
 		return -EINVAL;
@@ -208,9 +218,12 @@ int8_t ipc_queue_not_empty(const struct ipc_queue *queue, bool *not_empty)
 
 int8_t ipc_queue_check_integrity(struct ipc_queue *queue)
 {
-	if ((IPC_QUEUE_INIT_DONE == queue->pop_ring->sentinel) &&
-			(IPC_QUEUE_INIT_DONE == queue->push_ring->sentinel))
-		return 0;
+	if (IPC_QUEUE_INIT_DONE == queue->pop_ring->sentinel) {
+		dma_rmb();
+
+		if (IPC_QUEUE_INIT_DONE == queue->push_ring->sentinel)
+			return 0;
+	}
 
 	return -EINVAL;
 }
