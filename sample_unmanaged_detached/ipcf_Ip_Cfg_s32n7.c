@@ -53,7 +53,7 @@ static struct ipc_shm_channel_cfg ipcf_shm_cfg_channels[3] = {
 		.type = IPC_SHM_UNMANAGED,
 		.ch = {
 			.unmanaged = {
-				.addr = 0x381E0000,
+				.addr = 0x24820000,
 				.size = 64,
 				.detached = true,
 				.rx_cb = ctrl_chan_rx_cb,
@@ -88,8 +88,8 @@ static struct ipc_shm_channel_cfg ipcf_shm_cfg_channels[3] = {
 /* ipc shm configuration */
 struct ipc_shm_cfg ipcf_shm_cfg_instances[] = {
 	{
-		.local_shm_addr  = 0x381C0000,
-		.remote_shm_addr = 0x381D0000,
+		.local_shm_addr  = 0x24800000,
+		.remote_shm_addr = 0x24801000,
 		.inter_core_tx_irq = 0,
 		.inter_core_rx_irq = 0,
 		.shm_size  = 0x1000,
