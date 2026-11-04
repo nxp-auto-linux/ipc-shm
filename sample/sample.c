@@ -10,6 +10,7 @@
 #include <linux/stat.h>
 #include <linux/completion.h>
 #include <linux/of_address.h>
+#include <linux/io.h>
 
 #include "ipc-shm.h"
 #include "ipcf_Ip_Cfg.h"
@@ -108,6 +109,7 @@ void data_chan_rx_cb(void *arg, const uint8_t instance, uint8_t chan_id,
 		void *buf, uint32_t size)
 {
 	int err = 0;
+	char tmp[MAX_SAMPLE_MSG_LEN];
 	struct ipc_sample_app *cb_arg_sample =
 			(struct ipc_sample_app *)(*((uintptr_t *)arg));
 
@@ -115,11 +117,12 @@ void data_chan_rx_cb(void *arg, const uint8_t instance, uint8_t chan_id,
 	WARN_ON(size > MAX_SAMPLE_MSG_LEN);
 
 	/* process the received data */
-	sample_info("ch %d << %d bytes: %s\n", chan_id, size, (char *)buf);
+	memcpy_fromio(tmp, buf, size);
+
+	sample_info("ch %d << %d bytes: %s\n", chan_id, size, tmp);
 
 	/* consume received data: get number of message */
-	/* Note: without being copied locally */
-	cb_arg_sample->last_rx_no_msg = ipc_strtol((char *)buf + strlen("#"));
+	cb_arg_sample->last_rx_no_msg = ipc_strtol(tmp + strlen("#"));
 
 	/* release the buffer */
 	err = ipc_shm_release_buf(instance, chan_id, buf);
@@ -138,15 +141,17 @@ void data_chan_rx_cb(void *arg, const uint8_t instance, uint8_t chan_id,
 void ctrl_chan_rx_cb(void *arg, const uint8_t instance, uint8_t chan_id,
 		void *mem)
 {
+	char tmp[CTRL_CHAN_SIZE];
 	struct ipc_sample_app *cb_arg_sample =
 			(struct ipc_sample_app *)(*((uintptr_t *)arg));
 
 	WARN_ON(chan_id != CTRL_CHAN_ID);
-	WARN_ON(strlen(mem) > MAX_SAMPLE_MSG_LEN);
 	WARN_ON(cb_arg_sample != &app);
 
-	sample_info("ch %d << %ld bytes: %s\n",
-			chan_id, strlen(mem), (char *)mem);
+	memcpy_fromio(tmp, mem, CTRL_CHAN_SIZE);
+	WARN_ON(strlen(tmp) > MAX_SAMPLE_MSG_LEN);
+
+	sample_info("ch %d << %ld bytes: %s\n", chan_id, strlen(tmp), tmp);
 }
 
 /* send control message with number of data messages to be sent */
@@ -162,7 +167,7 @@ static int send_ctrl_msg(const uint8_t instance)
 	 * in SRAM and A53 will complain about unaligned accesses.
 	 */
 	sprintf(tmp, "SENDING MESSAGES: %d", app.num_msgs);
-	strcpy(app.ctrl_shm, tmp);
+	memcpy_toio(app.ctrl_shm, tmp, strlen(tmp) + 1);
 
 	sample_info("ch %d >> %ld bytes: %s\n", chan_id, strlen(tmp), tmp);
 
@@ -193,7 +198,7 @@ static void generate_msg(char *s, int len, int msg_no)
 	 * in SRAM and A53 will complain about unaligned accesses.
 	 */
 	sprintf(tmp, "#%d HELLO WORLD! from KERNEL", msg_no);
-	strcpy(s, tmp);
+	memcpy_toio(s, tmp, strlen(tmp) + 1);
 }
 
 /**
@@ -209,6 +214,7 @@ static int send_data_msg(const uint8_t instance, int msg_len, int msg_no,
 {
 	int err = 0;
 	char *buf = NULL;
+	char print_buf[MAX_SAMPLE_MSG_LEN];
 
 	buf = ipc_shm_acquire_buf(instance, chan_id, msg_len);
 	if (!buf) {
@@ -220,7 +226,8 @@ static int send_data_msg(const uint8_t instance, int msg_len, int msg_no,
 	/* write data to acquired buffer */
 	generate_msg(buf, msg_len, msg_no);
 
-	sample_info("ch %d >> %d bytes: %s\n", chan_id, msg_len, buf);
+	memcpy_fromio(print_buf, buf, msg_len);
+	sample_info("ch %d >> %d bytes: %s\n", chan_id, msg_len, print_buf);
 
 	/* send data to remote peer */
 	err = ipc_shm_tx(instance, chan_id, buf, msg_len);

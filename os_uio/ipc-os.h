@@ -11,6 +11,9 @@
 #include <string.h>
 #include <stdio.h>
 
+#define memcpy_toio(d, s, n) memcpy(d, s, n)
+#define memcpy_fromio(d, s, n) memcpy(d, s, n)
+
 /* softirq work budget used to prevent CPU starvation */
 #define IPC_SOFTIRQ_BUDGET 128u
 

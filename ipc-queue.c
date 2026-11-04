@@ -36,7 +36,7 @@ int8_t ipc_queue_pop(struct ipc_queue *queue, void *buf)
 
 	/* copy queue element in buffer */
 	src = &queue->pop_ring->data[read * queue->elem_size];
-	(void) memcpy(buf, src, queue->elem_size);
+	memcpy_fromio(buf, src, queue->elem_size);
 
 	/* increment read index with wrap around */
 	queue->push_ring->read = (read + 1u) % queue->elem_num;
@@ -71,7 +71,7 @@ int8_t ipc_queue_push(struct ipc_queue *queue, const void *buf)
 
 	/* copy element from buffer in queue */
 	dst = &queue->push_ring->data[write * queue->elem_size];
-	(void) memcpy(dst, buf, queue->elem_size);
+	memcpy_toio(dst, buf, queue->elem_size);
 
 	/* increment write index with wrap around */
 	queue->push_ring->write = (write + 1u) % queue->elem_num;
