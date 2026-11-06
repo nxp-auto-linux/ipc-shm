@@ -227,11 +227,11 @@ int8_t ipc_os_init(const uint8_t instance, const struct ipc_shm_cfg *cfg,
 	return 0;
 
 err_unmap_remote_shm:
-	iounmap((void *)cfg->remote_shm_addr);
+	iounmap((void *)priv.id[instance].remote_virt_shm);
 err_release_remote_region:
 	release_mem_region((phys_addr_t)cfg->remote_shm_addr, cfg->shm_size);
 err_unmap_local_shm:
-	iounmap((void *)cfg->local_shm_addr);
+	iounmap((void *)priv.id[instance].local_virt_shm);
 err_release_local_region:
 	release_mem_region((phys_addr_t)cfg->local_shm_addr, cfg->shm_size);
 
